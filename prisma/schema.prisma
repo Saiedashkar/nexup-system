@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+enum ClientTier {
+  VIP
+  LOYAL
+  NORMAL
+  DELINQUENT
+}
+
+enum WorkStatus {
+  WAITING
+  IN_PROGRESS
+  COMPLETED
+  PAUSED
+}
+
+enum PaymentStatus {
+  FULL
+  PARTIAL
+  UNPAID
+}
+
+enum PoolTransactionType {
+  IN
+  OUT
+}
+
+enum ExpenseCategory {
+  FIXED
+  VARIABLE
+}
+
+model User {
+  id             String          @id @default(cuid())
+  name           String
+  email          String          @unique
+  passwordHash   String
+  role           Role            @default(EMPLOYEE)
+  createdAt      DateTime        @default(now())
+  projectRecords ProjectRecord[] @relation("DesignerProjects")
+  activityLogs   ActivityLog[]
+
+  @@index([role])
+}
+
+model Client {
+  id             String          @id @default(cuid())
+  phone          String          @unique
+  name           String
+  // Computed from historical payments and project history, then cached here.
+  tier           ClientTier      @default(NORMAL)
+  createdAt      DateTime        @default(now())
+  projectRecords ProjectRecord[]
+
+  @@index([name])
+}
+
+model ServiceType {
+  id             String          @id @default(cuid())
+  name           String
+  isCustom       Boolean         @default(false)
+  projectRecords ProjectRecord[]
+
+  @@unique([name, isCustom])
+}
+
+model ProjectRecord {
+  id               String            @id @default(cuid())
+  clientId         String
+  projectName      String
+  date             DateTime
+  customServiceText String?
+  totalPrice       Decimal           @db.Decimal(12, 2)
+  deposit          Decimal           @default(0) @db.Decimal(12, 2)
+  // Set in backend logic as totalPrice - deposit; not accepted as a trusted UI value.
+  remaining        Decimal           @default(0) @db.Decimal(12, 2)
+  workStatus       WorkStatus        @default(WAITING)
+  paymentStatus    PaymentStatus     @default(UNPAID)
+  designerId       String
+  notes            String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  client           Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  designer         User              @relation("DesignerProjects", fields: [designerId], references: [id], onDelete: Restrict)
+  services         ServiceType[]
+  poolTransactions PoolTransaction[]
+
+  @@index([clientId])
+  @@index([designerId])
+  @@index([date])
+}
+
+model PoolTransaction {
+  id              String              @id @default(cuid())
+  projectRecordId String?
+  withdrawalId    String?             @unique
+  amountSAR       Decimal             @db.Decimal(12, 2)
+  type            PoolTransactionType
+  date            DateTime
+  note            String?
+  createdAt       DateTime            @default(now())
+  projectRecord   ProjectRecord?      @relation(fields: [projectRecordId], references: [id], onDelete: SetNull)
+  withdrawal      Withdrawal?         @relation(fields: [withdrawalId], references: [id], onDelete: SetNull)
+
+  @@index([projectRecordId])
+  @@index([type])
+  @@index([date])
+}
+
+model Withdrawal {
+  id              String           @id @default(cuid())
+  amountSAR       Decimal          @db.Decimal(12, 2)
+  exchangeRate    Decimal          @db.Decimal(12, 4)
+  commissionPct   Decimal          @default(10) @db.Decimal(5, 2)
+  // Set by backend logic as (amountSAR * exchangeRate) * (1 - commissionPct / 100).
+  netEGP          Decimal          @db.Decimal(14, 2)
+  date            DateTime
+  month           Int
+  year            Int
+  createdAt       DateTime         @default(now())
+  poolTransaction PoolTransaction?
+
+  @@index([year, month])
+  @@index([date])
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  description String
+  cost        Decimal         @db.Decimal(14, 2)
+  category    ExpenseCategory
+  name        String
+  notes       String?
+  date        DateTime
+  month       Int
+  year        Int
+  createdAt   DateTime        @default(now())
+
+  @@index([year, month])
+  @@index([date])
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  entityType String
+  entityId   String
+  timestamp  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([timestamp])
+}

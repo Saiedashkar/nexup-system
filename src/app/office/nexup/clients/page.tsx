@@ -341,7 +341,14 @@ export default function NexupClientsPage() {
                             </td>
                             <td style={{ padding: "5px 8px" }}><InlineText value={p.notes || ""} onSave={v => patchProject(p.id, { notes: v || null })} placeholder="note..." style={{ fontSize: 10, color: "var(--muted)" }} /></td>
                             <td style={{ padding: "5px 4px", textAlign: "center" }}>
-                              <button onClick={() => setDeleteConfirm(p.id)} style={{ padding: "3px 6px", borderRadius: 4, border: "none", background: "rgba(239,68,68,0.08)", color: "#ef4444", fontSize: 11, cursor: "pointer" }} title="Delete">🗑</button>
+                              {deleteConfirm === p.id ? (
+                                <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
+                                  <button onClick={() => handleDelete(p.id)} style={{ padding: "3px 8px", borderRadius: 4, border: "none", background: "#ef4444", color: "#fff", fontSize: 10, fontWeight: 600, cursor: "pointer" }}>Confirm</button>
+                                  <button onClick={() => setDeleteConfirm(null)} style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>Cancel</button>
+                                </div>
+                              ) : (
+                                <button onClick={() => setDeleteConfirm(p.id)} style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.05)", color: "#ef4444", fontSize: 11, cursor: "pointer" }} title="Delete">🗑</button>
+                              )}
                             </td>
                           </tr>
                         );
@@ -354,19 +361,7 @@ export default function NexupClientsPage() {
           );
         })}
 
-      {/* Delete Confirm */}
-      {deleteConfirm && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={e => { if (e.target === e.currentTarget) setDeleteConfirm(null); }}>
-          <div style={{ background: "var(--surface)", borderRadius: 12, padding: 20, maxWidth: 360, width: "90%", border: "1px solid var(--border)" }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>Delete Record?</h3>
-            <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>This cannot be undone.</p>
-            <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 14 }}>
-              <button onClick={() => setDeleteConfirm(null)} style={{ padding: "7px 14px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-              <button onClick={() => handleDelete(deleteConfirm)} style={{ padding: "7px 14px", borderRadius: 6, border: "none", background: "#ef4444", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Delete</button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Create Form Modal */}
       {showForm && (

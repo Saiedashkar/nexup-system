@@ -6,6 +6,9 @@ export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await getCurrentSession();
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
     const workStatus = searchParams.get("workStatus") || "";
@@ -13,7 +16,11 @@ export async function GET(request: NextRequest) {
     const sortBy = searchParams.get("sortBy") || "date";
     const sortDir = searchParams.get("sortDir") || "desc";
 
+    // Filter by businessId (SUPER_ADMIN sees all, others see their business)
     const where: Record<string, unknown> = {};
+    if (session.role !== "SUPER_ADMIN") {
+      where.businessId = session.businessId;
+    }
 
     if (search) {
       where.OR = [
@@ -78,6 +85,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (session.role === "EMPLOYEE") return NextResponse.json({ error: "Access denied" }, { status: 403 });
 
     const body = await request.json();
     const {
@@ -99,14 +107,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Please fill all required fields" }, { status: 400 });
     }
 
-    // Find or create client
+    const businessId = session.businessId;
+
+    // Find or create client (using compound unique for multi-business)
     let client = clientId
       ? await prisma.client.findUnique({ where: { id: clientId } })
-      : await prisma.client.findUnique({ where: { phone: clientPhone } });
+      : await prisma.client.findUnique({ where: { businessId_phone: { businessId, phone: clientPhone } } });
 
     if (!client) {
       client = await prisma.client.create({
-        data: { phone: clientPhone, name: clientName, tier: "NORMAL" },
+        data: { businessId, phone: clientPhone, name: clientName, tier: "NORMAL" },
       });
     } else if (client.name !== clientName) {
       client = await prisma.client.update({
@@ -121,6 +131,7 @@ export async function POST(request: NextRequest) {
 
     const project = await prisma.projectRecord.create({
       data: {
+        businessId,
         clientId: client.id,
         projectName,
         date: new Date(date),
@@ -145,6 +156,7 @@ export async function POST(request: NextRequest) {
     if (dep > 0) {
       await prisma.poolTransaction.create({
         data: {
+          businessId,
           projectRecordId: project.id,
           amountSAR: dep,
           type: "IN",

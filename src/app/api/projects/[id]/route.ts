@@ -4,7 +4,7 @@ import { getCurrentSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-// PATCH - Update a project record (work status, payment status, etc.)
+// PATCH - Update a project record
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -12,6 +12,7 @@ export async function PATCH(
   try {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (session.role === "EMPLOYEE") return NextResponse.json({ error: "Access denied" }, { status: 403 });
 
     const { id } = await params;
     const body = await request.json();
@@ -26,7 +27,6 @@ export async function PATCH(
 
     const updateData: Record<string, unknown> = {};
 
-    // Only update fields that are provided
     if (body.workStatus !== undefined) updateData.workStatus = body.workStatus;
     if (body.designerId !== undefined) updateData.designerId = body.designerId;
     if (body.projectName !== undefined) updateData.projectName = body.projectName;
@@ -44,11 +44,11 @@ export async function PATCH(
         ? "PARTIAL"
         : "UNPAID";
 
-      // Auto-create IN transaction for the deposit difference
       const depositDiff = newDeposit - parseFloat(String(existing.deposit));
       if (depositDiff > 0) {
         await prisma.poolTransaction.create({
           data: {
+            businessId: existing.businessId,
             projectRecordId: id,
             amountSAR: depositDiff,
             type: "IN",
@@ -63,15 +63,14 @@ export async function PATCH(
     if (body.toggleComplete) {
       updateData.workStatus = existing.workStatus === "COMPLETED" ? "IN_PROGRESS" : "COMPLETED";
       if (updateData.workStatus === "COMPLETED") {
-        // If work is completed and there's remaining balance, mark as full payment
         if (parseFloat(String(existing.remaining)) > 0) {
           updateData.paymentStatus = "FULL";
           updateData.remaining = 0;
-          // Create IN transaction for remaining
           const remainingAmount = parseFloat(String(existing.remaining));
           if (remainingAmount > 0) {
             await prisma.poolTransaction.create({
               data: {
+                businessId: existing.businessId,
                 projectRecordId: id,
                 amountSAR: remainingAmount,
                 type: "IN",
@@ -113,7 +112,6 @@ export async function PATCH(
       data: { tier },
     });
 
-    // Log activity
     await prisma.activityLog.create({
       data: {
         userId: session.userId,
@@ -138,6 +136,7 @@ export async function DELETE(
   try {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (session.role === "EMPLOYEE") return NextResponse.json({ error: "Access denied" }, { status: 403 });
 
     const { id } = await params;
 
@@ -149,15 +148,12 @@ export async function DELETE(
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
 
-    // Delete associated pool transactions first
     await prisma.poolTransaction.deleteMany({
       where: { projectRecordId: id },
     });
 
-    // Delete the project record
     await prisma.projectRecord.delete({ where: { id } });
 
-    // Log activity
     await prisma.activityLog.create({
       data: {
         userId: session.userId,

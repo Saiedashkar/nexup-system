@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+export const runtime = "nodejs";
+
 export async function GET(req: NextRequest) {
   const session = await getCurrentSession();
-  if (!session || session.role !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session.role === "EMPLOYEE") return NextResponse.json({ error: "Access denied" }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
   const month = searchParams.get("month");
@@ -14,6 +15,9 @@ export async function GET(req: NextRequest) {
   const category = searchParams.get("category") as "FIXED" | "VARIABLE" | null;
 
   const where: Record<string, unknown> = {};
+  if (session.role !== "SUPER_ADMIN") {
+    where.businessId = session.businessId;
+  }
   if (month) where.month = parseInt(month);
   if (year) where.year = parseInt(year);
   if (category) where.category = category;
@@ -23,7 +27,6 @@ export async function GET(req: NextRequest) {
     orderBy: { date: "desc" },
   });
 
-  // Calculate total
   let total = 0;
   for (const e of expenses) {
     total += Number(e.cost);
@@ -34,9 +37,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await getCurrentSession();
-  if (!session || session.role !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session.role === "EMPLOYEE") return NextResponse.json({ error: "Access denied" }, { status: 403 });
 
   const body = await req.json();
   const { description, cost, category, name, notes, date } = body;
@@ -49,6 +51,7 @@ export async function POST(req: NextRequest) {
 
   const expense = await prisma.expense.create({
     data: {
+      businessId: session.businessId,
       description,
       cost: parseFloat(cost),
       category,

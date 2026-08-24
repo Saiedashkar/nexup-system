@@ -6,9 +6,19 @@ datasource db {
   provider = "postgresql"
 }
 
+// ═══════════════════════════════════════════════════════
+// Enums
+// ═══════════════════════════════════════════════════════
+
 enum Role {
-  ADMIN
-  EMPLOYEE
+  SUPER_ADMIN   // Office owner — sees all businesses
+  ADMIN         // Business manager — full access to one business
+  EMPLOYEE      // Staff — clients only, within one business
+}
+
+enum CurrencyMode {
+  SAR_TO_EGP   // Saudi Riyal → Egyptian Pound (NEXUP)
+  EGP_DIRECT   // Egyptian Pound direct (REBOUND, ABOMAZEN)
 }
 
 enum ClientTier {
@@ -41,49 +51,85 @@ enum ExpenseCategory {
   VARIABLE
 }
 
+// ═══════════════════════════════════════════════════════
+// Business (multi-business support)
+// ═══════════════════════════════════════════════════════
+
+model Business {
+  id            String         @id @default(cuid())
+  name          String         @unique  // "NEXUP", "REBOUND", "ABOMAZEN"
+  slug          String         @unique  // "nexup", "rebound", "abomazen"
+  currencyMode  CurrencyMode   @default(SAR_TO_EGP)
+  createdAt     DateTime       @default(now())
+
+  // Relations — each business has its own isolated data
+  users             User[]
+  clients           Client[]
+  serviceTypes      ServiceType[]
+  projectRecords    ProjectRecord[]
+  poolTransactions  PoolTransaction[]
+  withdrawals       Withdrawal[]
+  expenses          Expense[]
+
+  @@index([slug])
+}
+
+// ═══════════════════════════════════════════════════════
+// Core Models
+// ═══════════════════════════════════════════════════════
+
 model User {
   id             String          @id @default(cuid())
   name           String
   email          String          @unique
   passwordHash   String
   role           Role            @default(EMPLOYEE)
+  businessId     String?         // null for SUPER_ADMIN (sees all)
   createdAt      DateTime        @default(now())
+  business       Business?       @relation(fields: [businessId], references: [id], onDelete: SetNull)
   projectRecords ProjectRecord[] @relation("DesignerProjects")
   activityLogs   ActivityLog[]
 
   @@index([role])
+  @@index([businessId])
 }
 
 model Client {
   id             String          @id @default(cuid())
-  phone          String          @unique
+  businessId     String
+  phone          String          // Not unique globally — unique per business
   name           String
-  // Computed from historical payments and project history, then cached here.
   tier           ClientTier      @default(NORMAL)
   createdAt      DateTime        @default(now())
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Restrict)
   projectRecords ProjectRecord[]
 
+  @@unique([businessId, phone])
   @@index([name])
+  @@index([businessId])
 }
 
 model ServiceType {
   id             String          @id @default(cuid())
+  businessId     String
   name           String
   isCustom       Boolean         @default(false)
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Restrict)
   projectRecords ProjectRecord[]
 
-  @@unique([name, isCustom])
+  @@unique([businessId, name, isCustom])
+  @@index([businessId])
 }
 
 model ProjectRecord {
   id               String            @id @default(cuid())
+  businessId       String
   clientId         String
   projectName      String
   date             DateTime
   customServiceText String?
   totalPrice       Decimal           @db.Decimal(12, 2)
   deposit          Decimal           @default(0) @db.Decimal(12, 2)
-  // Set in backend logic as totalPrice - deposit; not accepted as a trusted UI value.
   remaining        Decimal           @default(0) @db.Decimal(12, 2)
   workStatus       WorkStatus        @default(WAITING)
   paymentStatus    PaymentStatus     @default(UNPAID)
@@ -91,11 +137,13 @@ model ProjectRecord {
   notes            String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+  business         Business          @relation(fields: [businessId], references: [id], onDelete: Restrict)
   client           Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
   designer         User              @relation("DesignerProjects", fields: [designerId], references: [id], onDelete: Restrict)
   services         ServiceType[]
   poolTransactions PoolTransaction[]
 
+  @@index([businessId])
   @@index([clientId])
   @@index([designerId])
   @@index([date])
@@ -103,6 +151,7 @@ model ProjectRecord {
 
 model PoolTransaction {
   id              String              @id @default(cuid())
+  businessId      String
   projectRecordId String?
   withdrawalId    String?             @unique
   amountSAR       Decimal             @db.Decimal(12, 2)
@@ -110,9 +159,11 @@ model PoolTransaction {
   date            DateTime
   note            String?
   createdAt       DateTime            @default(now())
+  business        Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
   projectRecord   ProjectRecord?      @relation(fields: [projectRecordId], references: [id], onDelete: SetNull)
   withdrawal      Withdrawal?         @relation(fields: [withdrawalId], references: [id], onDelete: SetNull)
 
+  @@index([businessId])
   @@index([projectRecordId])
   @@index([type])
   @@index([date])
@@ -120,23 +171,26 @@ model PoolTransaction {
 
 model Withdrawal {
   id              String           @id @default(cuid())
+  businessId      String
   amountSAR       Decimal          @db.Decimal(12, 2)
   exchangeRate    Decimal          @db.Decimal(12, 4)
   commissionPct   Decimal          @default(10) @db.Decimal(5, 2)
-  // Set by backend logic as (amountSAR * exchangeRate) * (1 - commissionPct / 100).
   netEGP          Decimal          @db.Decimal(14, 2)
   date            DateTime
   month           Int
   year            Int
   createdAt       DateTime         @default(now())
+  business        Business         @relation(fields: [businessId], references: [id], onDelete: Restrict)
   poolTransaction PoolTransaction?
 
+  @@index([businessId])
   @@index([year, month])
   @@index([date])
 }
 
 model Expense {
   id          String          @id @default(cuid())
+  businessId  String
   description String
   cost        Decimal         @db.Decimal(14, 2)
   category    ExpenseCategory
@@ -146,7 +200,9 @@ model Expense {
   month       Int
   year        Int
   createdAt   DateTime        @default(now())
+  business    Business        @relation(fields: [businessId], references: [id], onDelete: Restrict)
 
+  @@index([businessId])
   @@index([year, month])
   @@index([date])
 }

@@ -5,7 +5,12 @@ import type { Role } from "@prisma/client";
 export const SESSION_COOKIE = "nexup_session";
 const sessionDurationSeconds = 60 * 60 * 8;
 
-export type Session = { userId: string; name: string; role: Role };
+export type Session = {
+  userId: string;
+  name: string;
+  role: Role;
+  businessId: string; // SUPER_ADMIN gets "all" or specific businessId
+};
 
 function secretKey() {
   const secret = process.env.AUTH_SECRET;
@@ -16,7 +21,11 @@ function secretKey() {
 }
 
 export async function createSessionToken(session: Session) {
-  return new SignJWT({ name: session.name, role: session.role })
+  return new SignJWT({
+    name: session.name,
+    role: session.role,
+    businessId: session.businessId,
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(session.userId)
     .setIssuedAt()
@@ -32,10 +41,16 @@ export async function verifySessionToken(token?: string): Promise<Session | null
     if (
       typeof payload.sub !== "string" ||
       typeof payload.name !== "string" ||
-      (payload.role !== "ADMIN" && payload.role !== "EMPLOYEE")
+      typeof payload.businessId !== "string" ||
+      (payload.role !== "SUPER_ADMIN" && payload.role !== "ADMIN" && payload.role !== "EMPLOYEE")
     ) return null;
 
-    return { userId: payload.sub, name: payload.name, role: payload.role };
+    return {
+      userId: payload.sub,
+      name: payload.name,
+      role: payload.role as Role,
+      businessId: payload.businessId,
+    };
   } catch {
     return null;
   }
@@ -53,3 +68,13 @@ export const sessionCookieOptions = {
   path: "/",
   maxAge: sessionDurationSeconds,
 };
+
+/** Check if user has admin-level access (SUPER_ADMIN or ADMIN) */
+export function isAdmin(session: Session): boolean {
+  return session.role === "SUPER_ADMIN" || session.role === "ADMIN";
+}
+
+/** Check if user is super admin */
+export function isSuperAdmin(session: Session): boolean {
+  return session.role === "SUPER_ADMIN";
+}

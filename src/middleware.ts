@@ -3,6 +3,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 
 const publicPaths = new Set(["/login", "/api/auth/login", "/api/auth/logout"]);
 const employeePaths = ["/clients", "/api/clients"];
+const adminPaths = ["/dashboard", "/finance", "/api/projects", "/api/pool", "/api/withdrawals", "/api/expenses", "/api/services", "/api/users"];
 
 export default async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -10,17 +11,30 @@ export default async function middleware(request: NextRequest) {
 
   const session = await verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value);
   if (!session) {
-    if (pathname.startsWith("/api/")) return NextResponse.json({ error: "غير مصرح بتسجيل الدخول." }, { status: 401 });
+    if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  if (pathname === "/login") return NextResponse.redirect(new URL(session.role === "ADMIN" ? "/dashboard" : "/clients", request.url));
+  if (pathname === "/login") {
+    if (session.role === "SUPER_ADMIN") return NextResponse.redirect(new URL("/office", request.url));
+    if (session.role === "ADMIN") return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL("/clients", request.url));
+  }
 
-  // Employees are restricted to customer-work routes; financial routes and APIs are denied by default.
+  // SUPER_ADMIN can access everything
+  if (session.role === "SUPER_ADMIN") return NextResponse.next();
+
+  // ADMIN can access admin + employee routes
+  if (session.role === "ADMIN") {
+    // Allow admin and employee routes
+    return NextResponse.next();
+  }
+
+  // EMPLOYEE: restricted to client-work routes only
   if (session.role === "EMPLOYEE" && !employeePaths.some((path) => pathname === path || pathname.startsWith(`${path}/`))) {
-    if (pathname.startsWith("/api/")) return NextResponse.json({ error: "ليس لديك صلاحية للوصول إلى بيانات الحسابات." }, { status: 403 });
+    if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Access denied" }, { status: 403 });
     return NextResponse.redirect(new URL("/clients", request.url));
   }
 

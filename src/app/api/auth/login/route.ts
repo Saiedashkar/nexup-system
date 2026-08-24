@@ -10,19 +10,38 @@ export async function POST(request: Request) {
     const body = await request.json();
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const password = typeof body.password === "string" ? body.password : "";
-    if (!email || !password) return NextResponse.json({ error: "أدخل البريد الإلكتروني وكلمة المرور." }, { status: 400 });
+    if (!email || !password) return NextResponse.json({ error: "Enter email and password." }, { status: 400 });
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { business: { select: { id: true, name: true, slug: true } } },
+    });
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-      return NextResponse.json({ error: "بيانات الدخول غير صحيحة." }, { status: 401 });
+      return NextResponse.json({ error: "Invalid credentials." }, { status: 401 });
     }
 
-    const token = await createSessionToken({ userId: user.id, name: user.name, role: user.role });
-    const response = NextResponse.json({ user: { name: user.name, role: user.role } });
+    // SUPER_ADMIN may have a businessId or null — handle both
+    const businessId = user.businessId || "all";
+
+    const token = await createSessionToken({
+      userId: user.id,
+      name: user.name,
+      role: user.role,
+      businessId,
+    });
+
+    const response = NextResponse.json({
+      user: {
+        name: user.name,
+        role: user.role,
+        businessId: user.businessId,
+        business: user.business,
+      },
+    });
     response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions);
     return response;
   } catch (error) {
     console.error("Login failed", error);
-    return NextResponse.json({ error: "تعذر إتمام تسجيل الدخول." }, { status: 500 });
+    return NextResponse.json({ error: "Login failed." }, { status: 500 });
   }
 }

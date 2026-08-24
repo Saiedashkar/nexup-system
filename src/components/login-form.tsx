@@ -11,14 +11,20 @@ export function LoginForm() {
     try {
       const response = await fetch("/api/auth/login", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ email:form.get("email"), password:form.get("password") }) });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "تعذر تسجيل الدخول.");
-      window.location.assign(data.user.role === "ADMIN" ? "/dashboard" : "/clients");
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "تعذر تسجيل الدخول."); } finally { setLoading(false); }
+      if (!response.ok) throw new Error(data.error ?? "Login failed.");
+      // Store role and business info for AppShell
+      sessionStorage.setItem("nexup-role", data.user.role);
+      sessionStorage.setItem("nexup-business", data.user.businessId || "");
+      // Navigate based on role
+      if (data.user.role === "SUPER_ADMIN") window.location.assign("/office");
+      else if (data.user.role === "ADMIN") window.location.assign("/dashboard");
+      else window.location.assign("/clients");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Login failed."); } finally { setLoading(false); }
   }
   return <form onSubmit={submit}>
-    <label className="field">البريد الإلكتروني<input name="email" type="email" autoComplete="email" required /></label>
-    <label className="field">كلمة المرور<input name="password" type="password" autoComplete="current-password" required /></label>
+    <label className="field">Email<input name="email" type="email" autoComplete="email" required /></label>
+    <label className="field">Password<input name="password" type="password" autoComplete="current-password" required /></label>
     {error && <p className="error" role="alert">{error}</p>}
-    <button className="button" style={{ marginTop:24, width:"100%" }} disabled={loading} type="submit">{loading ? "جارٍ التحقق..." : "تسجيل الدخول"}</button>
+    <button className="button" style={{ marginTop:24, width:"100%" }} disabled={loading} type="submit">{loading ? "Logging in..." : "Login"}</button>
   </form>;
 }

@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+export const runtime = "nodejs";
+
 export async function GET(req: NextRequest) {
   const session = await getCurrentSession();
-  if (!session || session.role !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session.role === "EMPLOYEE") return NextResponse.json({ error: "Access denied" }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
   const type = searchParams.get("type") as "IN" | "OUT" | null;
@@ -14,6 +15,9 @@ export async function GET(req: NextRequest) {
   const to = searchParams.get("to");
 
   const where: Record<string, unknown> = {};
+  if (session.role !== "SUPER_ADMIN") {
+    where.businessId = session.businessId;
+  }
   if (type) where.type = type;
   if (from || to) {
     where.date = {};
@@ -23,15 +27,16 @@ export async function GET(req: NextRequest) {
 
   const transactions = await prisma.poolTransaction.findMany({
     where,
-    include: {
-      projectRecord: {
-        include: { client: true },
-      },
-    },
+    include: { projectRecord: { include: { client: true } } },
     orderBy: { date: "desc" },
   });
 
+  const balanceWhere: Record<string, unknown> = {};
+  if (session.role !== "SUPER_ADMIN") {
+    balanceWhere.businessId = session.businessId;
+  }
   const allTransactions = await prisma.poolTransaction.findMany({
+    where: balanceWhere,
     select: { type: true, amountSAR: true },
   });
 
@@ -46,9 +51,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await getCurrentSession();
-  if (!session || session.role !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session.role === "EMPLOYEE") return NextResponse.json({ error: "Access denied" }, { status: 403 });
 
   const body = await req.json();
   const { projectRecordId, amountSAR, type, date, note } = body;
@@ -59,6 +63,7 @@ export async function POST(req: NextRequest) {
 
   const transaction = await prisma.poolTransaction.create({
     data: {
+      businessId: session.businessId,
       projectRecordId: projectRecordId || null,
       amountSAR: parseFloat(amountSAR),
       type,

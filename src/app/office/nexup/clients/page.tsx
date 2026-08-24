@@ -371,49 +371,116 @@ export default function NexupClientsPage() {
       {/* Create Form Modal */}
       {showForm && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={e => { if (e.target === e.currentTarget) { setShowForm(false); resetForm(); } }}>
-          <div style={{ background: "var(--surface)", borderRadius: 12, maxWidth: 600, width: "95%", maxHeight: "90vh", overflow: "auto", border: "1px solid var(--border)" }}>
-            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", margin: 0 }}>New Record</h3>
-              <button onClick={() => { setShowForm(false); resetForm(); }} style={{ background: "none", border: "none", fontSize: 16, color: "var(--muted)", cursor: "pointer" }}>✕</button>
+          <div style={{ background: "var(--surface)", borderRadius: 14, maxWidth: 620, width: "95%", maxHeight: "90vh", overflow: "auto", border: "1px solid var(--border)" }}>
+            {/* Header */}
+            <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", margin: 0 }}>New Service Record</h3>
+                <p style={{ fontSize: 11, color: "var(--muted)", margin: "2px 0 0" }}>Add client and project details</p>
+              </div>
+              <button onClick={() => { setShowForm(false); resetForm(); }} style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "var(--surface-hover)", color: "var(--muted)", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
             </div>
             <form onSubmit={handleSubmit}>
-              <div style={{ padding: "16px 20px" }}>
-                {error && <div style={{ padding: "8px 12px", borderRadius: 6, background: "rgba(239,68,68,0.1)", color: "#ef4444", fontSize: 12, marginBottom: 12 }}>{error}</div>}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  {[
-                    { l: "Date *", el: <input required type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /> },
-                    { l: "Phone *", el: <input required placeholder="05XXXXXXXX" value={form.clientPhone} dir="ltr" onChange={e => { setForm(f => ({ ...f, clientPhone: e.target.value })); setClientSuggestion(null); }} onBlur={e => checkPhone(e.target.value)} /> },
-                    { l: "Client Name *", el: <input required placeholder="Name" value={form.clientName} readOnly={!!clientSuggestion} style={clientSuggestion ? { background: "var(--surface-hover)" } : {}} onChange={e => setForm(f => ({ ...f, clientName: e.target.value }))} /> },
-                    { l: "Project *", el: <input required placeholder="Project name" value={form.projectName} onChange={e => setForm(f => ({ ...f, projectName: e.target.value }))} /> },
-                    { l: "Price (SAR) *", el: <input required type="number" step="0.01" min="0" placeholder="0" value={form.totalPrice} dir="ltr" style={{ textAlign: "right" }} onChange={e => setForm(f => ({ ...f, totalPrice: e.target.value }))} /> },
-                    { l: "Deposit (SAR)", el: <input type="number" step="0.01" min="0" placeholder="0" value={form.deposit} dir="ltr" style={{ textAlign: "right" }} onChange={e => setForm(f => ({ ...f, deposit: e.target.value }))} /> },
-                    { l: "Remaining", el: <div style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-hover)", fontWeight: 700, fontSize: 12, direction: "ltr", textAlign: "right", color: remaining > 0 ? "#ef4444" : "#10b981" }}>{fmt(remaining)} SAR</div> },
-                    { l: "Designer", el: <input placeholder="Name or select..." value={form.designerName || form.designerId} onChange={e => setForm(f => ({ ...f, designerName: e.target.value, designerId: "" }))} list="designer-list" /> },
-                  ].map(({ l, el }, i) => (
-                    <div key={i}>
-                      <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 2 }}>{l}</label>
-                      <div style={{ fontSize: 12 }}>{el}</div>
-                    </div>
-                  ))}
-                  <datalist id="designer-list">{users.map(u => <option key={u.id} value={u.name} />)}</datalist>
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 2 }}>Services</label>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                      {services.map(s => (
-                        <button key={s.id} type="button" onClick={() => setForm(f => ({ ...f, serviceIds: f.serviceIds.includes(s.id) ? f.serviceIds.filter(x => x !== s.id) : [...f.serviceIds, s.id] }))} style={{ padding: "3px 8px", borderRadius: 5, border: "1px solid", borderColor: form.serviceIds.includes(s.id) ? "#0d9488" : "var(--border)", background: form.serviceIds.includes(s.id) ? "rgba(13,148,136,0.1)" : "var(--surface)", color: form.serviceIds.includes(s.id) ? "#0d9488" : "var(--muted)", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{s.name}</button>
-                      ))}
-                    </div>
+              <div style={{ padding: "20px 24px" }}>
+                {error && <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(239,68,68,0.1)", color: "#ef4444", fontSize: 12, marginBottom: 14 }}>{error}</div>}
+
+                {/* Client Info Section */}
+                <div style={{ marginBottom: 18 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ width: 20, height: 20, borderRadius: 5, background: "rgba(59,130,246,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10 }}>👤</span>
+                    Client Info
                   </div>
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 2 }}>Notes</label>
-                    <textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Notes..." style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", resize: "vertical" }} />
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 3 }}>Phone *</label>
+                      <input required placeholder="05XXXXXXXX" value={form.clientPhone} dir="ltr" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none" }} onChange={e => { setForm(f => ({ ...f, clientPhone: e.target.value })); setClientSuggestion(null); }} onBlur={e => checkPhone(e.target.value)} />
+                      {clientSuggestion && <div style={{ marginTop: 4, padding: "4px 8px", borderRadius: 4, background: "rgba(13,148,136,0.08)", fontSize: 10, color: "#0d9488" }}>✓ {clientSuggestion.name}</div>}
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 3 }}>Client Name *</label>
+                      <input required placeholder="Name" value={form.clientName} readOnly={!!clientSuggestion} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: clientSuggestion ? "var(--surface-hover)" : "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none" }} onChange={e => setForm(f => ({ ...f, clientName: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 3 }}>Date *</label>
+                      <input required type="date" value={form.date} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none" }} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+                    </div>
                   </div>
                 </div>
-                {clientSuggestion && <div style={{ marginTop: 8, padding: "6px 10px", borderRadius: 5, background: "rgba(13,148,136,0.08)", fontSize: 11, color: "#0d9488" }}>✓ Existing: <strong>{clientSuggestion.name}</strong> — {TIER[clientSuggestion.tier]?.l} {clientSuggestion.isRepeatClient && "🔄"}</div>}
+
+                {/* Project Info Section */}
+                <div style={{ marginBottom: 18 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ width: 20, height: 20, borderRadius: 5, background: "rgba(13,148,136,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10 }}>📁</span>
+                    Project Details
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 3 }}>Project Name *</label>
+                      <input required placeholder="e.g. Al-Furat Company Identity" value={form.projectName} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none" }} onChange={e => setForm(f => ({ ...f, projectName: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 3 }}>Total Price (SAR) *</label>
+                      <input required type="number" step="0.01" min="0" placeholder="0" value={form.totalPrice} dir="ltr" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", textAlign: "right" }} onChange={e => setForm(f => ({ ...f, totalPrice: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 3 }}>Deposit (SAR)</label>
+                      <input type="number" step="0.01" min="0" placeholder="0" value={form.deposit} dir="ltr" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", textAlign: "right" }} onChange={e => setForm(f => ({ ...f, deposit: e.target.value }))} />
+                    </div>
+                    <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 10 }}>
+                      <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)", whiteSpace: "nowrap" }}>Remaining</label>
+                      <div style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-hover)", fontWeight: 700, fontSize: 12, direction: "ltr", textAlign: "right", color: remaining > 0 ? "#ef4444" : "#10b981" }}>{fmt(remaining)} SAR</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Services Section */}
+                <div style={{ marginBottom: 18 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ width: 20, height: 20, borderRadius: 5, background: "rgba(245,158,11,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10 }}>🎨</span>
+                    Services
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {services.map(s => (
+                      <button key={s.id} type="button" onClick={() => setForm(f => ({ ...f, serviceIds: f.serviceIds.includes(s.id) ? f.serviceIds.filter(x => x !== s.id) : [...f.serviceIds, s.id] }))}
+                        style={{ padding: "5px 12px", borderRadius: 20, border: "1.5px solid", borderColor: form.serviceIds.includes(s.id) ? "#0d9488" : "var(--border)", background: form.serviceIds.includes(s.id) ? "rgba(13,148,136,0.1)" : "var(--surface)", color: form.serviceIds.includes(s.id) ? "#0d9488" : "var(--text-secondary)", fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
+                        {s.name}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <input placeholder="+ Add custom service (if not in the list)" value={form.customServiceText} onChange={e => setForm(f => ({ ...f, customServiceText: e.target.value }))}
+                      style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px dashed var(--border)", background: "transparent", color: "var(--text)", fontSize: 11, outline: "none" }} />
+                  </div>
+                </div>
+
+                {/* Designer + Notes */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 3 }}>Designer</label>
+                    <input placeholder="Type name or select..." value={form.designerName || form.designerId} onChange={e => setForm(f => ({ ...f, designerName: e.target.value, designerId: "" }))} list="designer-list"
+                      style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none" }} />
+                    <datalist id="designer-list">{users.map(u => <option key={u.id} value={u.name} />)}</datalist>
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 3 }}>Work Status</label>
+                    <select value={form.workStatus} onChange={e => setForm(f => ({ ...f, workStatus: e.target.value }))}
+                      style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none" }}>
+                      <option value="WAITING">⏳ Waiting</option>
+                      <option value="IN_PROGRESS">🔄 In Progress</option>
+                      <option value="COMPLETED">✅ Completed</option>
+                      <option value="PAUSED">⏸ Paused</option>
+                    </select>
+                  </div>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 3 }}>Notes</label>
+                    <textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes..."
+                      style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", resize: "vertical" }} />
+                  </div>
+                </div>
               </div>
-              <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                <button type="button" onClick={() => { setShowForm(false); resetForm(); }} style={{ padding: "7px 14px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-                <button type="submit" disabled={submitting} style={{ padding: "7px 14px", borderRadius: 6, border: "none", background: "#0d9488", color: "#fff", fontSize: 12, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1 }}>{submitting ? "Saving..." : "Save"}</button>
+              <div style={{ padding: "14px 24px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button type="button" onClick={() => { setShowForm(false); resetForm(); }} style={{ padding: "9px 18px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                <button type="submit" disabled={submitting} style={{ padding: "9px 22px", borderRadius: 8, border: "none", background: "#0d9488", color: "#fff", fontSize: 12, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1, boxShadow: "0 2px 6px rgba(13,148,136,0.3)" }}>{submitting ? "Saving..." : "Save Record"}</button>
               </div>
             </form>
           </div>

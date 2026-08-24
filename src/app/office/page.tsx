@@ -36,19 +36,19 @@ const BUSINESS_CONFIG: Record<string, { color: string; gradient: string; desc: s
     color: "#0d9488",
     gradient: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)",
     desc: "Graphic design & visual identity",
-    iconPath: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5", // design/layers icon
+    iconPath: "M12 19l7-7 3 3-7 7-3-3z M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z M2 2l7.586 7.586", // Pen tool (design)
   },
   rebound: {
     color: "#3b82f6",
     gradient: "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
     desc: "Digital marketing & printing",
-    iconPath: "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0", // megaphone
+    iconPath: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z M8 10h0 M12 10h0 M16 10h0", // Chat bubble with dots (marketing/communication)
   },
   abomazen: {
     color: "#8b5cf6",
     gradient: "linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%)",
     desc: "Real estate marketing",
-    iconPath: "M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10", // building/home
+    iconPath: "M3 21h18 M5 21V7l7-4 7 4v14 M9 21v-6h6v6", // Building (real estate)
   },
 };
 

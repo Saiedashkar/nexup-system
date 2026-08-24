@@ -28,13 +28,21 @@ export async function PATCH(
     const updateData: Record<string, unknown> = {};
 
     if (body.workStatus !== undefined) updateData.workStatus = body.workStatus;
-    if (body.designerId !== undefined) updateData.designerId = body.designerId;
     if (body.projectName !== undefined) updateData.projectName = body.projectName;
     if (body.notes !== undefined) updateData.notes = body.notes;
 
-    // Handle payment updates
+    // Handle designer — support both designerId (from dropdown) and designerName (free text)
+    if (body.designerId !== undefined) {
+      updateData.designerId = body.designerId || null;
+    }
+    if (body.designerName !== undefined) {
+      updateData.designerName = body.designerName || null;
+    }
+
+    // Handle payment updates — supports both full and partial payments
     if (body.deposit !== undefined) {
       const newDeposit = parseFloat(String(body.deposit));
+      const oldDeposit = parseFloat(String(existing.deposit));
       const newRemaining = parseFloat(String(existing.totalPrice)) - newDeposit;
       updateData.deposit = newDeposit;
       updateData.remaining = Math.max(0, newRemaining);
@@ -44,7 +52,8 @@ export async function PATCH(
         ? "PARTIAL"
         : "UNPAID";
 
-      const depositDiff = newDeposit - parseFloat(String(existing.deposit));
+      // Create IN pool transaction for the payment difference
+      const depositDiff = newDeposit - oldDeposit;
       if (depositDiff > 0) {
         await prisma.poolTransaction.create({
           data: {
@@ -59,27 +68,25 @@ export async function PATCH(
       }
     }
 
-    // Auto-complete work status toggle
-    if (body.toggleComplete) {
-      updateData.workStatus = existing.workStatus === "COMPLETED" ? "IN_PROGRESS" : "COMPLETED";
-      if (updateData.workStatus === "COMPLETED") {
-        if (parseFloat(String(existing.remaining)) > 0) {
-          updateData.paymentStatus = "FULL";
-          updateData.remaining = 0;
-          const remainingAmount = parseFloat(String(existing.remaining));
-          if (remainingAmount > 0) {
-            await prisma.poolTransaction.create({
-              data: {
-                businessId: existing.businessId,
-                projectRecordId: id,
-                amountSAR: remainingAmount,
-                type: "IN",
-                date: new Date(),
-                note: `Final payment — ${existing.client.name} — ${existing.projectName}`,
-              },
-            });
-          }
-        }
+    // Quick pay remaining — sets deposit to full totalPrice
+    if (body.payRemaining) {
+      const remaining = parseFloat(String(existing.remaining));
+      if (remaining > 0) {
+        const newDeposit = parseFloat(String(existing.totalPrice));
+        updateData.deposit = newDeposit;
+        updateData.remaining = 0;
+        updateData.paymentStatus = "FULL";
+
+        await prisma.poolTransaction.create({
+          data: {
+            businessId: existing.businessId,
+            projectRecordId: id,
+            amountSAR: remaining,
+            type: "IN",
+            date: new Date(),
+            note: `Full payment — ${existing.client.name} — ${existing.projectName}`,
+          },
+        });
       }
     }
 

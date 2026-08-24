@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
       deposit,
       workStatus,
       designerId,
+      designerName,
       serviceIds,
       notes,
     } = body;
@@ -141,7 +142,8 @@ export async function POST(request: NextRequest) {
         remaining,
         workStatus: workStatus || "WAITING",
         paymentStatus: dep >= total ? "FULL" : dep > 0 ? "PARTIAL" : "UNPAID",
-        designerId: designerId || session.userId,
+        designerId: designerId || null,
+        designerName: designerName || null,
         notes: notes || null,
         services: serviceIds?.length ? { connect: serviceIds.map((id: string) => ({ id })) } : undefined,
       },

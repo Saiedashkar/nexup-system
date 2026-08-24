@@ -189,7 +189,7 @@ export default async function DashboardPage() {
                     <tr key={p.id}>
                       <td style={{ fontWeight: 600 }}>{p.client.name}</td>
                       <td>{p.projectName}</td>
-                      <td>{p.designer.name}</td>
+                      <td>{p.designer?.name || p.designerName || '—'}</td>
                       <td style={{ fontWeight: 700 }}>{Number(p.totalPrice).toLocaleString("ar-SA")} ر.س</td>
                       <td><span className={`badge ${workStatusBadge[p.workStatus]}`}>{workStatusMap[p.workStatus]}</span></td>
                       <td><span className={`badge badge-${p.paymentStatus.toLowerCase()}`}>{p.paymentStatus === "FULL" ? "مدفوع" : p.paymentStatus === "PARTIAL" ? "جزئي" : "غير مدفوع"}</span></td>

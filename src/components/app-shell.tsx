@@ -12,7 +12,7 @@ function NavIcon({ d }: { d: string }) {
 const icons = {
   dashboard: "M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10",
   clients: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75",
-  finance: "M12 2v20 M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6",
+  treasury: "M21 12V7H5a2 2 0 0 1 0-4h14v4 M3 5v14a2 2 0 0 0 2 2h16v-5 M18 12a2 2 0 0 0 0 4h4v-4z",
   logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9",
 };
 
@@ -39,7 +39,7 @@ export function AppShell({
 
         <nav className="sidebar-nav">
           <div className="sidebar-section">
-            <div className="sidebar-section-title">الرئيسية</div>
+            <div className="sidebar-section-title">القائمة الرئيسية</div>
             {isAdmin && (
               <Link className={`sidebar-link ${activePage === "dashboard" ? "active" : ""}`} href="/dashboard">
                 <NavIcon d={icons.dashboard} />
@@ -54,10 +54,10 @@ export function AppShell({
 
           {isAdmin && (
             <div className="sidebar-section">
-              <div className="sidebar-section-title">المالية</div>
+              <div className="sidebar-section-title">النظام المالي</div>
               <Link className={`sidebar-link ${activePage === "finance" ? "active" : ""}`} href="/finance">
-                <NavIcon d={icons.finance} />
-                إدارة الحسابات
+                <NavIcon d={icons.treasury} />
+                الخزينة والمصروفات
               </Link>
             </div>
           )}

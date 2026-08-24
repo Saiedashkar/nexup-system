@@ -77,14 +77,13 @@ export async function POST(request: NextRequest) {
         data: { phone: clientPhone, name: clientName, tier: "NORMAL" },
       });
     } else if (client.name !== clientName) {
-      // Update name if changed
       client = await prisma.client.update({
         where: { id: client.id },
         data: { name: clientName },
       });
     }
 
-    // Calculate remaining
+    // Calculate remaining (auto-calculated, not from client)
     const total = parseFloat(String(totalPrice));
     const dep = parseFloat(String(deposit || 0));
     const remaining = total - dep;
@@ -112,6 +111,19 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // AUTO: Create IN transaction in Available Balance when deposit > 0
+    if (dep > 0) {
+      await prisma.poolTransaction.create({
+        data: {
+          projectRecordId: project.id,
+          amountSAR: dep,
+          type: "IN",
+          date: new Date(date),
+          note: `عربون — ${clientName} — ${projectName}`,
+        },
+      });
+    }
+
     // Log activity
     await prisma.activityLog.create({
       data: {
@@ -122,7 +134,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Update client tier based on project history
+    // AUTO: Update client tier based on payment history
     const projectCount = await prisma.projectRecord.count({ where: { clientId: client.id } });
     const totalPaid = await prisma.projectRecord.aggregate({
       where: { clientId: client.id, paymentStatus: "FULL" },

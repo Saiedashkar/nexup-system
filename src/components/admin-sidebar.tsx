@@ -23,12 +23,12 @@ const icons = {
 };
 
 const NAV = [
-  { href: "/office/admin/dashboard", label: "Dashboard", icon: icons.dashboard },
-  { href: "/office/admin/partners", label: "Partners", icon: icons.partners },
-  { href: "/office/admin/partner-ledger", label: "Partner Ledger", icon: icons.ledger },
-  { href: "/office/admin/office-expenses", label: "Office Expenses", icon: icons.expenses },
-  { href: "/office/admin/capital", label: "Capital & Funding", icon: icons.capital },
-  { href: "/office/admin/settings", label: "Allocation Settings", icon: icons.settings },
+  { href: "/office/admin/dashboard", label: "Dashboard", ar: "لوحة التحكم", icon: icons.dashboard },
+  { href: "/office/admin/partners", label: "Partners", ar: "الشركاء", icon: icons.partners },
+  { href: "/office/admin/partner-ledger", label: "Partner Ledger", ar: "كشف حساب الشريك", icon: icons.ledger },
+  { href: "/office/admin/office-expenses", label: "Office Expenses", ar: "مصاريف المكتب", icon: icons.expenses },
+  { href: "/office/admin/capital", label: "Capital & Funding", ar: "رأس المال والتمويل", icon: icons.capital },
+  { href: "/office/admin/settings", label: "Allocation Settings", ar: "إعدادات التوزيع", icon: icons.settings },
 ];
 
 export function AdminSidebar() {
@@ -50,7 +50,7 @@ export function AdminSidebar() {
 
   return (
     <aside style={{
-      width: collapsed ? 72 : 250, transition: "width 0.2s ease", background: "#0f172a",
+      width: collapsed ? 72 : 260, transition: "width 0.2s ease", background: "#0f172a",
       color: "#e2e8f0", display: "flex", flexDirection: "column", height: "100vh",
       position: "sticky", top: 0, overflow: "hidden", flexShrink: 0,
     }}>
@@ -62,8 +62,8 @@ export function AdminSidebar() {
           </Link>
           {!collapsed && (
             <div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>Office Admin</div>
-              <div style={{ fontSize: 10, color: "#64748b", letterSpacing: "0.05em", textTransform: "uppercase" }}>Management Layer</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>الإدارة المكتبية</div>
+              <div style={{ fontSize: 10, color: "#64748b", letterSpacing: "0.05em" }}>Office Administration</div>
             </div>
           )}
         </div>
@@ -82,10 +82,15 @@ export function AdminSidebar() {
             }}
               onMouseEnter={e => { if (!active) { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.color = "#e2e8f0"; } }}
               onMouseLeave={e => { if (!active) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#94a3b8"; } }}
-              title={collapsed ? item.label : undefined}
+              title={collapsed ? `${item.ar} — ${item.label}` : undefined}
             >
               <NavIcon d={item.icon} size={18} />
-              {!collapsed && <span>{item.label}</span>}
+              {!collapsed && (
+                <div>
+                  <div style={{ lineHeight: 1.2 }}>{item.ar}</div>
+                  <div style={{ fontSize: 10, color: "#64748b", marginTop: 1 }}>{item.label}</div>
+                </div>
+              )}
             </Link>
           );
         })}
@@ -95,11 +100,11 @@ export function AdminSidebar() {
       <div style={{ padding: collapsed ? "12px 8px" : "12px 16px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
         <button onClick={() => setCollapsed(!collapsed)} style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start", gap: 10, width: "100%", padding: "8px 0", background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 12, borderRadius: 8 }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={16} height={16} style={{ transform: collapsed ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}><path d="M15 18l-6-6 6-6" /></svg>
-          {!collapsed && <span>Collapse</span>}
+          {!collapsed && <span>طي</span>}
         </button>
         <button onClick={toggleTheme} style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start", gap: 10, width: "100%", padding: "8px 0", background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 12, borderRadius: 8 }}>
           {theme === "light" ? "🌙" : "☀️"}
-          {!collapsed && <span>{theme === "light" ? "Dark Mode" : "Light Mode"}</span>}
+          {!collapsed && <span>{theme === "light" ? "الوضع الليلي" : "الوضع النهاري"}</span>}
         </button>
       </div>
     </aside>

@@ -67,8 +67,8 @@ export default function PartnerLedgerPage() {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>Partner Ledger</h1>
-          <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>Track all partner transactions with running balance</p>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>كشف حساب الشريك</h1>
+          <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>تتبع كل حركات الشريك مع الرصيد الجاري — Partner Ledger</p>
         </div>
       </div>
 
@@ -92,58 +92,57 @@ export default function PartnerLedgerPage() {
           {/* Partner Summary Bar */}
           <div style={{ display: "flex", gap: 16, marginBottom: 16, padding: "14px 20px", borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)" }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 11, color: "var(--muted)" }}>Running Balance</div>
+              <div style={{ fontSize: 11, color: "var(--muted)" }}>الرصيد الجاري</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: partner.runningBalance >= 0 ? "#10b981" : "#ef4444", direction: "ltr" }}>{fmt(partner.runningBalance)} EGP</div>
             </div>
             <div style={{ width: 1, background: "var(--border)" }} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 11, color: "var(--muted)" }}>Outstanding Advances</div>
+              <div style={{ fontSize: 11, color: "var(--muted)" }}>السلف المستحقة</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: partner.outstandingAdvances > 0 ? "#f59e0b" : "var(--muted)", direction: "ltr" }}>{fmt(partner.outstandingAdvances)} EGP</div>
             </div>
             <div style={{ width: 1, background: "var(--border)" }} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 11, color: "var(--muted)" }}>Transactions</div>
+              <div style={{ fontSize: 11, color: "var(--muted)" }}>الحركات</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text)" }}>{partner.transactions.length}</div>
             </div>
             <div style={{ display: "flex", alignItems: "center" }}>
-              <button onClick={() => setShowForm(true)} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>＋ New Transaction</button>
+              <button onClick={() => setShowForm(true)} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>＋ حركة جديدة</button>
             </div>
           </div>
 
           {/* New Transaction Form */}
           {showForm && (
             <div style={{ padding: 20, borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)", marginBottom: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>New Transaction for {partner.name}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>حركة جديدة لـ {partner.name}</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 12 }}>
                 <div>
-                  <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>Type *</label>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>النوع *</label>
                   <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none" }}>
                     {TX_TYPES.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>Amount (EGP) *</label>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>المبلغ (EGP) *</label>
                   <input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none" }} />
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>Date *</label>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>التاريخ *</label>
                   <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none" }} />
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>Business (optional)</label>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>النشاط (اختياري)</label>
                   <select value={form.businessId} onChange={e => setForm(f => ({ ...f, businessId: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none" }}>
-                    <option value="">General (Office)</option>
+                    <option value="">عام (المكتب)</option>
                     {businesses.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>Note</label>
-                  <input value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} placeholder="Optional" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none" }} />
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>ملاحظة</label>                    <input value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} placeholder="اختياري" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none" }} />
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={addTx} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
-                <button onClick={() => setShowForm(false)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 12, cursor: "pointer" }}>Cancel</button>
+                <button onClick={addTx} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>حفظ</button>
+                <button onClick={() => setShowForm(false)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 12, cursor: "pointer" }}>إلغاء</button>
               </div>
             </div>
           )}
@@ -155,7 +154,7 @@ export default function PartnerLedgerPage() {
             </div>
 
             {partner.transactions.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 48, color: "var(--muted)", fontSize: 13 }}>No transactions yet.</div>
+              <div style={{ textAlign: "center", padding: 48, color: "var(--muted)", fontSize: 13 }}>لا توجد حركات بعد.</div>
             ) : partner.transactions.map(tx => {
               const txInfo = TX_MAP[tx.type] || TX_TYPES[0];
               const isCredit = ["SALARY", "PROFIT_SHARE"].includes(tx.type);

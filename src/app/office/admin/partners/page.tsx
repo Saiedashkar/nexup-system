@@ -59,19 +59,18 @@ export default function PartnersPage() {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>Partners</h1>
-          <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>Manage partners & ownership percentages</p>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>الشركاء</h1>
+          <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>إدارة الشركاء ونسب الملكية — Partners</p>
         </div>
-        <button onClick={() => setShowForm(true)} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>＋ New Partner</button>
+        <button onClick={() => setShowForm(true)} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>＋ شريك جديد</button>
       </div>
 
       {showForm && (
         <div style={{ padding: 20, borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)", marginBottom: 20 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>New Partner</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>شريك جديد</div>
           <div style={{ display: "flex", gap: 10 }}>
-            <input value={form.name} onChange={e => setForm({ name: e.target.value })} placeholder="Partner name (e.g. SAIED)" style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 13, outline: "none" }} />
-            <button onClick={addPartner} style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
-            <button onClick={() => setShowForm(false)} style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+            <input value={form.name} onChange={e => setForm({ name: e.target.value })} placeholder="اسم الشريك (مثال: SAIED)" style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 13, outline: "none" }} />              <button onClick={addPartner} style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>حفظ</button>
+              <button onClick={() => setShowForm(false)} style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 13, cursor: "pointer" }}>إلغاء</button>
           </div>
         </div>
       )}
@@ -108,27 +107,27 @@ export default function PartnersPage() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
                   <div style={{ textAlign: "center" }}>
                     <div style={{ fontSize: 18, fontWeight: 700, color: p.runningBalance >= 0 ? "#10b981" : "#ef4444" }}>{fmt(p.runningBalance)}</div>
-                    <div style={{ fontSize: 10, color: "var(--muted)" }}>Balance EGP</div>
+                    <div style={{ fontSize: 10, color: "var(--muted)" }}>الرصيد</div>
                   </div>
                   <div style={{ textAlign: "center" }}>
                     <div style={{ fontSize: 18, fontWeight: 700, color: "#3b82f6" }}>{fmt(p.totalCapital)}</div>
-                    <div style={{ fontSize: 10, color: "var(--muted)" }}>Capital</div>
+                    <div style={{ fontSize: 10, color: "var(--muted)" }}>رأس المال</div>
                   </div>
                   <div style={{ textAlign: "center" }}>
                     <div style={{ fontSize: 18, fontWeight: 700, color: p.outstandingAdvances > 0 ? "#f59e0b" : "var(--muted)" }}>{fmt(p.outstandingAdvances)}</div>
-                    <div style={{ fontSize: 10, color: "var(--muted)" }}>Advances</div>
+                    <div style={{ fontSize: 10, color: "var(--muted)" }}>السلف</div>
                   </div>
                 </div>
 
                 {/* Ownership */}
                 <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>OWNERSHIP</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>الملكية</div>
                   {p.ownerships.length > 0 ? p.ownerships.map(o => (
                     <div key={o.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0" }}>
                       <span style={{ color: "var(--text)" }}>{o.business.name}</span>
                       <span style={{ fontWeight: 700, color: "#8b5cf6" }}>{o.ownershipPct}%</span>
                     </div>
-                  )) : <div style={{ fontSize: 11, color: "var(--muted)", fontStyle: "italic" }}>No ownership set</div>}
+                  )) :                    <div style={{ fontSize: 11, color: "var(--muted)", fontStyle: "italic" }}>لم تُحدد بعد</div>}
                 </div>
               </div>
             </div>

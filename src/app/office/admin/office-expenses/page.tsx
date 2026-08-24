@@ -77,19 +77,19 @@ export default function OfficeExpensesPage() {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>Office Expenses</h1>
-          <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>Track all office-level expenses (not business-specific)</p>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>مصاريف المكتب</h1>
+          <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>مصروفات المكتب العامة (ليست مخصصة لنشاط معين) — Office Expenses</p>
         </div>
-        <button onClick={() => setShowForm(true)} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>＋ New Expense</button>
+        <button onClick={() => setShowForm(true)} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>＋ مصروف جديد</button>
       </div>
 
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
         {[
-          { label: "This Month", value: `${fmt(totalMonthExpenses)} EGP`, color: "#ef4444", bg: "rgba(239,68,68,0.06)" },
-          { label: "All Time", value: `${fmt(totalAllExpenses)} EGP`, color: "#f59e0b", bg: "rgba(245,158,11,0.06)" },
-          { label: "Office Income", value: `${fmt(officeIncome)} EGP`, color: "#10b981", bg: "rgba(16,185,129,0.06)" },
-          { label: "Surplus / Deficit", value: `${surplus >= 0 ? "+" : ""}${fmt(surplus)} EGP`, color: surplus >= 0 ? "#10b981" : "#ef4444", bg: surplus >= 0 ? "rgba(16,185,129,0.06)" : "rgba(239,68,68,0.06)" },
+          { label: "هذا الشهر", value: `${fmt(totalMonthExpenses)} EGP`, color: "#ef4444", bg: "rgba(239,68,68,0.06)" },
+          { label: "إجمالي المصاريف", value: `${fmt(totalAllExpenses)} EGP`, color: "#f59e0b", bg: "rgba(245,158,11,0.06)" },
+          { label: "دخل المكتب", value: `${fmt(officeIncome)} EGP`, color: "#10b981", bg: "rgba(16,185,129,0.06)" },
+          { label: "فائض / عجز", value: `${surplus >= 0 ? "+" : ""}${fmt(surplus)} EGP`, color: surplus >= 0 ? "#10b981" : "#ef4444", bg: surplus >= 0 ? "rgba(16,185,129,0.06)" : "rgba(239,68,68,0.06)" },
         ].map(s => (
           <div key={s.label} style={{ padding: "18px 20px", borderRadius: 12, background: s.bg, border: "1px solid var(--border)" }}>
             <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>{s.label}</div>
@@ -101,12 +101,12 @@ export default function OfficeExpensesPage() {
       {/* Form */}
       {showForm && (
         <div style={{ padding: 20, borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)", marginBottom: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>New Office Expense</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>مصروف مكتب جديد</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
-            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Date *</label><input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
-            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Description *</label><input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. Rent, Net, Electricity" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
-            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Cost (EGP) *</label><input type="number" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
-            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Name *</label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Recipient" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
+            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>التاريخ *</label><input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
+            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>الوصف *</label><input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. Rent, Net, Electricity" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
+            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>التكلفة (EGP) *</label><input type="number" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
+            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>المستلم *</label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Recipient" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
             <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Category *</label>
@@ -116,11 +116,11 @@ export default function OfficeExpensesPage() {
                 ))}
               </div>
             </div>
-            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Notes</label><input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
+            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>ملاحظات</label><input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={submit} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
-            <button onClick={() => setShowForm(false)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 12, cursor: "pointer" }}>Cancel</button>
+            <button onClick={submit} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>حفظ</button>
+            <button onClick={() => setShowForm(false)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 12, cursor: "pointer" }}>إلغاء</button>
           </div>
         </div>
       )}

@@ -57,39 +57,39 @@ export default function CapitalPage() {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>Capital & Funding</h1>
-          <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>Track partner capital contributions</p>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>رأس المال والتمويل</h1>
+          <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>تتبع مساهمات الشركاء في رأس المال — Capital & Funding</p>
         </div>
-        <button onClick={() => setShowForm(true)} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: "#10b981", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>＋ New Contribution</button>
+        <button onClick={() => setShowForm(true)} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: "#10b981", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>＋ مساهمة جديدة</button>
       </div>
 
       <div style={{ padding: "18px 24px", borderRadius: 12, background: "rgba(16,185,129,0.06)", border: "1px solid var(--border)", marginBottom: 20 }}>
-        <div style={{ fontSize: 11, color: "var(--muted)" }}>Total Office Capital</div>
+        <div style={{ fontSize: 11, color: "var(--muted)" }}>إجمالي رأس المال</div>
         <div style={{ fontSize: 28, fontWeight: 800, color: "#10b981", direction: "ltr" }}>{fmt(totalCapital)} EGP</div>
       </div>
 
       {showForm && (
         <div style={{ padding: 20, borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)", marginBottom: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>New Capital Contribution</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>مساهمة رأس مال جديدة</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
-            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Partner *</label>
+            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>الشريك *</label>
               <select value={form.partnerId} onChange={e => setForm(f => ({ ...f, partnerId: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }}>
-                <option value="">Select partner</option>
+                <option value="">اختر شريك</option>
                 {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
-            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Amount (EGP) *</label><input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
-            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Type *</label>
+            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>المبلغ (EGP) *</label><input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
+            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>النوع *</label>
               <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }}>
                 <option value="CASH">💵 Cash</option><option value="ASSET">📦 Asset</option>
               </select>
             </div>
-            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Date *</label><input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
+            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>التاريخ *</label><input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
           </div>
           <div style={{ marginBottom: 12 }}><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Description</label><input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Optional description" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={submit} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "#10b981", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
-            <button onClick={() => setShowForm(false)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 12, cursor: "pointer" }}>Cancel</button>
+            <button onClick={submit} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "#10b981", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>حفظ</button>
+            <button onClick={() => setShowForm(false)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 12, cursor: "pointer" }}>إلغاء</button>
           </div>
         </div>
       )}
@@ -129,7 +129,7 @@ export default function CapitalPage() {
               </div>
             </div>
           ))}
-          {contributions.length === 0 && <div style={{ textAlign: "center", padding: 48, color: "var(--muted)" }}>No contributions yet.</div>}
+          {contributions.length === 0 && <div style={{ textAlign: "center", padding: 48, color: "var(--muted)" }}>لا توجد مساهمات بعد.</div>}
         </div>
       )}
     </div>

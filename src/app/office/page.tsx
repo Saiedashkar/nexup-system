@@ -156,8 +156,8 @@ export default function OfficePage() {
             }}>
               <span style={{ fontSize: 20 }}>🏢</span>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#8b5cf6" }}>Office Administration</div>
-                <div style={{ fontSize: 11, color: "var(--muted)" }}>Partners, Expenses, Capital, Allocations</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#8b5cf6" }}>الإدارة المكتبية الشاملة</div>
+                <div style={{ fontSize: 11, color: "var(--muted)" }}>الشركاء · المصاريف · رأس المال · التوزيع</div>
               </div>
               <svg viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="16" height="16" style={{ marginInlineStart: 8 }}>
                 <path d="M19 12H5M12 19l-7-7 7-7" />

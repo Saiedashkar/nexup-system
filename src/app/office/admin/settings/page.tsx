@@ -66,15 +66,15 @@ export default function AllocationSettingsPage() {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>Allocation Settings</h1>
-          <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>Set how much each business contributes to office expenses</p>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>إعدادات التوزيع</h1>
+          <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>تحديد نسبة كل نشاط من تحمّل مصاريف المكتب — Allocation Settings</p>
         </div>
-        <button onClick={() => setShowForm(true)} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: "#f59e0b", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>＋ New Setting</button>
+        <button onClick={() => setShowForm(true)} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: "#f59e0b", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>＋ إعداد جديد</button>
       </div>
 
       {/* Current Allocation Visual */}
       <div style={{ padding: 20, borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)", marginBottom: 20 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>Current Allocation</div>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>التوزيع الحالي</div>
         <div style={{ display: "flex", height: 32, borderRadius: 8, overflow: "hidden", marginBottom: 12 }}>
           {Array.from(latestByBusiness.values()).map(a => (
             <div key={a.business.slug} style={{ width: `${a.allocationPct}%`, background: BIZ_COLORS[a.business.slug] || "#6b7280", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700, transition: "width 0.3s" }}>
@@ -95,20 +95,20 @@ export default function AllocationSettingsPage() {
 
       {showForm && (
         <div style={{ padding: 20, borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)", marginBottom: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>New Allocation Setting</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>إعداد توزيع جديد</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
-            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Business *</label>
+            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>النشاط *</label>
               <select value={form.businessId} onChange={e => setForm(f => ({ ...f, businessId: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }}>
-                <option value="">Select business</option>
+                <option value="">اختر نشاط</option>
                 {businesses.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </div>
-            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Allocation % *</label><input type="number" min="0" max="100" value={form.allocationPct} onChange={e => setForm(f => ({ ...f, allocationPct: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
-            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Effective Date</label><input type="date" value={form.effectiveDate} onChange={e => setForm(f => ({ ...f, effectiveDate: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
+            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>النسبة % *</label><input type="number" min="0" max="100" value={form.allocationPct} onChange={e => setForm(f => ({ ...f, allocationPct: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
+            <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>تاريخ السريان</label><input type="date" value={form.effectiveDate} onChange={e => setForm(f => ({ ...f, effectiveDate: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={submit} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "#f59e0b", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
-            <button onClick={() => setShowForm(false)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 12, cursor: "pointer" }}>Cancel</button>
+            <button onClick={submit} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "#f59e0b", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>حفظ</button>
+            <button onClick={() => setShowForm(false)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 12, cursor: "pointer" }}>إلغاء</button>
           </div>
         </div>
       )}

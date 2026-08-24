@@ -29,17 +29,17 @@ export default function AdminDashboardPage() {
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>Office Dashboard</h1>
-        <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>Overview of office finances, partners & expenses</p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>لوحة تحكم المكتب</h1>
+        <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>نظرة شاملة على المالية والشركاء والمصاريف — Office Dashboard</p>
       </div>
 
       {/* Top Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
         {[
-          { label: "Office Expenses (Month)", value: `${fmt(stats.currentMonth.totalExpenses)} EGP`, color: "#ef4444", bg: "rgba(239,68,68,0.06)" },
-          { label: "Office Expenses (All Time)", value: `${fmt(stats.allTime.totalExpenses)} EGP`, color: "#f59e0b", bg: "rgba(245,158,11,0.06)" },
-          { label: "Total Capital", value: `${fmt(stats.allTime.totalCapital)} EGP`, color: "#10b981", bg: "rgba(16,185,129,0.06)" },
-          { label: "Partners", value: stats.partnerSummary.length, color: "#8b5cf6", bg: "rgba(139,92,246,0.06)" },
+          { label: "مصاريف هذا الشهر", value: `${fmt(stats.currentMonth.totalExpenses)} EGP`, color: "#ef4444", bg: "rgba(239,68,68,0.06)" },
+          { label: "إجمالي المصاريف", value: `${fmt(stats.allTime.totalExpenses)} EGP`, color: "#f59e0b", bg: "rgba(245,158,11,0.06)" },
+          { label: "رأس المال", value: `${fmt(stats.allTime.totalCapital)} EGP`, color: "#10b981", bg: "rgba(16,185,129,0.06)" },
+          { label: "عدد الشركاء", value: stats.partnerSummary.length, color: "#8b5cf6", bg: "rgba(139,92,246,0.06)" },
         ].map(s => (
           <div key={s.label} style={{ padding: "18px 20px", borderRadius: 12, background: s.bg, border: "1px solid var(--border)" }}>
             <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>{s.label}</div>
@@ -52,22 +52,21 @@ export default function AdminDashboardPage() {
         {/* Partner Balances */}
         <div style={{ borderRadius: 12, border: "1px solid var(--border)", overflow: "hidden" }}>
           <div style={{ padding: "14px 20px", background: "var(--surface)", borderBottom: "1px solid var(--border)", fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
-            Partner Balances
+            أرصدة الشركاء
           </div>
           {stats.partnerSummary.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 32, color: "var(--muted)", fontSize: 13 }}>No partners yet</div>
+            <div style={{ textAlign: "center", padding: 32, color: "var(--muted)", fontSize: 13 }}>لا يوجد شركاء بعد</div>
           ) : stats.partnerSummary.map(p => (
             <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", borderBottom: "1px solid var(--border)" }}>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text)" }}>{p.name}</div>
-                <div style={{ fontSize: 11, color: "var(--muted)" }}>{p.txCount} transactions</div>
+                <div style={{ fontSize: 11, color: "var(--muted)" }}>{p.txCount} حركة</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontWeight: 700, fontSize: 14, color: p.balance >= 0 ? "#10b981" : "#ef4444", direction: "ltr" }}>
                   {p.balance >= 0 ? "+" : ""}{fmt(p.balance)} EGP
-                </div>
-                {p.outstandingAdvances > 0 && (
-                  <div style={{ fontSize: 10, color: "#f59e0b" }}>Advances: {fmt(p.outstandingAdvances)} EGP</div>
+                </div>                  {p.outstandingAdvances > 0 && (
+                  <div style={{ fontSize: 10, color: "#f59e0b" }}>سلف: {fmt(p.outstandingAdvances)} EGP</div>
                 )}
               </div>
             </div>
@@ -77,7 +76,7 @@ export default function AdminDashboardPage() {
         {/* Monthly Expense Chart */}
         <div style={{ borderRadius: 12, border: "1px solid var(--border)", overflow: "hidden" }}>
           <div style={{ padding: "14px 20px", background: "var(--surface)", borderBottom: "1px solid var(--border)", fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
-            Monthly Office Expenses
+            مصروفات المكتب الشهرية
           </div>
           <div style={{ padding: 20 }}>
             {stats.monthlyBreakdown.map((m, i) => (

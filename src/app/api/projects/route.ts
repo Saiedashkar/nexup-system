@@ -10,6 +10,8 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") || "";
     const workStatus = searchParams.get("workStatus") || "";
     const paymentStatus = searchParams.get("paymentStatus") || "";
+    const sortBy = searchParams.get("sortBy") || "date";
+    const sortDir = searchParams.get("sortDir") || "desc";
 
     const where: Record<string, unknown> = {};
 
@@ -25,6 +27,11 @@ export async function GET(request: NextRequest) {
     if (workStatus) where.workStatus = workStatus;
     if (paymentStatus) where.paymentStatus = paymentStatus;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const orderBy: any = {};
+    if (sortBy === "client") orderBy.client = { name: sortDir };
+    else orderBy[sortBy] = sortDir;
+
     const projects = await prisma.projectRecord.findMany({
       where,
       include: {
@@ -32,20 +39,45 @@ export async function GET(request: NextRequest) {
         designer: { select: { id: true, name: true } },
         services: { select: { id: true, name: true } },
       },
-      orderBy: { date: "desc" },
+      orderBy,
     });
 
-    return NextResponse.json(projects);
+    // Enrich with client stats
+    const enriched = await Promise.all(
+      projects.map(async (p) => {
+        const clientProjectCount = await prisma.projectRecord.count({
+          where: { clientId: p.clientId },
+        });
+        const clientTotalPaid = await prisma.projectRecord.aggregate({
+          where: { clientId: p.clientId, paymentStatus: "FULL" },
+          _sum: { totalPrice: true },
+        });
+        const totalPaidAmount = Number(clientTotalPaid._sum.totalPrice ?? 0);
+        const isRepeatClient = clientProjectCount > 1;
+
+        return {
+          ...p,
+          client: {
+            ...p.client,
+            projectCount: clientProjectCount,
+            totalPaid: totalPaidAmount,
+            isRepeatClient,
+          },
+        };
+      })
+    );
+
+    return NextResponse.json(enriched);
   } catch (error) {
     console.error("Failed to fetch projects:", error);
-    return NextResponse.json({ error: "فشل جلب السجلات" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch records" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getCurrentSession();
-    if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await request.json();
     const {
@@ -58,13 +90,13 @@ export async function POST(request: NextRequest) {
       totalPrice,
       deposit,
       workStatus,
+      designerId,
       serviceIds,
       notes,
     } = body;
 
-    // Validate required fields
     if (!clientPhone || !clientName || !projectName || !date || !totalPrice) {
-      return NextResponse.json({ error: "يرجى تعبئة جميع الحقول المطلوبة" }, { status: 400 });
+      return NextResponse.json({ error: "Please fill all required fields" }, { status: 400 });
     }
 
     // Find or create client
@@ -83,12 +115,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Calculate remaining (auto-calculated, not from client)
     const total = parseFloat(String(totalPrice));
     const dep = parseFloat(String(deposit || 0));
     const remaining = total - dep;
 
-    // Create project record
     const project = await prisma.projectRecord.create({
       data: {
         clientId: client.id,
@@ -100,7 +130,7 @@ export async function POST(request: NextRequest) {
         remaining,
         workStatus: workStatus || "WAITING",
         paymentStatus: dep >= total ? "FULL" : dep > 0 ? "PARTIAL" : "UNPAID",
-        designerId: session.userId,
+        designerId: designerId || session.userId,
         notes: notes || null,
         services: serviceIds?.length ? { connect: serviceIds.map((id: string) => ({ id })) } : undefined,
       },
@@ -111,7 +141,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // AUTO: Create IN transaction in Available Balance when deposit > 0
+    // AUTO: Create IN transaction when deposit > 0
     if (dep > 0) {
       await prisma.poolTransaction.create({
         data: {
@@ -119,7 +149,7 @@ export async function POST(request: NextRequest) {
           amountSAR: dep,
           type: "IN",
           date: new Date(date),
-          note: `عربون — ${clientName} — ${projectName}`,
+          note: `Deposit — ${clientName} — ${projectName}`,
         },
       });
     }
@@ -134,7 +164,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // AUTO: Update client tier based on payment history
+    // AUTO: Update client tier
     const projectCount = await prisma.projectRecord.count({ where: { clientId: client.id } });
     const totalPaid = await prisma.projectRecord.aggregate({
       where: { clientId: client.id, paymentStatus: "FULL" },
@@ -143,14 +173,14 @@ export async function POST(request: NextRequest) {
     const totalRevenue = Number(totalPaid._sum.totalPrice ?? 0);
 
     let tier: "VIP" | "LOYAL" | "NORMAL" | "DELINQUENT" = "NORMAL";
-    if (totalRevenue > 50000 || projectCount >= 10) tier = "VIP";
-    else if (totalRevenue > 20000 || projectCount >= 5) tier = "LOYAL";
+    if (totalRevenue > 1000 || projectCount >= 3) tier = "VIP";
+    else if (totalRevenue > 500 || projectCount >= 2) tier = "LOYAL";
 
     await prisma.client.update({ where: { id: client.id }, data: { tier } });
 
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
     console.error("Failed to create project:", error);
-    return NextResponse.json({ error: "فشل إنشاء السجل" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to create record" }, { status: 500 });
   }
 }

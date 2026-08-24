@@ -57,6 +57,7 @@
   --sidebar-active-bg: rgba(13,148,136,0.15);
   --sidebar-active-text: #14b8a6;
   --input-bg: #ffffff;
+  --muted: #94a3b8;
   --card-shadow: var(--shadow-sm);
 }
 
@@ -77,6 +78,7 @@
   --sidebar-active-bg: rgba(13,148,136,0.2);
   --sidebar-active-text: #2dd4bf;
   --input-bg: #1e293b;
+  --muted: #64748b;
   --card-shadow: 0 1px 3px rgba(0,0,0,0.3);
   --brand-pale: rgba(13,148,136,0.15);
   --tier-vip-bg: rgba(139,92,246,0.15);

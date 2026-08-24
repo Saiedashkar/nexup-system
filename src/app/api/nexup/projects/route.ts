@@ -36,12 +36,37 @@ export async function GET(request: NextRequest) {
   const projects = await prisma.projectRecord.findMany({
     where,
     include: {
-      client: true,
+      client: { select: { id: true, name: true, phone: true, tier: true } },
       designer: { select: { id: true, name: true } },
       services: { select: { id: true, name: true } },
     },
     orderBy: { date: "desc" },
   });
 
-  return NextResponse.json(projects);
+  // Enrich with client stats (repeat client detection, total paid)
+  const enriched = await Promise.all(
+    projects.map(async (p) => {
+      const clientProjectCount = await prisma.projectRecord.count({
+        where: { clientId: p.clientId, businessId: nexup.id },
+      });
+      const clientTotalPaid = await prisma.projectRecord.aggregate({
+        where: { clientId: p.clientId, businessId: nexup.id, paymentStatus: "FULL" },
+        _sum: { totalPrice: true },
+      });
+      const totalPaidAmount = Number(clientTotalPaid._sum.totalPrice ?? 0);
+      const isRepeatClient = clientProjectCount > 1;
+
+      return {
+        ...p,
+        client: {
+          ...p.client,
+          projectCount: clientProjectCount,
+          totalPaid: totalPaidAmount,
+          isRepeatClient,
+        },
+      };
+    })
+  );
+
+  return NextResponse.json(enriched);
 }

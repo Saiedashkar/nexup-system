@@ -70,6 +70,10 @@ model Business {
   poolTransactions  PoolTransaction[]
   withdrawals       Withdrawal[]
   expenses          Expense[]
+  // Office admin relations
+  ownerships             BusinessOwnership[]
+  partnerTransactions    PartnerTransaction[]
+  allocationSettings     OfficeAllocationSetting[]
 
   @@index([slug])
 }
@@ -220,4 +224,109 @@ model ActivityLog {
   @@index([userId])
   @@index([entityType, entityId])
   @@index([timestamp])
+}
+
+// ═══════════════════════════════════════════════════════
+// Office Administration Layer (SUPER_ADMIN only)
+// ═══════════════════════════════════════════════════════
+
+enum PartnerTransactionType {
+  SALARY          // Fixed monthly salary
+  PROFIT_SHARE    // Share of distributed profits
+  ADVANCE         // Cash advance (deducted from future earnings)
+  WITHDRAWAL      // Normal withdrawal
+  LOAN_SETTLEMENT // Settlement/deduction of previous advance
+}
+
+enum CapitalType {
+  CASH
+  ASSET
+}
+
+enum ExpenseCat {
+  FIXED
+  VARIABLE
+}
+
+model Partner {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  ownerships          BusinessOwnership[]
+  transactions        PartnerTransaction[]
+  capitalContributions CapitalContribution[]
+}
+
+model BusinessOwnership {
+  id            String   @id @default(cuid())
+  partnerId     String
+  businessId    String
+  ownershipPct  Float    // percentage 0-100
+  effectiveDate DateTime @default(now())
+  partner       Partner  @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+
+  @@unique([partnerId, businessId, effectiveDate])
+  @@index([partnerId])
+  @@index([businessId])
+}
+
+model PartnerTransaction {
+  id          String                @id @default(cuid())
+  partnerId   String
+  type        PartnerTransactionType
+  amount      Float
+  date        DateTime
+  businessId  String?               // null = general office transaction
+  note        String?
+  createdAt   DateTime              @default(now())
+  partner     Partner               @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  business    Business?             @relation(fields: [businessId], references: [id], onDelete: SetNull)
+
+  @@index([partnerId])
+  @@index([businessId])
+  @@index([date])
+  @@index([type])
+}
+
+model OfficeExpense {
+  id          String     @id @default(cuid())
+  description String
+  cost        Float
+  category    ExpenseCat
+  name        String     // recipient/person
+  notes       String?
+  date        DateTime
+  month       Int
+  year        Int
+  createdAt   DateTime   @default(now())
+
+  @@index([year, month])
+  @@index([date])
+}
+
+model CapitalContribution {
+  id          String      @id @default(cuid())
+  partnerId   String
+  amount      Float
+  type        CapitalType
+  description String?
+  date        DateTime
+  createdAt   DateTime    @default(now())
+  partner     Partner     @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+
+  @@index([partnerId])
+  @@index([date])
+}
+
+model OfficeAllocationSetting {
+  id            String   @id @default(cuid())
+  businessId    String
+  allocationPct Float    // percentage this business pays of office expenses
+  effectiveDate DateTime @default(now())
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, effectiveDate])
+  @@index([businessId])
 }

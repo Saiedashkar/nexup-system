@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 
 /* ───── Types ───── */
-type ClientInfo = { id: string; name: string; phone: string; tier: string; projectCount: number; totalPaid: number; isRepeatClient: boolean; };
-type Project = { id: string; projectName: string; date: string; customServiceText: string | null; totalPrice: number; deposit: number; remaining: number; workStatus: string; paymentStatus: string; notes: string | null; createdAt: string; client: ClientInfo; designer: { id: string; name: string } | null; designerName: string | null; services: { id: string; name: string }[]; };
+type Payment = { id: string; amount: number; date: string; note: string | null };
+type ClientInfo = { id: string; name: string; phone: string; tier: string; projectCount: number; totalPaid: number; isRepeatClient: boolean };
+type Project = { id: string; projectName: string; date: string; customServiceText: string | null; totalPrice: number; deposit: number; remaining: number; workStatus: string; paymentStatus: string; notes: string | null; createdAt: string; client: ClientInfo; designer: { id: string; name: string } | null; designerName: string | null; services: { id: string; name: string }[]; payments?: Payment[] };
 type Service = { id: string; name: string; isCustom: boolean };
 type User = { id: string; name: string; role: string };
 
@@ -22,10 +23,10 @@ const PS_MAP: Record<string, { l: string; c: string; bg: string }> = {
   UNPAID: { l: "Unpaid", c: "#ef4444", bg: "rgba(239,68,68,0.12)" },
 };
 const TIER: Record<string, { l: string; c: string; bg: string }> = {
-  VIP: { l: "VIP", c: "#f59e0b", bg: "rgba(245,158,11,0.1)" },
-  LOYAL: { l: "Loyal", c: "#3b82f6", bg: "rgba(59,130,246,0.1)" },
+  VIP: { l: "VIP", c: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
+  LOYAL: { l: "Loyal", c: "#3b82f6", bg: "rgba(59,130,246,0.12)" },
   NORMAL: { l: "Normal", c: "#64748b", bg: "rgba(100,116,139,0.06)" },
-  DELINQUENT: { l: "At Risk", c: "#ef4444", bg: "rgba(239,68,68,0.1)" },
+  DELINQUENT: { l: "At Risk", c: "#ef4444", bg: "rgba(239,68,68,0.12)" },
 };
 
 function fmt(n: number) { return n.toLocaleString("en-US"); }
@@ -34,7 +35,7 @@ function monthKey(d: string) { const dt = new Date(d); return `${dt.getFullYear(
 function monthLabel(d: string) { return new Date(d).toLocaleDateString("en-US", { month: "long", year: "numeric" }); }
 
 /* ═══ Inline Editable Text ═══ */
-function InlineText({ value, onSave, style, placeholder }: { value: string; onSave: (v: string) => void; style?: React.CSSProperties; placeholder?: string; }) {
+function InlineText({ value, onSave, style, placeholder }: { value: string; onSave: (v: string) => void; style?: React.CSSProperties; placeholder?: string }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   useEffect(() => { setDraft(value); }, [value]);
@@ -85,9 +86,7 @@ function DesignerInput({ designerId, designerName, users, onSave }: { designerId
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const displayName = designerName || (users.find(u => u.id === designerId)?.name) || "—";
-
   useEffect(() => { const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setEditing(false); } }; document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h); }, []);
-
   if (!editing) return (
     <div ref={ref} onClick={() => { setEditing(true); setOpen(true); }}
       style={{ padding: "3px 6px", borderRadius: 4, cursor: "text", fontSize: 11, color: "var(--text-secondary)", transition: "background 0.1s" }}
@@ -97,7 +96,6 @@ function DesignerInput({ designerId, designerName, users, onSave }: { designerId
       {displayName}
     </div>
   );
-
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <input autoFocus value={draft} onChange={e => { setDraft(e.target.value); setOpen(true); }}
@@ -122,15 +120,15 @@ function DesignerInput({ designerId, designerName, users, onSave }: { designerId
   );
 }
 
-/* ═══ Partial Payment Input ═══ */
-function PayInput({ remaining, projectId, onPay }: { remaining: number; projectId: string; onPay: (id: string, amount: number) => void }) {
+/* ═══ Payment Button with inline amount input ═══ */
+function PayButton({ remaining, projectId, onPay }: { remaining: number; projectId: string; onPay: (id: string, amount: number) => void }) {
   const [editing, setEditing] = useState(false);
   const [amount, setAmount] = useState("");
   if (remaining <= 0) return <span style={{ fontWeight: 700, color: "#10b981", fontSize: 12 }}>0 ✓</span>;
   if (!editing) return (
     <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
       <span style={{ fontWeight: 700, color: "#ef4444", fontSize: 12 }}>{fmt(remaining)}</span>
-      <button onClick={() => setEditing(true)} style={{ padding: "2px 6px", borderRadius: 4, border: "none", background: "rgba(16,185,129,0.12)", color: "#10b981", fontSize: 10, fontWeight: 600, cursor: "pointer" }} title="Add payment">Pay</button>
+      <button onClick={() => setEditing(true)} style={{ padding: "2px 6px", borderRadius: 4, border: "none", background: "rgba(16,185,129,0.12)", color: "#10b981", fontSize: 10, fontWeight: 600, cursor: "pointer" }} title="Pay partial amount">Pay</button>
       <button onClick={() => onPay(projectId, remaining)} style={{ padding: "2px 6px", borderRadius: 4, border: "none", background: "rgba(13,148,136,0.1)", color: "#0d9488", fontSize: 10, fontWeight: 600, cursor: "pointer" }} title="Pay full remaining">All</button>
     </div>
   );
@@ -158,6 +156,190 @@ function MonthHeader({ label, count, revenue, collapsed, onToggle }: { label: st
   );
 }
 
+/* ═══ Payment Details Modal ═══ */
+function PaymentDetailsModal({ project, onClose, onAddPayment, onDeletePayment }: { project: Project; onClose: () => void; onAddPayment: (id: string, amount: number, note: string) => void; onDeletePayment: (id: string) => void }) {
+  const [addAmount, setAddAmount] = useState("");
+  const [addNote, setAddNote] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const payments = project.payments || [];
+  const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0);
+  const remaining = Number(project.totalPrice) - totalPaid;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: "var(--surface)", borderRadius: 14, maxWidth: 520, width: "95%", border: "1px solid var(--border)" }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", margin: 0 }}>Payment Details</h3>
+            <p style={{ fontSize: 11, color: "var(--muted)", margin: "2px 0 0" }}>{project.client.name} — {project.projectName}</p>
+          </div>
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "var(--surface-hover)", color: "var(--muted)", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+        </div>
+
+        {/* Summary */}
+        <div style={{ padding: "12px 20px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+          {[
+            { l: "Total Price", v: `${fmt(Number(project.totalPrice))} SAR`, c: "var(--text)" },
+            { l: "Total Paid", v: `${fmt(totalPaid)} SAR`, c: "#10b981" },
+            { l: "Remaining", v: `${fmt(remaining)} SAR`, c: remaining > 0 ? "#ef4444" : "#10b981" },
+          ].map(s => (
+            <div key={s.l} style={{ padding: "8px 10px", borderRadius: 6, background: "var(--surface-hover)", textAlign: "center" }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: s.c }}>{s.v}</div>
+              <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 1 }}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Payment list */}
+        <div style={{ padding: "0 20px 12px", maxHeight: 260, overflow: "auto" }}>
+          {payments.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 20, color: "var(--muted)", fontSize: 12 }}>No payments yet.</div>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <thead>
+                <tr style={{ color: "var(--muted)", fontSize: 9, fontWeight: 600, textTransform: "uppercase" }}>
+                  <th style={{ textAlign: "left", padding: "4px 6px" }}>Date</th>
+                  <th style={{ textAlign: "left", padding: "4px 6px" }}>Amount (SAR)</th>
+                  <th style={{ textAlign: "left", padding: "4px 6px" }}>Note</th>
+                  <th style={{ textAlign: "center", padding: "4px 6px", width: 50 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {payments.map((p, i) => (
+                  <tr key={p.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                    <td style={{ padding: "5px 6px", color: "var(--text-secondary)" }}>{fmtDate(p.date)}</td>
+                    <td style={{ padding: "5px 6px", fontWeight: 700, color: "#10b981" }}>{fmt(Number(p.amount))}</td>
+                    <td style={{ padding: "5px 6px", color: "var(--muted)" }}>{p.note || "—"}</td>
+                    <td style={{ padding: "5px 6px", textAlign: "center" }}>
+                      {confirmDelete === p.id ? (
+                        <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
+                          <button onClick={() => { onDeletePayment(p.id); setConfirmDelete(null); }} style={{ padding: "2px 6px", borderRadius: 3, border: "none", background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 600, cursor: "pointer" }}>Yes</button>
+                          <button onClick={() => setConfirmDelete(null)} style={{ padding: "2px 6px", borderRadius: 3, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 9, cursor: "pointer" }}>No</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setConfirmDelete(p.id)} style={{ padding: "2px 5px", borderRadius: 3, border: "1px solid rgba(239,68,68,0.2)", background: "transparent", color: "#ef4444", fontSize: 10, cursor: "pointer" }}>🗑</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Add payment form */}
+        {remaining > 0 && (
+          <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, alignItems: "flex-end" }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 9, fontWeight: 600, color: "var(--muted)" }}>Amount</label>
+              <input type="number" min="1" max={remaining} value={addAmount} onChange={e => setAddAmount(e.target.value)}
+                placeholder={`≤ ${fmt(remaining)}`}
+                style={{ width: "100%", padding: "6px 8px", borderRadius: 5, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 2 }}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 9, fontWeight: 600, color: "var(--muted)" }}>Note</label>
+              <input value={addNote} onChange={e => setAddNote(e.target.value)} placeholder="Optional"
+                style={{ width: "100%", padding: "6px 8px", borderRadius: 5, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 2 }}
+              />
+            </div>
+            <button onClick={() => { if (addAmount) { onAddPayment(project.id, Math.min(parseFloat(addAmount), remaining), addNote); setAddAmount(""); setAddNote(""); } }}
+              style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "#0d9488", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Add</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══ Edit Modal ═══ */
+function EditModal({ project, users, services, onClose, onSave }: { project: Project; users: User[]; services: Service[]; onClose: () => void; onSave: (data: Record<string, unknown>) => void }) {
+  const [form, setForm] = useState({
+    projectName: project.projectName,
+    date: project.date.split("T")[0],
+    totalPrice: String(project.totalPrice),
+    deposit: String(project.deposit),
+    workStatus: project.workStatus,
+    designerName: project.designerName || project.designer?.name || "",
+    notes: project.notes || "",
+  });
+  const remaining = form.totalPrice && form.deposit ? Math.max(0, parseFloat(form.totalPrice) - parseFloat(form.deposit || "0")) : 0;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: "var(--surface)", borderRadius: 14, maxWidth: 520, width: "95%", border: "1px solid var(--border)" }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", margin: 0 }}>Edit Record</h3>
+            <p style={{ fontSize: 11, color: "var(--muted)", margin: "2px 0 0" }}>{project.client.name} — {project.projectName}</p>
+          </div>
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "var(--surface-hover)", color: "var(--muted)", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+        </div>
+        <div style={{ padding: "16px 20px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Project Name</label>
+              <input value={form.projectName} onChange={e => setForm(f => ({ ...f, projectName: e.target.value }))}
+                style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Date</label>
+              <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Total Price (SAR)</label>
+              <input type="number" value={form.totalPrice} onChange={e => setForm(f => ({ ...f, totalPrice: e.target.value }))} dir="ltr"
+                style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3, textAlign: "right" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Deposit (SAR)</label>
+              <input type="number" value={form.deposit} onChange={e => setForm(f => ({ ...f, deposit: e.target.value }))} dir="ltr"
+                style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3, textAlign: "right" }} />
+            </div>
+            <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 8 }}>
+              <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Remaining</label>
+              <span style={{ fontWeight: 700, fontSize: 12, color: remaining > 0 ? "#ef4444" : "#10b981" }}>{fmt(remaining)} SAR</span>
+            </div>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Work Status</label>
+              <select value={form.workStatus} onChange={e => setForm(f => ({ ...f, workStatus: e.target.value }))}
+                style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3 }}>
+                <option value="WAITING">⏳ Waiting</option>
+                <option value="IN_PROGRESS">🔄 In Progress</option>
+                <option value="COMPLETED">✅ Done</option>
+                <option value="PAUSED">⏸ Paused</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Designer</label>
+              <input value={form.designerName} onChange={e => setForm(f => ({ ...f, designerName: e.target.value }))} list="edit-designer-list"
+                style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3 }} />
+              <datalist id="edit-designer-list">{users.map(u => <option key={u.id} value={u.name} />)}</datalist>
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Notes</label>
+              <textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3, resize: "vertical" }} />
+            </div>
+          </div>
+        </div>
+        <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+          <button onClick={() => onSave({
+            projectName: form.projectName,
+            date: form.date,
+            totalPrice: parseFloat(form.totalPrice) || Number(project.totalPrice),
+            workStatus: form.workStatus,
+            designerName: form.designerName || null,
+            notes: form.notes || null,
+          })} style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: "#0d9488", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════ MAIN PAGE ═══════════════════════ */
 export default function NexupClientsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -174,6 +356,8 @@ export default function NexupClientsPage() {
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
   const [form, setForm] = useState({ clientPhone: "", clientName: "", projectName: "", date: new Date().toISOString().split("T")[0], customServiceText: "", totalPrice: "", deposit: "", workStatus: "WAITING", designerId: "", designerName: "", serviceIds: [] as string[], notes: "" });
   const [clientSuggestion, setClientSuggestion] = useState<ClientInfo | null>(null);
+  const [paymentModal, setPaymentModal] = useState<Project | null>(null);
+  const [editModal, setEditModal] = useState<Project | null>(null);
 
   const fetchProjects = useCallback(async () => {
     setLoading(true);
@@ -185,7 +369,7 @@ export default function NexupClientsPage() {
     setLoading(false);
   }, [search, wsFilter, psFilter]);
 
-  const fetchMeta = async () => { try { const [s, u] = await Promise.all([fetch("/api/services"), fetch("/api/users")]); if (s.ok) setServices(await s.json()); if (u.ok) setUsers(await u.json()); } catch {} };
+  const fetchMeta = async () => { try { const [s, u] = await Promise.all([fetch("/api/services"), fetch("/api/users")]); if (s.ok) setServices(await s.json()); if (u.ok) setUsers(await s.json()); } catch {} };
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
   useEffect(() => { fetchMeta(); }, []);
 
@@ -204,6 +388,8 @@ export default function NexupClientsPage() {
     total: projects.length, inProgress: projects.filter(p => p.workStatus === "IN_PROGRESS").length,
     completed: projects.filter(p => p.workStatus === "COMPLETED").length, unpaid: projects.filter(p => p.paymentStatus === "UNPAID").length,
     clients: new Set(projects.map(p => p.client.id)).size, revenue: projects.reduce((s, p) => s + Number(p.totalPrice), 0),
+    totalCollected: projects.reduce((s, p) => s + Number(p.deposit), 0),
+    totalRemaining: projects.reduce((s, p) => s + Number(p.remaining), 0),
   }), [projects]);
 
   const remaining = form.totalPrice && form.deposit ? parseFloat(form.totalPrice) - parseFloat(form.deposit || "0") : form.totalPrice ? parseFloat(form.totalPrice) : 0;
@@ -214,11 +400,20 @@ export default function NexupClientsPage() {
 
   const handlePayPartial = async (id: string, amount: number) => {
     try {
-      const proj = projects.find(p => p.id === id);
-      if (!proj) return;
-      const newDeposit = Number(proj.deposit) + amount;
-      await patchProject(id, { deposit: newDeposit });
+      const r = await fetch("/api/client-payments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectRecordId: id, amount, note: "Table quick pay" }) });
+      if (r.ok) { fetchProjects(); if (paymentModal) { const updated = projects.find(p => p.id === id); if (updated) setPaymentModal({ ...updated, payments: [...(updated.payments || []), { id: "temp", amount, date: new Date().toISOString(), note: "Table quick pay" }] }); } }
     } catch {}
+  };
+
+  const handleAddPayment = async (projectId: string, amount: number, note: string) => {
+    try {
+      const r = await fetch("/api/client-payments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectRecordId: projectId, amount, note: note || undefined }) });
+      if (r.ok) fetchProjects();
+    } catch {}
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    try { await fetch(`/api/client-payments/${paymentId}`, { method: "DELETE" }); fetchProjects(); } catch {}
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -233,6 +428,12 @@ export default function NexupClientsPage() {
   };
 
   const handleDelete = async (id: string) => { try { await fetch(`/api/projects/${id}`, { method: "DELETE" }); setDeleteConfirm(null); fetchProjects(); } catch {} };
+
+  const handleEditSave = async (data: Record<string, unknown>) => {
+    if (!editModal) return;
+    await patchProject(editModal.id, data);
+    setEditModal(null);
+  };
 
   const resetForm = () => { setForm({ clientPhone: "", clientName: "", projectName: "", date: new Date().toISOString().split("T")[0], customServiceText: "", totalPrice: "", deposit: "", workStatus: "WAITING", designerId: "", designerName: "", serviceIds: [], notes: "" }); setClientSuggestion(null); setError(""); };
 
@@ -289,10 +490,10 @@ export default function NexupClientsPage() {
               <MonthHeader label={group.label} count={group.items.length} revenue={rev} collapsed={collapsed} onToggle={() => toggleMonth(key)} />
               {!collapsed && (
                 <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderTop: "none", borderRadius: "0 0 6px 6px" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 1050 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 1100 }}>
                     <thead>
                       <tr style={{ background: "var(--surface-hover)" }}>
-                        {[{ l: "Date", w: 85 }, { l: "Phone", w: 100 }, { l: "Client", w: 100 }, { l: "Project", w: 120 }, { l: "Services", w: 90 }, { l: "Price", w: 70 }, { l: "Deposit", w: 65 }, { l: "Remaining", w: 120 }, { l: "Designer", w: 90 }, { l: "Work", w: 95 }, { l: "Pay", w: 60 }, { l: "Notes", w: 100 }, { l: "", w: 30 }].map((c, i) => (
+                        {[{ l: "Date", w: 85 }, { l: "Phone", w: 100 }, { l: "Client", w: 100 }, { l: "Project", w: 120 }, { l: "Services", w: 90 }, { l: "Price", w: 70 }, { l: "Deposit", w: 65 }, { l: "Remaining", w: 130 }, { l: "Designer", w: 90 }, { l: "Work", w: 95 }, { l: "Status", w: 60 }, { l: "Notes", w: 100 }, { l: "", w: 60 }].map((c, i) => (
                           <th key={i} style={{ padding: "6px 8px", fontSize: 9, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap", width: c.w, textAlign: "left", borderBottom: "1px solid var(--border)" }}>{c.l}</th>
                         ))}
                       </tr>
@@ -316,8 +517,11 @@ export default function NexupClientsPage() {
                             <td style={{ padding: "5px 8px", fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap" }}>{fmtDate(p.date)}</td>
                             <td style={{ padding: "5px 8px", fontSize: 11, color: "var(--text-secondary)", direction: "ltr" }}>{p.client.phone}</td>
                             <td style={{ padding: "5px 8px" }}>
-                              <div style={{ fontWeight: 600, fontSize: 12 }}>{p.client.name}</div>
-                              {p.client.isRepeatClient && <span style={{ fontSize: 9, color: "#8b5cf6", fontWeight: 600 }}>🔄 Repeat</span>}
+                              <div style={{ fontWeight: 600, fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
+                                {p.client.name}
+                                {p.client.isRepeatClient && <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 3, background: "rgba(139,92,246,0.1)", color: "#8b5cf6", fontWeight: 700 }}>×{p.client.projectCount}</span>}
+                              </div>
+                              <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 3, background: tier.bg, color: tier.c, fontWeight: 700 }}>{tier.l}</span>
                             </td>
                             <td style={{ padding: "5px 8px" }}><InlineText value={p.projectName} onSave={v => patchProject(p.id, { projectName: v })} style={{ fontWeight: 600, fontSize: 12 }} /></td>
                             <td style={{ padding: "5px 8px" }}>
@@ -329,7 +533,12 @@ export default function NexupClientsPage() {
                             <td style={{ padding: "5px 8px", fontWeight: 700, direction: "ltr", textAlign: "left", fontSize: 12 }}>{fmt(Number(p.totalPrice))}</td>
                             <td style={{ padding: "5px 8px", direction: "ltr", textAlign: "left", color: "var(--text-secondary)", fontSize: 12 }}>{fmt(Number(p.deposit))}</td>
                             <td style={{ padding: "5px 8px", direction: "ltr", textAlign: "left" }}>
-                              <PayInput remaining={Number(p.remaining)} projectId={p.id} onPay={handlePayPartial} />
+                              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                <PayButton remaining={Number(p.remaining)} projectId={p.id} onPay={handlePayPartial} />
+                                {(p.payments && p.payments.length > 0) && (
+                                  <button onClick={() => setPaymentModal(p)} style={{ padding: "2px 5px", borderRadius: 3, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 9, cursor: "pointer" }} title="View payment history">📄 {p.payments.length}</button>
+                                )}
+                              </div>
                             </td>
                             <td style={{ padding: "5px 8px" }}>
                               <DesignerInput designerId={p.designer?.id || null} designerName={p.designerName} users={users}
@@ -341,14 +550,17 @@ export default function NexupClientsPage() {
                             </td>
                             <td style={{ padding: "5px 8px" }}><InlineText value={p.notes || ""} onSave={v => patchProject(p.id, { notes: v || null })} placeholder="note..." style={{ fontSize: 10, color: "var(--muted)" }} /></td>
                             <td style={{ padding: "5px 4px", textAlign: "center" }}>
-                              {deleteConfirm === p.id ? (
-                                <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
-                                  <button onClick={() => handleDelete(p.id)} style={{ padding: "3px 8px", borderRadius: 4, border: "none", background: "#ef4444", color: "#fff", fontSize: 10, fontWeight: 600, cursor: "pointer" }}>Confirm</button>
-                                  <button onClick={() => setDeleteConfirm(null)} style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>Cancel</button>
-                                </div>
-                              ) : (
-                                <button onClick={() => setDeleteConfirm(p.id)} style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.05)", color: "#ef4444", fontSize: 11, cursor: "pointer" }} title="Delete">🗑</button>
-                              )}
+                              <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
+                                <button onClick={() => setEditModal(p)} style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 11, cursor: "pointer" }} title="Edit">✏️</button>
+                                {deleteConfirm === p.id ? (
+                                  <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
+                                    <button onClick={() => handleDelete(p.id)} style={{ padding: "3px 6px", borderRadius: 4, border: "none", background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 600, cursor: "pointer" }}>OK</button>
+                                    <button onClick={() => setDeleteConfirm(null)} style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 9, cursor: "pointer" }}>No</button>
+                                  </div>
+                                ) : (
+                                  <button onClick={() => setDeleteConfirm(p.id)} style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.05)", color: "#ef4444", fontSize: 11, cursor: "pointer" }} title="Delete">🗑</button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -361,13 +573,38 @@ export default function NexupClientsPage() {
           );
         })}
 
+      {/* Sticky Totals Row */}
+      {projects.length > 0 && (
+        <div style={{ position: "sticky", bottom: 0, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 16px", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 16, boxShadow: "0 -2px 8px rgba(0,0,0,0.08)" }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 9, color: "var(--muted)", fontWeight: 600, textTransform: "uppercase" }}>Total Price</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text)" }}>{fmt(stats.revenue)} SAR</div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 9, color: "var(--muted)", fontWeight: 600, textTransform: "uppercase" }}>Collected</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#10b981" }}>{fmt(stats.totalCollected)} SAR</div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 9, color: "var(--muted)", fontWeight: 600, textTransform: "uppercase" }}>Remaining</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: stats.totalRemaining > 0 ? "#ef4444" : "#10b981" }}>{fmt(stats.totalRemaining)} SAR</div>
+          </div>
+        </div>
+      )}
 
+      {/* Payment Details Modal */}
+      {paymentModal && (
+        <PaymentDetailsModal project={paymentModal} onClose={() => setPaymentModal(null)} onAddPayment={handleAddPayment} onDeletePayment={handleDeletePayment} />
+      )}
+
+      {/* Edit Modal */}
+      {editModal && (
+        <EditModal project={editModal} users={users} services={services} onClose={() => setEditModal(null)} onSave={handleEditSave} />
+      )}
 
       {/* Create Form Modal */}
       {showForm && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={e => { if (e.target === e.currentTarget) { setShowForm(false); resetForm(); } }}>
           <div style={{ background: "var(--surface)", borderRadius: 14, maxWidth: 620, width: "95%", maxHeight: "90vh", overflow: "auto", border: "1px solid var(--border)" }}>
-            {/* Header */}
             <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", margin: 0 }}>New Service Record</h3>
@@ -379,7 +616,7 @@ export default function NexupClientsPage() {
               <div style={{ padding: "20px 24px" }}>
                 {error && <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(239,68,68,0.1)", color: "#ef4444", fontSize: 12, marginBottom: 14 }}>{error}</div>}
 
-                {/* Client Info Section */}
+                {/* Client Info */}
                 <div style={{ marginBottom: 18 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ width: 20, height: 20, borderRadius: 5, background: "rgba(59,130,246,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10 }}>👤</span>
@@ -389,7 +626,7 @@ export default function NexupClientsPage() {
                     <div>
                       <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 3 }}>Phone *</label>
                       <input required placeholder="05XXXXXXXX" value={form.clientPhone} dir="ltr" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none" }} onChange={e => { setForm(f => ({ ...f, clientPhone: e.target.value })); setClientSuggestion(null); }} onBlur={e => checkPhone(e.target.value)} />
-                      {clientSuggestion && <div style={{ marginTop: 4, padding: "4px 8px", borderRadius: 4, background: "rgba(13,148,136,0.08)", fontSize: 10, color: "#0d9488" }}>✓ {clientSuggestion.name}</div>}
+                      {clientSuggestion && <div style={{ marginTop: 4, padding: "4px 8px", borderRadius: 4, background: "rgba(13,148,136,0.08)", fontSize: 10, color: "#0d9488" }}>✓ {clientSuggestion.name} ({clientSuggestion.projectCount} prev. projects, {fmt(clientSuggestion.totalPaid)} SAR)</div>}
                     </div>
                     <div>
                       <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 3 }}>Client Name *</label>
@@ -402,7 +639,7 @@ export default function NexupClientsPage() {
                   </div>
                 </div>
 
-                {/* Project Info Section */}
+                {/* Project Details */}
                 <div style={{ marginBottom: 18 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ width: 20, height: 20, borderRadius: 5, background: "rgba(13,148,136,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10 }}>📁</span>
@@ -428,7 +665,7 @@ export default function NexupClientsPage() {
                   </div>
                 </div>
 
-                {/* Services Section */}
+                {/* Services */}
                 <div style={{ marginBottom: 18 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ width: 20, height: 20, borderRadius: 5, background: "rgba(245,158,11,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10 }}>🎨</span>

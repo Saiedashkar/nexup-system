@@ -147,6 +147,7 @@ model ProjectRecord {
   designer         User?             @relation("DesignerProjects", fields: [designerId], references: [id], onDelete: Restrict)
   services         ServiceType[]
   poolTransactions PoolTransaction[]
+  payments         ClientPayment[]
 
   @@index([businessId])
   @@index([clientId])
@@ -209,6 +210,20 @@ model Expense {
 
   @@index([businessId])
   @@index([year, month])
+  @@index([date])
+}
+
+model ClientPayment {
+  id              String          @id @default(cuid())
+  projectRecordId String
+  amount          Decimal         @db.Decimal(12, 2)
+  date            DateTime
+  note            String?
+  createdByUserId String?
+  createdAt       DateTime        @default(now())
+  projectRecord   ProjectRecord   @relation(fields: [projectRecordId], references: [id], onDelete: Restrict)
+
+  @@index([projectRecordId])
   @@index([date])
 }
 

@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
       client: { select: { id: true, name: true, phone: true, tier: true } },
       designer: { select: { id: true, name: true } },
       services: { select: { id: true, name: true } },
+      payments: { select: { id: true, amount: true, date: true, note: true }, orderBy: { date: "asc" as const } },
     },
     orderBy: { date: "desc" },
   });

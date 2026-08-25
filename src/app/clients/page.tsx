@@ -26,7 +26,8 @@ type Project = {
   paymentStatus: string;
   notes: string | null;
   client: ClientInfo;
-  designer: { id: string; name: string };
+  designer: { id: string; name: string } | null;
+  designerName: string | null;
   services: { id: string; name: string }[];
 };
 
@@ -298,7 +299,7 @@ export default function ClientsPage() {
       totalPrice: String(p.totalPrice),
       deposit: String(p.deposit),
       workStatus: p.workStatus,
-      designerId: p.designer.id,
+      designerId: p.designer?.id || "",
       serviceIds: p.services.map((s) => s.id),
       notes: p.notes || "",
     });
@@ -558,7 +559,7 @@ export default function ClientsPage() {
 
                     {/* Designer */}
                     <td style={{ fontSize: 12, color: "var(--muted)" }}>
-                      {p.designer.name}
+                      {p.designer?.name || p.designerName || "—"}
                     </td>
 
                     {/* Tier */}

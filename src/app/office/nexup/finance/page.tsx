@@ -199,50 +199,65 @@ export default function NexupFinancePage() {
     <div style={{ maxWidth: 1200, margin: "0 auto" }}>
       {/* ═══ PERMANENT BALANCE BAR ═══ */}
       <div style={{
-        display: "flex", alignItems: "center", gap: 24, padding: "14px 24px", marginBottom: 20,
-        borderRadius: 12, background: "linear-gradient(135deg, rgba(13,148,136,0.08) 0%, rgba(13,148,136,0.02) 100%)",
-        border: "1px solid rgba(13,148,136,0.2)",
+        display: "grid", gridTemplateColumns: "auto 1fr 1fr 1fr 1fr", alignItems: "center", gap: 0, padding: "16px 20px", marginBottom: 20,
+        borderRadius: 14, background: "linear-gradient(135deg, rgba(13,148,136,0.1) 0%, rgba(13,148,136,0.03) 100%)",
+        border: "1px solid rgba(13,148,136,0.2)", boxShadow: "0 2px 12px rgba(13,148,136,0.08)",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(13,148,136,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>💰</div>
+        {/* Available Balance */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, paddingRight: 20, borderLeft: "none" }}>
+          <div style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(13,148,136,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>💰</div>
           <div>
-            <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Available Balance</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#0d9488", direction: "ltr" }}>{fmt(poolBalance)} <span style={{ fontSize: 12, fontWeight: 600 }}>SAR</span></div>
+            <div style={{ fontSize: 9, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>الرصيد المتاح</div>
+            <div style={{ fontSize: 9, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Available Balance</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#0d9488", direction: "ltr", lineHeight: 1 }}>{fmt(poolBalance)} <span style={{ fontSize: 12, fontWeight: 600 }}>SAR</span></div>
           </div>
         </div>
-        <div style={{ width: 1, height: 32, background: "var(--border)" }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ fontSize: 10, color: "var(--muted)" }}>Total Income</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#10b981", direction: "ltr" }}>{fmt(poolTotalIn)} SAR</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px", borderLeft: "1px solid var(--border)", height: 40 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 2, background: "#10b981" }} />
+          <div>
+            <div style={{ fontSize: 9, color: "var(--muted)" }}>الدخل الكلي · Total Income</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#10b981", direction: "ltr" }}>{fmt(poolTotalIn)} <span style={{ fontSize: 10, fontWeight: 500 }}>SAR</span></div>
+          </div>
         </div>
-        <div style={{ width: 1, height: 32, background: "var(--border)" }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ fontSize: 10, color: "var(--muted)" }}>Total Withdrawn</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#ef4444", direction: "ltr" }}>{fmt(poolTotalOut)} SAR</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px", borderLeft: "1px solid var(--border)", height: 40 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 2, background: "#ef4444" }} />
+          <div>
+            <div style={{ fontSize: 9, color: "var(--muted)" }}>إجمالي السحب · Total Withdrawn</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#ef4444", direction: "ltr" }}>{fmt(poolTotalOut)} <span style={{ fontSize: 10, fontWeight: 500 }}>SAR</span></div>
+          </div>
         </div>
-        <div style={{ width: 1, height: 32, background: "var(--border)" }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ fontSize: 10, color: "var(--muted)" }}>Converted (EGP)</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#3b82f6", direction: "ltr" }}>{fmt(totalEGPIncome)} EGP</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px", borderLeft: "1px solid var(--border)", height: 40 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 2, background: "#3b82f6" }} />
+          <div>
+            <div style={{ fontSize: 9, color: "var(--muted)" }}>محول بالمصري · Converted EGP</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#3b82f6", direction: "ltr" }}>{fmt(totalEGPIncome)} <span style={{ fontSize: 10, fontWeight: 500 }}>EGP</span></div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px", borderLeft: "1px solid var(--border)", height: 40 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 2, background: "#f59e0b" }} />
+          <div>
+            <div style={{ fontSize: 9, color: "var(--muted)" }}>إجمالي المصروفات · Total Expenses</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#f59e0b", direction: "ltr" }}>{fmt(totalEGPExpenses)} <span style={{ fontSize: 10, fontWeight: 500 }}>EGP</span></div>
+          </div>
         </div>
       </div>
 
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>Finance</h1>
-          <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>Income · Expenses · Monthly Summary</p>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>Finance <span style={{ fontSize: 14, fontWeight: 500, color: "var(--muted)", marginLeft: 6 }}>الحسابات</span></h1>
+          <p style={{ fontSize: 12, color: "var(--muted)", margin: "4px 0 0" }}>الدخل · المصروفات · الملخص الشهري — Income · Expenses · Monthly Summary</p>
         </div>
       </div>
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 20, background: "var(--surface)", padding: 4, borderRadius: 10, border: "1px solid var(--border)" }}>
-        {([ { key: "income", label: "Income", icon: "💰" }, { key: "expenses", label: "Expenses", icon: "🧾" }, { key: "summary", label: "Monthly Summary", icon: "📊" }] as const).map(t => (
+        {([ { key: "income", label: "Income", ar: "الدخل", icon: "💰" }, { key: "expenses", label: "Expenses", ar: "المصروفات", icon: "🧾" }, { key: "summary", label: "Monthly Summary", ar: "الملخص الشهري", icon: "📊" }] as const).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             padding: "8px 20px", borderRadius: 8, border: "none", display: "flex", alignItems: "center", gap: 6,
             background: tab === t.key ? "#0d9488" : "transparent",
             color: tab === t.key ? "#fff" : "var(--muted)", fontSize: 13, fontWeight: 600, cursor: "pointer",
-          }}><span>{t.icon}</span>{t.label}</button>
+          }}><span>{t.icon}</span><span>{t.label}</span><span style={{ fontSize: 10, opacity: 0.7 }}>{t.ar}</span></button>
         ))}
       </div>
 
@@ -252,7 +267,7 @@ export default function NexupFinancePage() {
       {tab === "income" && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Income Record — SAR → EGP</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>سجل الدخل · Income Record — <span style={{ color: "#0d9488" }}>SAR</span> → <span style={{ color: "#3b82f6" }}>EGP</span></span>
             <button onClick={() => setShowIncForm(!showIncForm)} style={{
               padding: "8px 18px", borderRadius: 8, border: "none",
               background: showIncForm ? "#6b7280" : "#0d9488", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer",
@@ -325,7 +340,7 @@ export default function NexupFinancePage() {
       {tab === "expenses" && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>All Expenses — NEXUP (Egypt)</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>المصروفات · Expenses — NEXUP <span style={{ fontSize: 10, fontWeight: 500, color: "var(--muted)", marginLeft: 4 }}>(مصر · Egypt)</span></span>
             <button onClick={() => setShowExpForm(!showExpForm)} style={{
               padding: "8px 18px", borderRadius: 8, border: "none",
               background: showExpForm ? "#6b7280" : "#ef4444", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer",
@@ -411,46 +426,82 @@ export default function NexupFinancePage() {
       {/* ═══════════════ MONTHLY SUMMARY TAB ═══════════════ */}
       {tab === "summary" && (
         <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
+          {/* ── Creative Summary Cards ── */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
             {[
-              { label: "Total Income (EGP)", value: `${fmt(totalEGPIncome)} EGP`, color: "#10b981", bg: "rgba(16,185,129,0.06)" },
-              { label: "Total Expenses (EGP)", value: `${fmt(totalEGPExpenses)} EGP`, color: "#ef4444", bg: "rgba(239,68,68,0.06)" },
-              { label: "Net Profit (EGP)", value: `${fmt(netProfit)} EGP`, color: netProfit >= 0 ? "#10b981" : "#ef4444", bg: netProfit >= 0 ? "rgba(16,185,129,0.06)" : "rgba(239,68,68,0.06)" },
-              { label: "Profit Margin", value: totalEGPIncome > 0 ? `${((netProfit / totalEGPIncome) * 100).toFixed(1)}%` : "—", color: "#3b82f6", bg: "rgba(59,130,246,0.06)" },
+              { labelAr: "إجمالي الدخل", labelEn: "Total Income", value: `${fmt(totalEGPIncome)} EGP`, color: "#10b981", bg: "linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(16,185,129,0.04) 100%)", icon: "📈" },
+              { labelAr: "إجمالي المصروفات", labelEn: "Total Expenses", value: `${fmt(totalEGPExpenses)} EGP`, color: "#ef4444", bg: "linear-gradient(135deg, rgba(239,68,68,0.12) 0%, rgba(239,68,68,0.04) 100%)", icon: "📉" },
+              { labelAr: "صافي الربح", labelEn: "Net Profit", value: `${netProfit >= 0 ? "+" : ""}${fmt(netProfit)} EGP`, color: netProfit >= 0 ? "#10b981" : "#ef4444", bg: netProfit >= 0 ? "linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(16,185,129,0.04) 100%)" : "linear-gradient(135deg, rgba(239,68,68,0.12) 0%, rgba(239,68,68,0.04) 100%)", icon: netProfit >= 0 ? "🎯" : "⚠️" },
+              { labelAr: "هامش الربح", labelEn: "Profit Margin", value: totalEGPIncome > 0 ? `${((netProfit / totalEGPIncome) * 100).toFixed(1)}%` : "—", color: "#8b5cf6", bg: "linear-gradient(135deg, rgba(139,92,246,0.12) 0%, rgba(139,92,246,0.04) 100%)", icon: "📊" },
             ].map(s => (
-              <div key={s.label} style={{ padding: "18px 20px", borderRadius: 12, background: s.bg, border: "1px solid var(--border)" }}>
-                <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>{s.label}</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: s.color, direction: "ltr" }}>{s.value}</div>
+              <div key={s.labelEn} style={{ padding: "18px 20px", borderRadius: 14, background: s.bg, border: "1px solid var(--border)", position: "relative", overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: 12, left: 14, fontSize: 24, opacity: 0.3 }}>{s.icon}</div>
+                <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 2 }}>{s.labelAr}</div>
+                <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 8 }}>{s.labelEn}</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: s.color, direction: "ltr", lineHeight: 1 }}>{s.value}</div>
               </div>
             ))}
           </div>
 
-          <div style={{ borderRadius: 12, border: "1px solid var(--border)", overflow: "hidden" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "140px 1fr 1fr 1fr", padding: "10px 16px", background: "var(--surface)", borderBottom: "2px solid var(--border)", fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>
-              <div>MONTH</div><div style={{ textAlign: "right" }}>INCOME (EGP)</div><div style={{ textAlign: "right" }}>EXPENSES (EGP)</div><div style={{ textAlign: "right" }}>NET PROFIT (EGP)</div>
+          {/* ── Monthly Breakdown Table ── */}
+          <div style={{ borderRadius: 14, border: "1px solid var(--border)", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "160px 1fr 1fr 1fr", padding: "12px 20px", background: "linear-gradient(135deg, rgba(13,148,136,0.08) 0%, transparent 100%)", borderBottom: "2px solid var(--border)", fontSize: 11, fontWeight: 700, color: "var(--text)", letterSpacing: 0.3 }}>
+              <div>
+                <div>الشهر · MONTH</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div>الدخل · INCOME</div>
+                <div style={{ fontSize: 9, fontWeight: 500, color: "var(--muted)" }}>EGP</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div>المصروفات · EXPENSES</div>
+                <div style={{ fontSize: 9, fontWeight: 500, color: "var(--muted)" }}>EGP</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div>صافي الربح · NET PROFIT</div>
+                <div style={{ fontSize: 9, fontWeight: 500, color: "var(--muted)" }}>EGP</div>
+              </div>
             </div>
 
             {monthlyData.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 48, color: "var(--muted)", fontSize: 13 }}>No data yet.</div>
+              <div style={{ textAlign: "center", padding: 48, color: "var(--muted)", fontSize: 13 }}>لا توجد بيانات بعد · No data yet.</div>
             ) : monthlyData.map(([key, data]) => {
               const profit = data.income - data.expenses;
+              const profitPct = data.income > 0 ? ((profit / data.income) * 100).toFixed(0) : "0";
               return (
-                <div key={key} style={{ display: "grid", gridTemplateColumns: "140px 1fr 1fr 1fr", padding: "12px 16px", borderBottom: "1px solid var(--border)", fontSize: 13, alignItems: "center" }}
+                <div key={key} style={{ display: "grid", gridTemplateColumns: "160px 1fr 1fr 1fr", padding: "14px 20px", borderBottom: "1px solid var(--border)", fontSize: 13, alignItems: "center", transition: "background 0.1s" }}
                   onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-hover, rgba(0,0,0,0.02))")} onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                  <div style={{ fontWeight: 700 }}>{monthName(data.month)} {data.year}</div>
-                  <div style={{ textAlign: "right", fontWeight: 700, color: "#10b981", direction: "ltr" }}>{fmt(data.income)} EGP</div>
-                  <div style={{ textAlign: "right", fontWeight: 700, color: "#ef4444", direction: "ltr" }}>{fmt(data.expenses)} EGP</div>
-                  <div style={{ textAlign: "right", fontWeight: 800, color: profit >= 0 ? "#10b981" : "#ef4444", direction: "ltr", fontSize: 14 }}>{profit >= 0 ? "+" : ""}{fmt(profit)} EGP</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(13,148,136,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: "#0d9488" }}>{data.month}</div>
+                    <div>
+                      <div style={{ fontWeight: 700, color: "var(--text)" }}>{monthName(data.month)} {data.year}</div>
+                      <div style={{ fontSize: 9, color: "var(--muted)" }}>{data.year}</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontWeight: 800, color: "#10b981", direction: "ltr", fontSize: 15 }}>{fmt(data.income)} <span style={{ fontSize: 10, fontWeight: 500 }}>EGP</span></div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontWeight: 800, color: "#ef4444", direction: "ltr", fontSize: 15 }}>{fmt(data.expenses)} <span style={{ fontSize: 10, fontWeight: 500 }}>EGP</span></div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontWeight: 800, color: profit >= 0 ? "#10b981" : "#ef4444", direction: "ltr", fontSize: 16 }}>{profit >= 0 ? "+" : ""}{fmt(profit)} <span style={{ fontSize: 10, fontWeight: 500 }}>EGP</span></span>
+                      <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 8, background: profit >= 0 ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)", color: profit >= 0 ? "#10b981" : "#ef4444", fontWeight: 600 }}>{profitPct}%</span>
+                    </div>
+                  </div>
                 </div>
               );
             })}
 
             {monthlyData.length > 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: "140px 1fr 1fr 1fr", padding: "14px 16px", background: "var(--surface)", fontWeight: 700, fontSize: 14, borderTop: "2px solid var(--border)" }}>
-                <div>TOTAL</div>
-                <div style={{ textAlign: "right", color: "#10b981", direction: "ltr" }}>{fmt(totalEGPIncome)} EGP</div>
-                <div style={{ textAlign: "right", color: "#ef4444", direction: "ltr" }}>{fmt(totalEGPExpenses)} EGP</div>
-                <div style={{ textAlign: "right", color: netProfit >= 0 ? "#10b981" : "#ef4444", direction: "ltr", fontSize: 16 }}>{netProfit >= 0 ? "+" : ""}{fmt(netProfit)} EGP</div>
+              <div style={{ display: "grid", gridTemplateColumns: "160px 1fr 1fr 1fr", padding: "16px 20px", background: "linear-gradient(135deg, rgba(13,148,136,0.06) 0%, rgba(13,148,136,0.02) 100%)", fontWeight: 800, fontSize: 15, borderTop: "2px solid var(--border)" }}>
+                <div style={{ color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700 }}>المجموع · TOTAL</span>
+                </div>
+                <div style={{ textAlign: "right", color: "#10b981", direction: "ltr" }}>{fmt(totalEGPIncome)} <span style={{ fontSize: 10 }}>EGP</span></div>
+                <div style={{ textAlign: "right", color: "#ef4444", direction: "ltr" }}>{fmt(totalEGPExpenses)} <span style={{ fontSize: 10 }}>EGP</span></div>
+                <div style={{ textAlign: "right", color: netProfit >= 0 ? "#10b981" : "#ef4444", direction: "ltr", fontSize: 18 }}>{netProfit >= 0 ? "+" : ""}{fmt(netProfit)} <span style={{ fontSize: 10 }}>EGP</span></div>
               </div>
             )}
           </div>

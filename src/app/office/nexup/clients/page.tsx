@@ -146,12 +146,48 @@ function PayButton({ remaining, projectId, onPay }: { remaining: number; project
 }
 
 /* ═══ Month Header ═══ */
-function MonthHeader({ label, count, revenue, collapsed, onToggle }: { label: string; count: number; revenue: number; collapsed: boolean; onToggle: () => void }) {
+function MonthHeader({ label, count, totalRevenue, totalCollected, totalRemaining, paidCount, collapsed, onToggle }: {
+  label: string; count: number; totalRevenue: number; totalCollected: number; totalRemaining: number; paidCount: number;
+  collapsed: boolean; onToggle: () => void;
+}) {
   return (
-    <div onClick={onToggle} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", borderRadius: collapsed ? 6 : "6px 6px 0 0", background: "var(--surface-hover)", cursor: "pointer", border: "1px solid var(--border)", borderBottom: collapsed ? "1px solid var(--border)" : "none" }}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} width={11} height={11} style={{ color: "var(--muted)", transform: collapsed ? "rotate(-90deg)" : "rotate(0)", transition: "transform 0.2s", flexShrink: 0 }}><path d="M6 9l6 6 6-6" /></svg>
-      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>{label}</span>
-      <span style={{ fontSize: 10, color: "var(--muted)", marginLeft: "auto" }}>{count} records · {fmt(revenue)} SAR</span>
+    <div style={{ borderRadius: collapsed ? 8 : "8px 8px 0 0", overflow: "hidden", border: "1px solid var(--border)" }}>
+      <div onClick={onToggle} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", background: "linear-gradient(135deg, rgba(13,148,136,0.08) 0%, rgba(13,148,136,0.02) 100%)", cursor: "pointer", borderBottom: collapsed ? "none" : "1px solid var(--border)" }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} width={12} height={12} style={{ color: "#0d9488", transform: collapsed ? "rotate(-90deg)" : "rotate(0)", transition: "transform 0.2s", flexShrink: 0 }}><path d="M6 9l6 6 6-6" /></svg>
+        <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>{label}</span>
+        <span style={{ fontSize: 9, fontWeight: 600, padding: "2px 7px", borderRadius: 10, background: "rgba(13,148,136,0.1)", color: "#0d9488" }}>
+          {count} record{count !== 1 ? "s" : ""}
+        </span>
+        {paidCount > 0 && (
+          <span style={{ fontSize: 9, fontWeight: 600, padding: "2px 7px", borderRadius: 10, background: "rgba(16,185,129,0.1)", color: "#10b981" }}>
+            {paidCount} paid
+          </span>
+        )}
+        <span style={{ flex: 1 }} />
+        {collapsed && (
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginRight: 8 }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 8, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 1 }}>Total</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", direction: "ltr" }}>{fmt(totalRevenue)} <span style={{ fontSize: 9, color: "var(--muted)" }}>SAR</span></div>
+            </div>
+            <div style={{ width: 1, height: 20, background: "var(--border)" }} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 8, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 1 }}>Collected</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#10b981", direction: "ltr" }}>{fmt(totalCollected)} <span style={{ fontSize: 9, color: "var(--muted)" }}>SAR</span></div>
+            </div>
+            <div style={{ width: 1, height: 20, background: "var(--border)" }} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 8, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 1 }}>Remaining</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: totalRemaining > 0 ? "#ef4444" : "#10b981", direction: "ltr" }}>{fmt(totalRemaining)} <span style={{ fontSize: 9, color: "var(--muted)" }}>SAR</span></div>
+            </div>
+          </div>
+        )}
+        {!collapsed && (
+          <span style={{ fontSize: 11, color: "var(--muted)", direction: "ltr" }}>
+            {fmt(totalCollected)} / {fmt(totalRevenue)} SAR collected
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -484,17 +520,23 @@ export default function NexupClientsPage() {
         : projects.length === 0 ? <div style={{ textAlign: "center", padding: 40 }}><div style={{ fontSize: 36, marginBottom: 8 }}>📋</div><p style={{ color: "var(--muted)", fontSize: 13 }}>No records yet.</p><button onClick={() => { setShowForm(true); resetForm(); }} style={{ marginTop: 10, padding: "8px 16px", borderRadius: 8, background: "#0d9488", color: "#fff", border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Add First</button></div>
         : grouped.map(([key, group]) => {
           const collapsed = collapsedMonths.has(key);
-          const rev = group.items.reduce((s, p) => s + Number(p.deposit), 0);
+          const gRevenue = group.items.reduce((s, p) => s + Number(p.totalPrice), 0);
+          const gCollected = group.items.reduce((s, p) => s + Number(p.deposit), 0);
+          const gRemaining = group.items.reduce((s, p) => s + Number(p.remaining), 0);
+          const gPaid = group.items.filter(p => p.paymentStatus === "FULL").length;
           return (
             <div key={key} style={{ marginBottom: 16 }}>
-              <MonthHeader label={group.label} count={group.items.length} revenue={rev} collapsed={collapsed} onToggle={() => toggleMonth(key)} />
+              <MonthHeader label={group.label} count={group.items.length} totalRevenue={gRevenue} totalCollected={gCollected} totalRemaining={gRemaining} paidCount={gPaid} collapsed={collapsed} onToggle={() => toggleMonth(key)} />
               {!collapsed && (
                 <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderTop: "none", borderRadius: "0 0 6px 6px" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 1100 }}>
                     <thead>
-                      <tr style={{ background: "var(--surface-hover)" }}>
-                        {[{ l: "Date", w: 85 }, { l: "Phone", w: 100 }, { l: "Client", w: 100 }, { l: "Project", w: 120 }, { l: "Services", w: 90 }, { l: "Price", w: 70 }, { l: "Deposit", w: 65 }, { l: "Remaining", w: 130 }, { l: "Designer", w: 90 }, { l: "Work", w: 95 }, { l: "Status", w: 60 }, { l: "Notes", w: 100 }, { l: "", w: 60 }].map((c, i) => (
-                          <th key={i} style={{ padding: "6px 8px", fontSize: 9, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap", width: c.w, textAlign: "left", borderBottom: "1px solid var(--border)" }}>{c.l}</th>
+                      <tr style={{ background: "linear-gradient(135deg, rgba(13,148,136,0.06) 0%, transparent 100%)" }}>
+                        {[{ l: "Date", ar: "التاريخ", w: 85 }, { l: "Phone", ar: "الهاتف", w: 100 }, { l: "Client", ar: "العميل", w: 100 }, { l: "Project", ar: "المشروع", w: 120 }, { l: "Services", ar: "الخدمات", w: 90 }, { l: "Price", ar: "السعر", w: 70 }, { l: "Deposit", ar: "العربون", w: 65 }, { l: "Remaining", ar: "المتبقي", w: 130 }, { l: "Designer", ar: "المصمم", w: 90 }, { l: "Work", ar: "الحالة", w: 95 }, { l: "Status", ar: "الدفع", w: 60 }, { l: "Notes", ar: "ملاحظات", w: 100 }, { l: "", ar: "", w: 60 }].map((c, i) => (
+                          <th key={i} style={{ padding: "7px 8px", width: c.w, textAlign: "left", borderBottom: "2px solid var(--border)" }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text)", letterSpacing: "0.02em" }}>{c.l}</div>
+                            {c.ar && <div style={{ fontSize: 8, fontWeight: 500, color: "var(--muted)", marginTop: 1 }}>{c.ar}</div>}
+                          </th>
                         ))}
                       </tr>
                     </thead>

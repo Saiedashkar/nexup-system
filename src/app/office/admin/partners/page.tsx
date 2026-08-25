@@ -60,7 +60,7 @@ export default function PartnersPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>الشركاء</h1>
-          <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>إدارة الشركاء ونسب الملكية — Partners</p>
+          <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>إدارة الشركاء ونسب الملكية — الأرصدة تمثل صافي المستحق لكل شريك شخصيًا</p>
         </div>
         <button onClick={() => setShowForm(true)} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>＋ شريك جديد</button>
       </div>
@@ -75,7 +75,7 @@ export default function PartnersPage() {
         </div>
       )}
 
-      {loading ? <div style={{ textAlign: "center", padding: 48, color: "var(--muted)" }}>Loading...</div> : (
+      {loading ? <div style={{ textAlign: "center", padding: 48, color: "var(--muted)" }}>جاري التحميل...</div> : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
           {partners.map(p => (
             <div key={p.id} style={{ borderRadius: 12, border: "1px solid var(--border)", overflow: "hidden", background: "var(--surface)" }}>
@@ -83,8 +83,8 @@ export default function PartnersPage() {
                 {editing === p.id ? (
                   <div style={{ display: "flex", gap: 6, flex: 1 }}>
                     <input value={editName} onChange={e => setEditName(e.target.value)} autoFocus style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: "1px solid #8b5cf6", background: "var(--bg)", color: "var(--text)", fontSize: 14, fontWeight: 700, outline: "none" }} />
-                    <button onClick={() => updatePartner(p.id)} style={{ padding: "4px 10px", borderRadius: 6, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 11, cursor: "pointer" }}>Save</button>
-                    <button onClick={() => setEditing(null)} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 11, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => updatePartner(p.id)} style={{ padding: "4px 10px", borderRadius: 6, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 11, cursor: "pointer" }}>حفظ</button>
+                    <button onClick={() => setEditing(null)} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 11, cursor: "pointer" }}>إلغاء</button>
                   </div>
                 ) : (
                   <>
@@ -93,8 +93,8 @@ export default function PartnersPage() {
                       <button onClick={() => { setEditing(p.id); setEditName(p.name); }} style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 11, cursor: "pointer" }}>✏️</button>
                       {confirmDelete === p.id ? (
                         <>
-                          <button onClick={() => deletePartner(p.id)} style={{ padding: "4px 8px", borderRadius: 4, border: "none", background: "#ef4444", color: "#fff", fontSize: 11, cursor: "pointer" }}>Confirm</button>
-                          <button onClick={() => setConfirmDelete(null)} style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 11, cursor: "pointer" }}>Cancel</button>
+                          <button onClick={() => deletePartner(p.id)} style={{ padding: "4px 8px", borderRadius: 4, border: "none", background: "#ef4444", color: "#fff", fontSize: 11, cursor: "pointer" }}>تأكيد</button>
+                          <button onClick={() => setConfirmDelete(null)} style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 11, cursor: "pointer" }}>إلغاء</button>
                         </>
                       ) : (
                         <button onClick={() => setConfirmDelete(p.id)} style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.05)", color: "#ef4444", fontSize: 11, cursor: "pointer" }}>🗑</button>
@@ -121,13 +121,14 @@ export default function PartnersPage() {
 
                 {/* Ownership */}
                 <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>الملكية</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>نسب الملكية في الأنشطة</div>
                   {p.ownerships.length > 0 ? p.ownerships.map(o => (
                     <div key={o.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0" }}>
                       <span style={{ color: "var(--text)" }}>{o.business.name}</span>
                       <span style={{ fontWeight: 700, color: "#8b5cf6" }}>{o.ownershipPct}%</span>
                     </div>
-                  )) :                    <div style={{ fontSize: 11, color: "var(--muted)", fontStyle: "italic" }}>لم تُحدد بعد</div>}
+                  )) : (                    <div style={{ fontSize: 11, color: "var(--muted)", fontStyle: "italic" }}>لم تُحدد بعد</div>
+                  )}
                 </div>
               </div>
             </div>

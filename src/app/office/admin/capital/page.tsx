@@ -81,12 +81,12 @@ export default function CapitalPage() {
             <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>المبلغ (EGP) *</label><input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
             <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>النوع *</label>
               <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }}>
-                <option value="CASH">💵 Cash</option><option value="ASSET">📦 Asset</option>
+                <option value="CASH">💵 نقدي</option><option value="ASSET">📦 عقار/أصل</option>
               </select>
             </div>
             <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>التاريخ *</label><input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
           </div>
-          <div style={{ marginBottom: 12 }}><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Description</label><input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Optional description" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
+          <div style={{ marginBottom: 12 }}><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>الوصف</label><input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="اختياري" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={submit} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "#10b981", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>حفظ</button>
             <button onClick={() => setShowForm(false)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 12, cursor: "pointer" }}>إلغاء</button>
@@ -95,7 +95,7 @@ export default function CapitalPage() {
       )}
 
       {/* Timeline */}
-      {loading ? <div style={{ textAlign: "center", padding: 32, color: "var(--muted)" }}>Loading...</div> : (
+      {loading ? <div style={{ textAlign: "center", padding: 32, color: "var(--muted)" }}>جاري التحميل...</div> : (
         <div style={{ position: "relative", paddingLeft: 30 }}>
           <div style={{ position: "absolute", left: 14, top: 0, bottom: 0, width: 2, background: "var(--border)" }} />
           {contributions.map(c => (
@@ -104,19 +104,19 @@ export default function CapitalPage() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{c.partner.name}</div>
-                  <div style={{ fontSize: 12, color: "var(--muted)" }}>{toEN(c.date)} · {c.type === "CASH" ? "💵 Cash" : "📦 Asset"}{c.description ? ` · ${c.description}` : ""}</div>
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>{toEN(c.date)} · {c.type === "CASH" ? "💵 نقدي" : "📦 عقار/أصل"}{c.description ? ` · ${c.description}` : ""}</div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   {editing === c.id ? (
                     <>
                       <input type="number" value={editForm.amount} onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))} style={{ width: 100, padding: "4px 8px", borderRadius: 4, border: "1px solid #8b5cf6", background: "var(--bg)", color: "var(--text)", fontSize: 13, outline: "none", textAlign: "right" }} />
-                      <button onClick={() => update(c.id)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 11, cursor: "pointer" }}>Save</button>
-                      <button onClick={() => setEditing(null)} style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 11, cursor: "pointer" }}>Cancel</button>
+                      <button onClick={() => update(c.id)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 11, cursor: "pointer" }}>حفظ</button>
+                      <button onClick={() => setEditing(null)} style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 11, cursor: "pointer" }}>إلغاء</button>
                     </>
                   ) : confirmDelete === c.id ? (
                     <>
-                      <button onClick={() => deleteItem(c.id)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", background: "#ef4444", color: "#fff", fontSize: 11, cursor: "pointer" }}>Confirm</button>
-                      <button onClick={() => setConfirmDelete(null)} style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 11, cursor: "pointer" }}>Cancel</button>
+                      <button onClick={() => deleteItem(c.id)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", background: "#ef4444", color: "#fff", fontSize: 11, cursor: "pointer" }}>تأكيد</button>
+                      <button onClick={() => setConfirmDelete(null)} style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 11, cursor: "pointer" }}>إلغاء</button>
                     </>
                   ) : (
                     <>

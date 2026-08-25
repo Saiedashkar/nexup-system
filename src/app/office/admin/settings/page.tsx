@@ -69,6 +69,17 @@ export default function AllocationSettingsPage() {
           <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>إعدادات التوزيع</h1>
           <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>تحديد نسبة كل نشاط من تحمّل مصاريف المكتب — Allocation Settings</p>
         </div>
+
+      {/* Info Banner */}
+      <div style={{ padding: "14px 18px", borderRadius: 10, background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)", marginBottom: 20, display: "flex", gap: 10, alignItems: "flex-start" }}>
+        <span style={{ fontSize: 18, flexShrink: 0 }}>ℹ️</span>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>ملاحظة مهمة</div>
+          <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6 }}>
+            هذه النسب تُستخدم لأغراض التقارير والتحليل فقط (لمعرفة النصيب النظري لكل نشاط من تكلفة المصاريف المشتركة)، <b style={{ color: "var(--text)" }}>ولا تمثل تحويل فلوس فعليًا</b> بين الأنشطة والمكتب.
+          </div>
+        </div>
+      </div>
         <button onClick={() => setShowForm(true)} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: "#f59e0b", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>＋ إعداد جديد</button>
       </div>
 
@@ -116,10 +127,10 @@ export default function AllocationSettingsPage() {
       {/* History Table */}
       <div style={{ borderRadius: 12, border: "1px solid var(--border)", overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 120px 100px", padding: "10px 16px", background: "var(--surface)", borderBottom: "2px solid var(--border)", fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>
-          <div>BUSINESS</div><div style={{ textAlign: "right" }}>ALLOCATION</div><div>EFFECTIVE DATE</div><div style={{ textAlign: "center" }}>ACTIONS</div>
+          <div>النشاط</div><div style={{ textAlign: "right" }}>النسبة</div><div>تاريخ السريان</div><div style={{ textAlign: "center" }}>الإجراءات</div>
         </div>
-        {loading ? <div style={{ textAlign: "center", padding: 32, color: "var(--muted)" }}>Loading...</div> :
-          settings.length === 0 ? <div style={{ textAlign: "center", padding: 48, color: "var(--muted)" }}>No settings yet.</div> :
+        {loading ? <div style={{ textAlign: "center", padding: 32, color: "var(--muted)" }}>جاري التحميل...</div> :
+          settings.length === 0 ? <div style={{ textAlign: "center", padding: 48, color: "var(--muted)" }}>لا توجد إعدادات بعد.</div> :
           settings.map(s => (
             <div key={s.id} style={{ display: "grid", gridTemplateColumns: "1fr 120px 120px 100px", padding: "10px 16px", borderBottom: "1px solid var(--border)", fontSize: 13, alignItems: "center" }}
               onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-hover, rgba(0,0,0,0.02))")} onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
@@ -135,11 +146,11 @@ export default function AllocationSettingsPage() {
               <div style={{ fontSize: 12, color: "var(--muted)" }}>{toEN(s.effectiveDate)}</div>
               <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
                 {editing === s.id ? (
-                  <><button onClick={() => update(s.id)} style={{ padding: "3px 8px", borderRadius: 4, border: "none", background: "#f59e0b", color: "#fff", fontSize: 10, cursor: "pointer" }}>Save</button>
-                  <button onClick={() => setEditing(null)} style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>Cancel</button></>
+                  <><button onClick={() => update(s.id)} style={{ padding: "3px 8px", borderRadius: 4, border: "none", background: "#f59e0b", color: "#fff", fontSize: 10, cursor: "pointer" }}>حفظ</button>
+                  <button onClick={() => setEditing(null)} style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>إلغاء</button></>
                 ) : confirmDelete === s.id ? (
-                  <><button onClick={() => deleteItem(s.id)} style={{ padding: "3px 8px", borderRadius: 4, border: "none", background: "#ef4444", color: "#fff", fontSize: 10, cursor: "pointer" }}>Confirm</button>
-                  <button onClick={() => setConfirmDelete(null)} style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>Cancel</button></>
+                  <><button onClick={() => deleteItem(s.id)} style={{ padding: "3px 8px", borderRadius: 4, border: "none", background: "#ef4444", color: "#fff", fontSize: 10, cursor: "pointer" }}>تأكيد</button>
+                  <button onClick={() => setConfirmDelete(null)} style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>إلغاء</button></>
                 ) : (
                   <><button onClick={() => { setEditing(s.id); setEditPct(String(s.allocationPct)); }} style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>✏️</button>
                   <button onClick={() => setConfirmDelete(s.id)} style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.05)", color: "#ef4444", fontSize: 10, cursor: "pointer" }}>🗑</button></>

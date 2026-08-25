@@ -7,11 +7,11 @@ type Tx = { id: string; type: string; amount: number; date: string; note: string
 type Business = { id: string; name: string };
 
 const TX_TYPES = [
-  { v: "SALARY", l: "Salary", c: "#10b981", bg: "rgba(16,185,129,0.1)" },
-  { v: "PROFIT_SHARE", l: "Profit Share", c: "#3b82f6", bg: "rgba(59,130,246,0.1)" },
-  { v: "ADVANCE", l: "Advance", c: "#f59e0b", bg: "rgba(245,158,11,0.1)" },
-  { v: "WITHDRAWAL", l: "Withdrawal", c: "#8b5cf6", bg: "rgba(139,92,246,0.1)" },
-  { v: "LOAN_SETTLEMENT", l: "Loan Settlement", c: "#ef4444", bg: "rgba(239,68,68,0.1)" },
+  { v: "SALARY", l: "راتب", c: "#10b981", bg: "rgba(16,185,129,0.1)" },
+  { v: "PROFIT_SHARE", l: "نصيب أرباح", c: "#3b82f6", bg: "rgba(59,130,246,0.1)" },
+  { v: "ADVANCE", l: "سلفة", c: "#f59e0b", bg: "rgba(245,158,11,0.1)" },
+  { v: "WITHDRAWAL", l: "سحب", c: "#8b5cf6", bg: "rgba(139,92,246,0.1)" },
+  { v: "LOAN_SETTLEMENT", l: "تسوية سلفة", c: "#ef4444", bg: "rgba(239,68,68,0.1)" },
 ] as const;
 const TX_MAP = Object.fromEntries(TX_TYPES.map(t => [t.v, t]));
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -92,12 +92,12 @@ export default function PartnerLedgerPage() {
           {/* Partner Summary Bar */}
           <div style={{ display: "flex", gap: 16, marginBottom: 16, padding: "14px 20px", borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)" }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 11, color: "var(--muted)" }}>الرصيد الجاري</div>
+              <div style={{ fontSize: 11, color: "var(--muted)" }}>الرصيد الجاري (صافي المستحق)</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: partner.runningBalance >= 0 ? "#10b981" : "#ef4444", direction: "ltr" }}>{fmt(partner.runningBalance)} EGP</div>
             </div>
             <div style={{ width: 1, background: "var(--border)" }} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 11, color: "var(--muted)" }}>السلف المستحقة</div>
+              <div style={{ fontSize: 11, color: "var(--muted)" }}>السلف المستحقة عليه</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: partner.outstandingAdvances > 0 ? "#f59e0b" : "var(--muted)", direction: "ltr" }}>{fmt(partner.outstandingAdvances)} EGP</div>
             </div>
             <div style={{ width: 1, background: "var(--border)" }} />
@@ -132,7 +132,7 @@ export default function PartnerLedgerPage() {
                 <div>
                   <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>النشاط (اختياري)</label>
                   <select value={form.businessId} onChange={e => setForm(f => ({ ...f, businessId: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none" }}>
-                    <option value="">عام (المكتب)</option>
+                    <option value="">عام — المكتب</option>
                     {businesses.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
                 </div>
@@ -150,7 +150,7 @@ export default function PartnerLedgerPage() {
           {/* Transaction Table */}
           <div style={{ borderRadius: 12, border: "1px solid var(--border)", overflow: "hidden" }}>
             <div style={{ display: "grid", gridTemplateColumns: "90px 120px 100px 100px 1fr 120px 100px", padding: "10px 16px", background: "var(--surface)", borderBottom: "2px solid var(--border)", fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>
-              <div>DATE</div><div>TYPE</div><div style={{ textAlign: "right" }}>AMOUNT</div><div style={{ textAlign: "right" }}>BALANCE</div><div>BUSINESS</div><div>NOTE</div><div style={{ textAlign: "center" }}>ACTIONS</div>
+              <div>التاريخ</div><div>النوع</div><div style={{ textAlign: "right" }}>المبلغ</div><div style={{ textAlign: "right" }}>الرصيد</div><div>النشاط</div><div>ملاحظة</div><div style={{ textAlign: "center" }}>الإجراءات</div>
             </div>
 
             {partner.transactions.length === 0 ? (
@@ -188,13 +188,13 @@ export default function PartnerLedgerPage() {
                   <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
                     {editing === tx.id ? (
                       <>
-                        <button onClick={() => updateTx(tx.id)} style={{ padding: "3px 8px", borderRadius: 4, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 10, cursor: "pointer" }}>Save</button>
-                        <button onClick={() => setEditing(null)} style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>Cancel</button>
+                        <button onClick={() => updateTx(tx.id)} style={{ padding: "3px 8px", borderRadius: 4, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 10, cursor: "pointer" }}>حفظ</button>
+                        <button onClick={() => setEditing(null)} style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>إلغاء</button>
                       </>
                     ) : confirmDelete === tx.id ? (
                       <>
-                        <button onClick={() => deleteTx(tx.id)} style={{ padding: "3px 8px", borderRadius: 4, border: "none", background: "#ef4444", color: "#fff", fontSize: 10, cursor: "pointer" }}>Confirm</button>
-                        <button onClick={() => setConfirmDelete(null)} style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>Cancel</button>
+                        <button onClick={() => deleteTx(tx.id)} style={{ padding: "3px 8px", borderRadius: 4, border: "none", background: "#ef4444", color: "#fff", fontSize: 10, cursor: "pointer" }}>تأكيد</button>
+                        <button onClick={() => setConfirmDelete(null)} style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>إلغاء</button>
                       </>
                     ) : (
                       <>

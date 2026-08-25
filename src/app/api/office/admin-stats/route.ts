@@ -22,9 +22,27 @@ export async function GET() {
   const allExpenses = await prisma.officeExpense.findMany();
   const totalAllExpenses = allExpenses.reduce((s, e) => s + e.cost, 0);
 
-  // Capital contributions
+  // Capital contributions (CASH only for treasury)
   const capital = await prisma.capitalContribution.findMany({ include: { partner: true } });
   const totalCapital = capital.reduce((s, c) => s + c.amount, 0);
+  const cashCapital = capital.filter(c => c.type === "CASH").reduce((s, c) => s + c.amount, 0);
+
+  // Profit transfers from businesses to office treasury
+  const profitTransfers = await prisma.profitTransfer.findMany();
+  const totalProfitTransfers = profitTransfers.reduce((s, t) => s + t.amount, 0);
+
+  // Partner transactions that take money OUT of treasury
+  const allPartnerTx = await prisma.partnerTransaction.findMany();
+  const partnerOutflows = allPartnerTx
+    .filter(t => ["SALARY", "ADVANCE", "WITHDRAWAL", "PROFIT_SHARE"].includes(t.type))
+    .reduce((s, t) => s + t.amount, 0);
+  // LOAN_SETTLEMENT puts money BACK into treasury
+  const partnerInflows = allPartnerTx
+    .filter(t => t.type === "LOAN_SETTLEMENT")
+    .reduce((s, t) => s + t.amount, 0);
+
+  // OFFICE TREASURY BALANCE = Cash Capital + Profit Transfers - Expenses - Partner Outflows + Loan Settlements
+  const officeTreasuryBalance = cashCapital + totalProfitTransfers - totalAllExpenses - partnerOutflows + partnerInflows;
 
   // Partner summary
   const partners = await prisma.partner.findMany({ include: { transactions: true, capitalContributions: true } });
@@ -57,6 +75,13 @@ export async function GET() {
   return NextResponse.json({
     currentMonth: { totalExpenses: totalMonthExpenses, expenseCount: monthExpenses.length },
     allTime: { totalExpenses: totalAllExpenses, totalCapital, expenseCount: allExpenses.length },
+    officeTreasury: {
+      balance: officeTreasuryBalance,
+      cashCapital,
+      profitTransfers: totalProfitTransfers,
+      partnerOutflows,
+      partnerInflows,
+    },
     partnerSummary,
     monthlyBreakdown: monthlyBreakdown.reverse(),
   });

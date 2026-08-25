@@ -112,7 +112,7 @@ export default function OfficeExpensesPage() {
             <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Category *</label>
               <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                 {(["FIXED", "VARIABLE"] as const).map(c => (
-                  <button key={c} type="button" onClick={() => setForm(f => ({ ...f, category: c }))} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: form.category === c ? (c === "FIXED" ? "2px solid #f59e0b" : "2px solid #3b82f6") : "1px solid var(--border)", background: form.category === c ? (c === "FIXED" ? "rgba(245,158,11,0.1)" : "rgba(59,130,246,0.1)") : "transparent", color: form.category === c ? (c === "FIXED" ? "#f59e0b" : "#3b82f6") : "var(--muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{c === "FIXED" ? "📌 Fixed" : "🔄 Variable"}</button>
+                  <button key={c} type="button" onClick={() => setForm(f => ({ ...f, category: c }))} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: form.category === c ? (c === "FIXED" ? "2px solid #f59e0b" : "2px solid #3b82f6") : "1px solid var(--border)", background: form.category === c ? (c === "FIXED" ? "rgba(245,158,11,0.1)" : "rgba(59,130,246,0.1)") : "transparent", color: form.category === c ? (c === "FIXED" ? "#f59e0b" : "#3b82f6") : "var(--muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{c === "FIXED" ? "📌 ثابت" : "🔄 متغير"}</button>
                 ))}
               </div>
             </div>
@@ -128,11 +128,11 @@ export default function OfficeExpensesPage() {
       {/* Monthly Grouped Table */}
       <div style={{ borderRadius: 12, border: "1px solid var(--border)", overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "80px 1fr 100px 100px 1fr 80px 100px", padding: "10px 16px", background: "var(--surface)", borderBottom: "2px solid var(--border)", fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>
-          <div>DATE</div><div>DESCRIPTION</div><div style={{ textAlign: "right" }}>COST</div><div>NAME</div><div>NOTES</div><div style={{ textAlign: "right" }}>TOTAL</div><div style={{ textAlign: "center" }}>ACTIONS</div>
+          <div>التاريخ</div><div>الوصف</div><div style={{ textAlign: "right" }}>التكلفة</div><div>المستلم</div><div>ملاحظات</div><div style={{ textAlign: "right" }}>الإجمالي</div><div style={{ textAlign: "center" }}>الإجراءات</div>
         </div>
 
-        {loading ? <div style={{ textAlign: "center", padding: 32, color: "var(--muted)" }}>Loading...</div> :
-          groups.length === 0 ? <div style={{ textAlign: "center", padding: 48, color: "var(--muted)" }}>No expenses yet.</div> :
+        {loading ? <div style={{ textAlign: "center", padding: 32, color: "var(--muted)" }}>جاري التحميل...</div> :
+          groups.length === 0 ? <div style={{ textAlign: "center", padding: 48, color: "var(--muted)" }}>لا توجد مصاريف بعد.</div> :
           groups.map(([key, grp]) => {
             const col = collapsed[key];
             const sum = grp.items.reduce((s, e) => s + e.cost, 0);
@@ -141,7 +141,7 @@ export default function OfficeExpensesPage() {
                 <div onClick={() => toggle(key)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", background: "var(--surface-hover, rgba(139,92,246,0.04))", cursor: "pointer", borderBottom: "1px solid var(--border)", borderLeft: "3px solid #ef4444" }}>
                   <span style={{ fontSize: 11, color: "var(--muted)" }}>{col ? "▶" : "▼"}</span>
                   <span style={{ fontSize: 13, fontWeight: 700 }}>{MONTHS[grp.month - 1]} {grp.year}</span>
-                  <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>{grp.items.length} records</span>
+                  <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>{grp.items.length} سجل</span>
                   <span style={{ flex: 1 }} />
                   <span style={{ fontSize: 13, fontWeight: 700, color: "#ef4444", direction: "ltr" }}>EGP{fmt(sum)}</span>
                 </div>
@@ -150,7 +150,7 @@ export default function OfficeExpensesPage() {
                     onMouseEnter={ev => (ev.currentTarget.style.background = "var(--surface-hover, rgba(0,0,0,0.02))")} onMouseLeave={ev => (ev.currentTarget.style.background = "transparent")}>
                     <div style={{ fontSize: 12, color: "var(--muted)" }}>{toEN(e.date)}</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, fontWeight: 600, background: e.category === "FIXED" ? "rgba(245,158,11,0.1)" : "rgba(59,130,246,0.1)", color: e.category === "FIXED" ? "#f59e0b" : "#3b82f6" }}>{e.category === "FIXED" ? "FIXED" : "VAR"}</span>
+                      <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, fontWeight: 600, background: e.category === "FIXED" ? "rgba(245,158,11,0.1)" : "rgba(59,130,246,0.1)", color: e.category === "FIXED" ? "#f59e0b" : "#3b82f6" }}>{e.category === "FIXED" ? "ثابت" : "متغير"}</span>
                       {editing === e.id ? <input value={editForm.description} onChange={ev => setEditForm(f => ({ ...f, description: ev.target.value }))} style={{ flex: 1, padding: "3px 6px", borderRadius: 4, border: "1px solid #8b5cf6", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none" }} /> : e.description}
                     </div>
                     <div style={{ textAlign: "right", fontWeight: 700, direction: "ltr" }}>{editing === e.id ? <input type="number" value={editForm.cost} onChange={ev => setEditForm(f => ({ ...f, cost: ev.target.value }))} style={{ width: 80, padding: "3px 6px", borderRadius: 4, border: "1px solid #8b5cf6", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", textAlign: "right" }} /> : `EGP${fmt(e.cost)}`}</div>
@@ -159,11 +159,11 @@ export default function OfficeExpensesPage() {
                     <div style={{ textAlign: "right", fontSize: 12, color: "var(--muted)" }}>{key}</div>
                     <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
                       {editing === e.id ? (
-                        <><button onClick={() => update(e.id)} style={{ padding: "3px 8px", borderRadius: 4, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 10, cursor: "pointer" }}>Save</button>
-                        <button onClick={() => setEditing(null)} style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>Cancel</button></>
+                        <><button onClick={() => update(e.id)} style={{ padding: "3px 8px", borderRadius: 4, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 10, cursor: "pointer" }}>حفظ</button>
+                        <button onClick={() => setEditing(null)} style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>إلغاء</button></>
                       ) : confirmDelete === e.id ? (
-                        <><button onClick={() => deleteItem(e.id)} style={{ padding: "3px 8px", borderRadius: 4, border: "none", background: "#ef4444", color: "#fff", fontSize: 10, cursor: "pointer" }}>Confirm</button>
-                        <button onClick={() => setConfirmDelete(null)} style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>Cancel</button></>
+                        <><button onClick={() => deleteItem(e.id)} style={{ padding: "3px 8px", borderRadius: 4, border: "none", background: "#ef4444", color: "#fff", fontSize: 10, cursor: "pointer" }}>تأكيد</button>
+                        <button onClick={() => setConfirmDelete(null)} style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>إلغاء</button></>
                       ) : (
                         <><button onClick={() => { setEditing(e.id); setEditForm({ description: e.description, cost: String(e.cost), category: e.category, name: e.name, notes: e.notes || "" }); }} style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>✏️</button>
                         <button onClick={() => setConfirmDelete(e.id)} style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.05)", color: "#ef4444", fontSize: 10, cursor: "pointer" }}>🗑</button></>

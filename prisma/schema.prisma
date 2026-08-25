@@ -74,6 +74,7 @@ model Business {
   ownerships             BusinessOwnership[]
   partnerTransactions    PartnerTransaction[]
   allocationSettings     OfficeAllocationSetting[]
+  profitTransfers        ProfitTransfer[]
 
   @@index([slug])
 }
@@ -344,4 +345,17 @@ model OfficeAllocationSetting {
 
   @@unique([businessId, effectiveDate])
   @@index([businessId])
+}
+
+model ProfitTransfer {
+  id          String   @id @default(cuid())
+  businessId  String
+  amount      Float    // EGP transferred from business profit to office treasury
+  date        DateTime
+  note        String?
+  createdAt   DateTime @default(now())
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+
+  @@index([businessId])
+  @@index([date])
 }

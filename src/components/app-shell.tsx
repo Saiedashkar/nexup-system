@@ -56,7 +56,7 @@ export function AppShell({
   activePage?: string;
 }) {
   const initial = userName ? userName.charAt(0) : "N";
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [userRole, setUserRole] = useState<string>("");
 
   useEffect(() => {

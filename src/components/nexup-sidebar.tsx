@@ -33,7 +33,7 @@ const NAV_ITEMS = [
 
 export function NexupSidebar() {
   const pathname = usePathname();
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {

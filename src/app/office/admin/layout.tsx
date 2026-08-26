@@ -7,6 +7,12 @@ type TreasuryData = {
   balance: number;
   totalRevenue: number;
   totalExpenses: number;
+  netProfit: number;
+  // Monthly data
+  monthlyRevenue: number;
+  monthlyExpenses: number;
+  monthlyNetProfit: number;
+  currentMonth: string;
 };
 
 function fmt(n: number) {
@@ -21,10 +27,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       .then(r => r.json())
       .then(d => {
         if (d.officeTreasury) {
+          const totalRevenue = d.officeTreasury.cashCapital + d.officeTreasury.profitTransfers;
+          const totalExpenses = d.allTime?.totalExpenses || 0;
+          // Monthly data (current month)
+          const now = new Date();
+          const currentMonth = now.toLocaleDateString("ar-EG", { month: "long", year: "numeric" });
+          const monthlyRevenue = d.monthlyPartnerOutflows?.find((m: {month:number;year:number;total:number}) => m.month === now.getMonth()+1 && m.year === now.getFullYear())?.total || 0;
+          const monthlyExpenses = d.currentMonth?.totalExpenses || 0;
           setTreasury({
             balance: d.officeTreasury.balance,
-            totalRevenue: d.officeTreasury.cashCapital + d.officeTreasury.profitTransfers,
-            totalExpenses: d.allTime?.totalExpenses || 0,
+            totalRevenue,
+            totalExpenses,
+            netProfit: totalRevenue - totalExpenses,
+            monthlyRevenue,
+            monthlyExpenses,
+            monthlyNetProfit: monthlyRevenue - monthlyExpenses,
+            currentMonth,
           });
         }
       })
@@ -43,7 +61,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
         }}>
           <div style={{
-            display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr",
+            display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr 1fr",
             maxWidth: 1440, margin: "0 auto", padding: "16px 28px", gap: 16,
           }}>
             {/* رصيد الخزينة — Main */}
@@ -122,6 +140,32 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>إجمالي المصروفات</div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: "#ef4444", direction: "ltr", lineHeight: 1.1 }}>
                   {treasury ? `${fmt(treasury.totalExpenses)} EGP` : "—"}
+                </div>
+              </div>
+            </div>
+
+            {/* صافي الربح — Net Profit */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 14,
+              padding: "14px 20px", borderRadius: 14,
+              background: treasury && treasury.netProfit >= 0
+                ? "rgba(16,185,129,0.06)"
+                : "rgba(239,68,68,0.06)",
+              border: `1px solid ${treasury && treasury.netProfit >= 0 ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)"}`,
+            }}>
+              <div style={{
+                width: 42, height: 42, borderRadius: 12,
+                background: treasury && treasury.netProfit >= 0 ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)",
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={treasury && treasury.netProfit >= 0 ? "#10b981" : "#ef4444"} strokeWidth="2" strokeLinecap="round">
+                  <circle cx="12" cy="12" r="10"/><path d="M16 8l-4 4-4-4M12 12v6"/>
+                </svg>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>صافي الربح</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: treasury && treasury.netProfit >= 0 ? "#10b981" : "#ef4444", direction: "ltr", lineHeight: 1.1 }}>
+                  {treasury ? `${treasury.netProfit >= 0 ? "+" : "-"}${fmt(treasury.netProfit)} EGP` : "—"}
                 </div>
               </div>
             </div>

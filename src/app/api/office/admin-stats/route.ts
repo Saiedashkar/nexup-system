@@ -116,8 +116,27 @@ export async function GET() {
     ? ((totalMonthExpenses - totalPrevMonthExpenses) / totalPrevMonthExpenses * 100)
     : 0;
 
+  // Monthly income breakdown (profit transfers per month, last 12 months)
+  const monthlyIncome: { month: number; year: number; total: number }[] = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(currentYear, currentMonth - 1 - i, 1);
+    const m = d.getMonth() + 1;
+    const y = d.getFullYear();
+    const mIncome = profitTransfers.filter(t => {
+      const td = new Date(t.date);
+      return td.getMonth() + 1 === m && td.getFullYear() === y;
+    });
+    monthlyIncome.push({ month: m, year: y, total: mIncome.reduce((s, t) => s + t.amount, 0) });
+  }
+
+  // Current month income
+  const currentMonthIncome = profitTransfers.filter(t => {
+    const td = new Date(t.date);
+    return td.getMonth() + 1 === currentMonth && td.getFullYear() === currentYear;
+  }).reduce((s, t) => s + t.amount, 0);
+
   return NextResponse.json({
-    currentMonth: { totalExpenses: totalMonthExpenses, expenseCount: monthExpenses.length },
+    currentMonth: { totalExpenses: totalMonthExpenses, totalIncome: currentMonthIncome, expenseCount: monthExpenses.length },
     prevMonth: { totalExpenses: totalPrevMonthExpenses, expenseCount: prevMonthExpenses.length },
     expenseTrend: Math.round(expenseTrend * 10) / 10,
     allTime: { totalExpenses: totalAllExpenses, totalCapital, expenseCount: allExpenses.length },
@@ -133,6 +152,7 @@ export async function GET() {
     partnerSummary,
     monthlyBreakdown: monthlyBreakdown.reverse(),
     monthlyPartnerOutflows: monthlyPartnerOutflows.reverse(),
+    monthlyIncome: monthlyIncome.reverse(),
     txByType,
     recentPartnerTx,
   });

@@ -4,6 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 
+// Check if current user is SUPER_ADMIN (from session)
+function useIsSuperAdmin() {
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  useEffect(() => {
+    fetch("/api/auth/me").then(r => r.json()).then(d => {
+      setIsSuperAdmin(d.user?.role === "SUPER_ADMIN");
+    }).catch(() => {});
+  }, []);
+  return isSuperAdmin;
+}
+
 function NavIcon({ d, size = 20 }: { d: string; size?: number }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" width={size} height={size}>
@@ -28,6 +39,7 @@ const NAV_ITEMS = [
   { href: "/office/nexup/clients", label: "Clients", icon: icons.clients },
   { href: "/office/nexup/finance", label: "Finance", icon: icons.finance },
   { href: "/office/nexup/analytics", label: "Analytics", icon: icons.analytics },
+  { href: "/office/nexup/profit-distribution", label: "توزيع الأرباح", icon: icons.finance, superAdminOnly: true },
   { href: "/office/nexup/settings", label: "Settings", icon: icons.settings },
 ];
 
@@ -35,6 +47,7 @@ export function NexupSidebar() {
   const pathname = usePathname();
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [collapsed, setCollapsed] = useState(false);
+  const isSuperAdmin = useIsSuperAdmin();
 
   useEffect(() => {
     const saved = localStorage.getItem("nexup-theme") as "light" | "dark" | null;
@@ -89,7 +102,7 @@ export function NexupSidebar() {
 
       {/* Navigation */}
       <nav style={{ padding: "12px 8px", flex: 1 }}>
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter(item => !(item as Record<string, unknown>).superAdminOnly || isSuperAdmin).map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Link

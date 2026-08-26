@@ -10,6 +10,11 @@ export type Session = {
   name: string;
   role: Role;
   businessId: string; // SUPER_ADMIN gets "all" or specific businessId
+  // ─── Permission Flags ───
+  canAccessNexup: boolean;
+  canAccessRebound: boolean;
+  canAccessAbomazen: boolean;
+  canAccessOfficeFinanceFull: boolean;
 };
 
 function secretKey() {
@@ -25,6 +30,10 @@ export async function createSessionToken(session: Session) {
     name: session.name,
     role: session.role,
     businessId: session.businessId,
+    canAccessNexup: session.canAccessNexup,
+    canAccessRebound: session.canAccessRebound,
+    canAccessAbomazen: session.canAccessAbomazen,
+    canAccessOfficeFinanceFull: session.canAccessOfficeFinanceFull,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(session.userId)
@@ -50,6 +59,10 @@ export async function verifySessionToken(token?: string): Promise<Session | null
       name: payload.name,
       role: payload.role as Role,
       businessId: payload.businessId,
+      canAccessNexup: payload.canAccessNexup === true,
+      canAccessRebound: payload.canAccessRebound === true,
+      canAccessAbomazen: payload.canAccessAbomazen === true,
+      canAccessOfficeFinanceFull: payload.canAccessOfficeFinanceFull === true,
     };
   } catch {
     return null;
@@ -77,4 +90,37 @@ export function isAdmin(session: Session): boolean {
 /** Check if user is super admin */
 export function isSuperAdmin(session: Session): boolean {
   return session.role === "SUPER_ADMIN";
+}
+
+// ═══════════════════════════════════════════════════════
+// Permission Flag Helpers (Backend Enforcement)
+// ═══════════════════════════════════════════════════════
+
+/** SUPER_ADMIN bypasses all permission checks — always returns true */
+export function canAccessBusiness(session: Session, businessSlug: string): boolean {
+  // SUPER_ADMIN always has full access
+  if (session.role === "SUPER_ADMIN") return true;
+
+  switch (businessSlug) {
+    case "nexup": return session.canAccessNexup;
+    case "rebound": return session.canAccessRebound;
+    case "abomazen": return session.canAccessAbomazen;
+    default: return false;
+  }
+}
+
+/** Check if user can access Office Finance full admin pages */
+export function canAccessOfficeFinance(session: Session): boolean {
+  if (session.role === "SUPER_ADMIN") return true;
+  return session.canAccessOfficeFinanceFull;
+}
+
+/** Get all business slugs the user can access */
+export function getAccessibleBusinesses(session: Session): string[] {
+  if (session.role === "SUPER_ADMIN") return ["nexup", "rebound", "abomazen"];
+  const slugs: string[] = [];
+  if (session.canAccessNexup) slugs.push("nexup");
+  if (session.canAccessRebound) slugs.push("rebound");
+  if (session.canAccessAbomazen) slugs.push("abomazen");
+  return slugs;
 }

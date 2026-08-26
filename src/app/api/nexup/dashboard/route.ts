@@ -18,7 +18,7 @@ export async function GET() {
   }
 
   // Fetch all data for NEXUP
-  const [projects, clients] = await Promise.all([
+  const [projects, clients, poolTransactions, withdrawals, expenses, profitLedger, profitTransfers] = await Promise.all([
     prisma.projectRecord.findMany({
       where: { businessId: nexup.id },
       include: { client: true, designer: true, services: true },
@@ -27,6 +27,11 @@ export async function GET() {
     prisma.client.findMany({
       where: { businessId: nexup.id },
     }),
+    prisma.poolTransaction.findMany({ where: { businessId: nexup.id }, select: { type: true, amountSAR: true } }),
+    prisma.withdrawal.findMany({ where: { businessId: nexup.id }, select: { netEGP: true } }),
+    prisma.expense.findMany({ where: { businessId: nexup.id }, select: { cost: true } }),
+    prisma.nexupProfitLedger.findMany({ select: { amount: true } }),
+    prisma.profitTransfer.findMany({ where: { businessId: nexup.id }, select: { amount: true } }),
   ]);
 
   // Compute stats
@@ -80,6 +85,21 @@ export async function GET() {
     text: `${p.client.name} — ${p.projectName} (${p.workStatus})`,
   }));
 
+  // ─── Pool Balance (SAR available — not yet withdrawn) ───
+  let poolBalance = 0;
+  for (const t of poolTransactions) {
+    if (t.type === "IN") poolBalance += Number(t.amountSAR);
+    else poolBalance -= Number(t.amountSAR);
+  }
+
+  // ─── NEXUP Treasury Balance (EGP) ───
+  // = sum(netEGP withdrawals) - sum(expenses) - sum(nexupProfitLedger) - sum(profitTransfers from NEXUP)
+  const totalWithdrawnEGP = withdrawals.reduce((s, w) => s + Number(w.netEGP), 0);
+  const totalExpensesEGP = expenses.reduce((s, e) => s + Number(e.cost), 0);
+  const totalProfitDistributed = profitLedger.reduce((s, l) => s + l.amount, 0);
+  const totalProfitTransferred = profitTransfers.reduce((s, t) => s + t.amount, 0);
+  const nexupTreasuryEGP = totalWithdrawnEGP - totalExpensesEGP - totalProfitDistributed - totalProfitTransferred;
+
   return NextResponse.json({
     totalClients: clients.length,
     totalProjects: projects.length,
@@ -92,5 +112,7 @@ export async function GET() {
     topClients,
     workStatusBreakdown,
     recentActivity,
+    poolBalance,
+    nexupTreasuryEGP,
   });
 }

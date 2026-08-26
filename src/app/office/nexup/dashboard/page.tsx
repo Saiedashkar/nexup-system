@@ -14,6 +14,9 @@ type DashboardData = {
   topClients: { name: string; projects: number; totalPaid: number }[];
   workStatusBreakdown: { status: string; count: number }[];
   recentActivity: { date: string; text: string }[];
+  // ─── Treasury ───
+  poolBalance: number; // SAR available (not yet withdrawn)
+  nexupTreasuryEGP: number; // EGP treasury (withdrawn but not yet distributed/transferred)
 };
 
 function formatNum(n: number) {
@@ -76,6 +79,51 @@ export default function NexupDashboard() {
         <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>
           NEXUP Design Studio — Overview & Performance
         </p>
+      </div>
+
+      {/* ═══ Balance Cards (SAR Available + EGP Treasury) ═══ */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+        {/* SAR Available Balance */}
+        <div style={{
+          padding: "20px 24px", borderRadius: 14,
+          background: "linear-gradient(135deg, rgba(13,148,136,0.1) 0%, rgba(13,148,136,0.03) 100%)",
+          border: "1px solid rgba(13,148,136,0.2)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(13,148,136,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>💰</div>
+            <div>
+              <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>الرصيد المتاح</div>
+              <div style={{ fontSize: 10, color: "var(--muted)" }}>Available Balance (SAR)</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#0d9488", direction: "ltr", marginTop: 4 }}>
+            {formatNum(data.poolBalance)} <span style={{ fontSize: 14, fontWeight: 600 }}>SAR</span>
+          </div>
+          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>
+            مجموع كل الدفعات التي لم تُسحب بعد
+          </div>
+        </div>
+
+        {/* EGP Treasury */}
+        <div style={{
+          padding: "20px 24px", borderRadius: 14,
+          background: "linear-gradient(135deg, rgba(59,130,246,0.1) 0%, rgba(59,130,246,0.03) 100%)",
+          border: "1px solid rgba(59,130,246,0.2)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(59,130,246,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🏦</div>
+            <div>
+              <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>رصيد خزنة NEXUP</div>
+              <div style={{ fontSize: 10, color: "var(--muted)" }}>NEXUP Treasury (EGP)</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#3b82f6", direction: "ltr", marginTop: 4 }}>
+            {formatNum(data.nexupTreasuryEGP)} <span style={{ fontSize: 14, fontWeight: 600 }}>EGP</span>
+          </div>
+          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>
+            الأموال المحولة من ريال لمصري ولم تُوزَّع بعد
+          </div>
+        </div>
       </div>
 
       {/* Main Stats Cards */}

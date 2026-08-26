@@ -28,6 +28,10 @@ export async function POST(request: Request) {
       name: user.name,
       role: user.role,
       businessId,
+      canAccessNexup: user.canAccessNexup,
+      canAccessRebound: user.canAccessRebound,
+      canAccessAbomazen: user.canAccessAbomazen,
+      canAccessOfficeFinanceFull: user.canAccessOfficeFinanceFull,
     });
 
     const response = NextResponse.json({
@@ -36,6 +40,10 @@ export async function POST(request: Request) {
         role: user.role,
         businessId: user.businessId,
         business: user.business,
+        canAccessNexup: user.canAccessNexup,
+        canAccessRebound: user.canAccessRebound,
+        canAccessAbomazen: user.canAccessAbomazen,
+        canAccessOfficeFinanceFull: user.canAccessOfficeFinanceFull,
       },
     });
     response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions);

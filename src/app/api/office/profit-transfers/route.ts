@@ -26,10 +26,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "businessId, amount, and date are required" }, { status: 400 });
   }
 
+  const parsedAmount = parseFloat(amount);
+  if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    return NextResponse.json({ error: "Amount must be a positive number" }, { status: 400 });
+  }
+
+  // ─── Validate NEXUP treasury balance if transferring from NEXUP ───
+  const business = await prisma.business.findUnique({ where: { id: businessId } });
+  if (business && business.slug === "nexup") {
+    // Calculate NEXUP treasury balance
+    const [withdrawals, expenses, profitLedger, existingTransfers] = await Promise.all([
+      prisma.withdrawal.findMany({ where: { businessId }, select: { netEGP: true } }),
+      prisma.expense.findMany({ where: { businessId }, select: { cost: true } }),
+      prisma.nexupProfitLedger.findMany({ select: { amount: true } }),
+      prisma.profitTransfer.findMany({ where: { businessId }, select: { amount: true } }),
+    ]);
+
+    const totalWithdrawnEGP = withdrawals.reduce((s, w) => s + Number(w.netEGP), 0);
+    const totalExpenses = expenses.reduce((s, e) => s + Number(e.cost), 0);
+    const totalProfitDistributed = profitLedger.reduce((s, l) => s + l.amount, 0);
+    const totalProfitTransferred = existingTransfers.reduce((s, t) => s + t.amount, 0);
+    const treasuryBalance = totalWithdrawnEGP - totalExpenses - totalProfitDistributed - totalProfitTransferred;
+
+    if (parsedAmount > treasuryBalance) {
+      return NextResponse.json({
+        error: `Insufficient NEXUP treasury balance. Available: ${treasuryBalance.toFixed(2)} EGP, Requested: ${parsedAmount.toFixed(2)} EGP`,
+      }, { status: 400 });
+    }
+  }
+
   const transfer = await prisma.profitTransfer.create({
     data: {
       businessId,
-      amount: parseFloat(amount),
+      amount: parsedAmount,
       date: new Date(date),
       note: note || null,
     },

@@ -90,6 +90,11 @@ model User {
   passwordHash   String
   role           Role            @default(EMPLOYEE)
   businessId     String?         // null for SUPER_ADMIN (sees all)
+  // ─── Permission Flags ───
+  canAccessNexup            Boolean @default(false)
+  canAccessRebound          Boolean @default(false)
+  canAccessAbomazen         Boolean @default(false)
+  canAccessOfficeFinanceFull Boolean @default(false)
   createdAt      DateTime        @default(now())
   business       Business?       @relation(fields: [businessId], references: [id], onDelete: SetNull)
   projectRecords ProjectRecord[] @relation("DesignerProjects")
@@ -272,6 +277,7 @@ model Partner {
   ownerships          BusinessOwnership[]
   transactions        PartnerTransaction[]
   capitalContributions CapitalContribution[]
+  nexupProfitDistributions NexupProfitLedger[]
 }
 
 model BusinessOwnership {
@@ -357,5 +363,22 @@ model ProfitTransfer {
   business    Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
 
   @@index([businessId])
+  @@index([date])
+}
+
+// ═══════════════════════════════════════════════════════
+// NEXUP Profit Distribution (SAIED & ADEL only)
+// ═══════════════════════════════════════════════════════
+
+model NexupProfitLedger {
+  id          String   @id @default(cuid())
+  partnerId   String   // Must be SAIED or ADEL — enforced at API level
+  amount      Float    // EGP distributed from NEXUP treasury
+  date        DateTime
+  note        String?
+  createdAt   DateTime @default(now())
+  partner     Partner  @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+
+  @@index([partnerId])
   @@index([date])
 }

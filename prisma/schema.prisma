@@ -51,6 +51,23 @@ enum ExpenseCategory {
   VARIABLE
 }
 
+enum ClientType {
+  ONE_TIME    // One-time service
+  RECURRING   // Monthly subscription
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PAID
+  PARTIAL
+}
+
 // ═══════════════════════════════════════════════════════
 // Business (multi-business support)
 // ═══════════════════════════════════════════════════════
@@ -70,6 +87,8 @@ model Business {
   poolTransactions  PoolTransaction[]
   withdrawals       Withdrawal[]
   expenses          Expense[]
+  // Subscription relations
+  subscriptions          Subscription[]
   // Office admin relations
   ownerships             BusinessOwnership[]
   partnerTransactions    PartnerTransaction[]
@@ -113,6 +132,7 @@ model Client {
   createdAt      DateTime        @default(now())
   business       Business        @relation(fields: [businessId], references: [id], onDelete: Restrict)
   projectRecords ProjectRecord[]
+  subscriptions  Subscription[]
 
   @@unique([businessId, phone])
   @@index([name])
@@ -154,6 +174,7 @@ model ProjectRecord {
   services         ServiceType[]
   poolTransactions PoolTransaction[]
   payments         ClientPayment[]
+  clientType       ClientType        @default(ONE_TIME)
 
   @@index([businessId])
   @@index([clientId])
@@ -381,4 +402,47 @@ model NexupProfitLedger {
 
   @@index([partnerId])
   @@index([date])
+}
+
+// ═══════════════════════════════════════════════════════
+// REBOUND Subscriptions
+// ═══════════════════════════════════════════════════════
+
+model Subscription {
+  id            String              @id @default(cuid())
+  clientId      String
+  businessId    String
+  services      String              // JSON array of service names
+  monthlyFee    Float
+  startDate     DateTime
+  billingDay    Int                 @default(1) // Day of month for billing
+  status        SubscriptionStatus  @default(ACTIVE)
+  notes         String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  client        Client              @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  business      Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  invoices      SubscriptionInvoice[]
+
+  @@index([clientId])
+  @@index([businessId])
+  @@index([status])
+}
+
+model SubscriptionInvoice {
+  id              String          @id @default(cuid())
+  subscriptionId  String
+  month           Int
+  year            Int
+  amount          Float           // Defaults to monthlyFee at generation time
+  status          InvoiceStatus   @default(UNPAID)
+  paidAmount      Float           @default(0)
+  paidDate        DateTime?
+  createdAt       DateTime        @default(now())
+  subscription    Subscription    @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@unique([subscriptionId, month, year])
+  @@index([subscriptionId])
+  @@index([month, year])
+  @@index([status])
 }

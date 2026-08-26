@@ -241,7 +241,7 @@ export default function OfficePage() {
                 return (
                   <Link
                     key={biz.id}
-                    href={biz.slug === "nexup" ? "/office/nexup/dashboard" : `/office/${biz.slug}`}
+                    href={biz.slug === "nexup" ? "/office/nexup/dashboard" : biz.slug === "rebound" ? "/office/rebound/dashboard" : `/office/${biz.slug}`}
                     style={{ textDecoration: "none" }}
                   >
                     <div

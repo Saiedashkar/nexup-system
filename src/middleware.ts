@@ -6,7 +6,7 @@ const publicPaths = new Set(["/login", "/api/auth/login", "/api/auth/logout"]);
 // Business-specific route prefixes
 const businessRoutes: Record<string, string[]> = {
   nexup: ["/office/nexup", "/api/nexup", "/api/pool", "/api/withdrawals", "/api/expenses", "/api/services", "/api/projects", "/api/client-payments"],
-  rebound: ["/office/rebound", "/api/rebound"],
+  rebound: ["/office/rebound", "/api/rebound", "/api/expenses"],
   abomazen: ["/office/abomazen", "/api/abomazen"],
 };
 

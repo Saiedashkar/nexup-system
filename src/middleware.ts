@@ -26,6 +26,8 @@ const officeFinanceRoutes = [
   "/api/office/office-expenses",
   "/api/office/capital",
   "/api/office/settings",
+  "/office/admin/users",
+  "/api/admin/users",
 ];
 
 export default async function middleware(request: NextRequest) {

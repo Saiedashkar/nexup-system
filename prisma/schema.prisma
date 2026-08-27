@@ -117,6 +117,7 @@ model User {
   canAccessRebound          Boolean @default(false)
   canAccessAbomazen         Boolean @default(false)
   canAccessOfficeFinanceFull Boolean @default(false)
+  mustChangePassword Boolean @default(false)
   createdAt      DateTime        @default(now())
   business       Business?       @relation(fields: [businessId], references: [id], onDelete: SetNull)
   projectRecords ProjectRecord[] @relation("DesignerProjects")

@@ -4,23 +4,17 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-// GET invoices with optional filters (pass ?slug=rebound or ?slug=nexup)
 export async function GET(request: NextRequest) {
   const session = await getCurrentSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
-  const slug = searchParams.get("slug") || "rebound";
-
-  const business = await prisma.business.findUnique({ where: { slug } });
-  if (!business) return NextResponse.json({ error: "Business not found" }, { status: 404 });
-
   const status = searchParams.get("status") || "";
   const month = searchParams.get("month");
   const year = searchParams.get("year");
 
   const where: Record<string, unknown> = {
-    subscription: { businessId: business.id },
+    subscription: { businessId: (await prisma.business.findUnique({ where: { slug: "abomazen" } }))?.id },
   };
   if (status) where.status = status;
   if (month) where.month = parseInt(month);
@@ -35,7 +29,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(invoices);
 }
 
-// POST pay an invoice (full or partial)
 export async function POST(request: NextRequest) {
   const session = await getCurrentSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -59,7 +52,6 @@ export async function POST(request: NextRequest) {
   const newPaid = invoice.paidAmount + payAmount;
   const newStatus = newPaid >= invoice.amount ? "PAID" : "PARTIAL";
 
-  // Update invoice
   const updatedInvoice = await prisma.subscriptionInvoice.update({
     where: { id: invoiceId },
     data: {
@@ -81,16 +73,10 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // Log activity
   const userId = session.userId;
   if (userId) {
     await prisma.activityLog.create({
-      data: {
-        userId,
-        action: "UPDATE",
-        entityType: "SubscriptionInvoice",
-        entityId: invoiceId,
-      },
+      data: { userId, action: "UPDATE", entityType: "SubscriptionInvoice", entityId: invoiceId },
     });
   }
 

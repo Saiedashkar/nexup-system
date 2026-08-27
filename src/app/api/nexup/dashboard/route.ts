@@ -18,7 +18,7 @@ export async function GET() {
   }
 
   // Fetch all data for NEXUP
-  const [projects, clients, poolTransactions, withdrawals, expenses, profitLedger, profitTransfers] = await Promise.all([
+  const [projects, clients, poolTransactions, withdrawals, expenses, profitLedger, profitTransfers, subscriptions] = await Promise.all([
     prisma.projectRecord.findMany({
       where: { businessId: nexup.id },
       include: { client: true, designer: true, services: true },
@@ -32,6 +32,7 @@ export async function GET() {
     prisma.expense.findMany({ where: { businessId: nexup.id }, select: { cost: true } }),
     prisma.nexupProfitLedger.findMany({ select: { amount: true } }),
     prisma.profitTransfer.findMany({ where: { businessId: nexup.id }, select: { amount: true } }),
+    prisma.subscription.findMany({ where: { businessId: nexup.id }, include: { invoices: true } }),
   ]);
 
   // Compute stats
@@ -100,6 +101,10 @@ export async function GET() {
   const totalProfitTransferred = profitTransfers.reduce((s, t) => s + t.amount, 0);
   const nexupTreasuryEGP = totalWithdrawnEGP - totalExpensesEGP - totalProfitDistributed - totalProfitTransferred;
 
+  // ─── Subscription stats ───
+  const activeSubscriptions = subscriptions.filter(s => s.status === "ACTIVE");
+  const mrr = activeSubscriptions.reduce((s, sub) => s + Number(sub.monthlyFee), 0);
+
   return NextResponse.json({
     totalClients: clients.length,
     totalProjects: projects.length,
@@ -114,5 +119,8 @@ export async function GET() {
     recentActivity,
     poolBalance,
     nexupTreasuryEGP,
+    mrr,
+    activeSubscriptions: activeSubscriptions.length,
+    totalSubscriptions: subscriptions.length,
   });
 }

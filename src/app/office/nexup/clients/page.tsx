@@ -376,8 +376,244 @@ function EditModal({ project, users, services, onClose, onSave }: { project: Pro
   );
 }
 
+/* ═══ Subscription Types ═══ */
+type SubInvoice = { id: string; month: number; year: number; amount: number; status: string; paidAmount: number; paidDate: string | null };
+type Subscription = { id: string; clientId: string; businessId: string; services: string; monthlyFee: number; startDate: string; billingDay: number; status: string; notes: string | null; createdAt: string; client: ClientInfo; invoices: SubInvoice[] };
+
+/* ═══ Recurring Tab ═══ */
+function RecurringTab() {
+  const [subs, setSubs] = useState<Subscription[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ clientPhone: "", clientName: "", monthlyFee: "", startDate: new Date().toISOString().split("T")[0], services: "", notes: "" });
+  const [payModal, setPayModal] = useState<Subscription | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+
+  const fetchSubs = useCallback(async () => {
+    setLoading(true);
+    try { const r = await fetch("/api/rebound/subscriptions?slug=nexup"); if (r.ok) setSubs(await r.json()); } catch {}
+    setLoading(false);
+  }, []);
+  useEffect(() => { fetchSubs(); }, [fetchSubs]);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const r = await fetch("/api/rebound/subscriptions", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessSlug: "nexup", clientPhone: form.clientPhone, clientName: form.clientName, monthlyFee: parseFloat(form.monthlyFee), startDate: form.startDate, services: form.services ? form.services.split(",").map(s => s.trim()) : [], notes: form.notes }) });
+      if (r.ok) { setShowForm(false); setForm({ clientPhone: "", clientName: "", monthlyFee: "", startDate: new Date().toISOString().split("T")[0], services: "", notes: "" }); fetchSubs(); }
+    } catch {}
+  };
+
+  const handlePay = async (subId: string, invoiceId: string, amount: number) => {
+    try {
+      const r = await fetch("/api/rebound/subscription-invoices", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscriptionId: subId, invoiceId, amount }) });
+      if (r.ok) { fetchSubs(); setPayModal(null); setPayAmount(""); }
+    } catch {}
+  };
+
+  const handleToggleStatus = async (subId: string, newStatus: string) => {
+    try {
+      const r = await fetch("/api/rebound/subscriptions", { method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: subId, status: newStatus }) });
+      if (r.ok) fetchSubs();
+    } catch {}
+  };
+
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+
+  const activeSubs = subs.filter(s => s.status === "ACTIVE");
+  const mrr = activeSubs.reduce((sum, s) => sum + s.monthlyFee, 0);
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--text)", margin: 0 }}>اشتراكات شهرية</h1>
+          <p style={{ fontSize: 12, color: "var(--muted)", margin: "3px 0 0" }}>Monthly Subscriptions — NEXUP</p>
+        </div>
+        <button onClick={() => setShowForm(true)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "9px 16px", borderRadius: 8, background: "#0d9488", color: "#fff", border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", boxShadow: "0 2px 6px rgba(13,148,136,0.3)" }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+          اشتراك جديد +
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
+        {[
+          { l: "الإجمالي", v: subs.length, c: "var(--text)" },
+          { l: "نشط", v: activeSubs.length, c: "#10b981" },
+          { l: "متوقف", v: subs.filter(s => s.status !== "ACTIVE").length, c: "#f59e0b" },
+          { l: "الدخل الشهري (MRR)", v: `${fmt(mrr)} EGP`, c: "#0d9488" },
+        ].map(s => (
+          <div key={s.l} style={{ padding: "10px 12px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)", textAlign: "center" }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: s.c, direction: "ltr" }}>{s.v}</div>
+            <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 1 }}>{s.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--muted)" }}>Loading...</div>
+        : subs.length === 0 ? (
+          <div style={{ textAlign: "center", padding: 40 }}>
+            <div style={{ fontSize: 36, marginBottom: 8 }}>📋</div>
+            <p style={{ color: "var(--muted)", fontSize: 13 }}>لا توجد اشتراكات بعد</p>
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: 8 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 900 }}>
+              <thead>
+                <tr style={{ background: "rgba(13,148,136,0.06)" }}>
+                  {["العميل", "الهاتف", "الخدمات", "القيمة الشهرية", "تاريخ البداية", "يوم الاستحقاق", "الحالة", "فاتورة الشهر", "الإجراءات"].map(h => (
+                    <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: "var(--text)", borderBottom: "2px solid var(--border)" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {subs.map(sub => {
+                  const currentInvoice = sub.invoices.find(i => i.month === currentMonth && i.year === currentYear);
+                  const isOverdue = currentInvoice && currentInvoice.status === "UNPAID" && now.getDate() > sub.billingDay;
+                  const services = sub.services ? JSON.parse(sub.services) : [];
+                  return (
+                    <tr key={sub.id} style={{ borderBottom: "1px solid var(--border)", background: sub.status !== "ACTIVE" ? "rgba(245,158,11,0.03)" : "var(--surface)" }}>
+                      <td style={{ padding: "8px 10px", fontWeight: 600 }}>{sub.client.name}</td>
+                      <td style={{ padding: "8px 10px", direction: "ltr", color: "var(--text-secondary)" }}>{sub.client.phone}</td>
+                      <td style={{ padding: "8px 10px" }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
+                          {services.map((s: string, i: number) => <span key={i} style={{ padding: "1px 6px", borderRadius: 3, fontSize: 9, fontWeight: 600, background: "rgba(13,148,136,0.08)", color: "#0d9488" }}>{s}</span>)}
+                          {services.length === 0 && <span style={{ fontSize: 9, color: "var(--muted)" }}>—</span>}
+                        </div>
+                      </td>
+                      <td style={{ padding: "8px 10px", fontWeight: 700, color: "#0d9488", direction: "ltr" }}>{fmt(sub.monthlyFee)} EGP</td>
+                      <td style={{ padding: "8px 10px", color: "var(--text-secondary)", fontSize: 11 }}>{fmtDate(sub.startDate)}</td>
+                      <td style={{ padding: "8px 10px", textAlign: "center", fontWeight: 700 }}>{sub.billingDay}</td>
+                      <td style={{ padding: "8px 10px" }}>
+                        <select value={sub.status} onChange={e => handleToggleStatus(sub.id, e.target.value)}
+                          style={{ padding: "3px 6px", borderRadius: 4, border: "none", fontSize: 10, fontWeight: 600, cursor: "pointer", background: sub.status === "ACTIVE" ? "rgba(16,185,129,0.12)" : sub.status === "PAUSED" ? "rgba(245,158,11,0.12)" : "rgba(239,68,68,0.12)", color: sub.status === "ACTIVE" ? "#10b981" : sub.status === "PAUSED" ? "#f59e0b" : "#ef4444" }}>
+                          <option value="ACTIVE">نشط</option>
+                          <option value="PAUSED">متوقف</option>
+                          <option value="CANCELLED">ملغي</option>
+                        </select>
+                      </td>
+                      <td style={{ padding: "8px 10px" }}>
+                        {currentInvoice ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600,
+                              background: currentInvoice.status === "PAID" ? "rgba(16,185,129,0.12)" : isOverdue ? "rgba(239,68,68,0.12)" : "rgba(245,158,11,0.12)",
+                              color: currentInvoice.status === "PAID" ? "#10b981" : isOverdue ? "#ef4444" : "#f59e0b" }}>
+                              {currentInvoice.status === "PAID" ? "مدفوع" : isOverdue ? "متأخر" : "غير مدفوع"}
+                            </span>
+                            {currentInvoice.status !== "PAID" && (
+                              <button onClick={() => { setPayModal(sub); setPayAmount(String(currentInvoice.amount - (currentInvoice.paidAmount || 0))); }}
+                                style={{ padding: "2px 6px", borderRadius: 3, border: "none", background: "rgba(16,185,129,0.12)", color: "#10b981", fontSize: 9, fontWeight: 600, cursor: "pointer" }}>ادفع</button>
+                            )}
+                          </div>
+                        ) : <span style={{ fontSize: 10, color: "var(--muted)" }}>—</span>}
+                      </td>
+                      <td style={{ padding: "8px 10px" }}>
+                        <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
+                          {currentInvoice && currentInvoice.status !== "PAID" && (
+                            <button onClick={() => { setPayModal(sub); setPayAmount(String(currentInvoice.amount - (currentInvoice.paidAmount || 0))); }}
+                              style={{ padding: "3px 8px", borderRadius: 4, border: "none", background: "rgba(16,185,129,0.12)", color: "#10b981", fontSize: 10, fontWeight: 600, cursor: "pointer" }}>💳 ادفع</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+      {/* Pay Modal */}
+      {payModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={e => { if (e.target === e.currentTarget) { setPayModal(null); setPayAmount(""); } }}>
+          <div style={{ background: "var(--surface)", borderRadius: 14, maxWidth: 400, width: "95%", border: "1px solid var(--border)" }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", margin: 0 }}>دفع فاتورة</h3>
+              <button onClick={() => { setPayModal(null); setPayAmount(""); }} style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "var(--surface-hover)", color: "var(--muted)", fontSize: 14, cursor: "pointer" }}>✕</button>
+            </div>
+            <div style={{ padding: "16px 20px" }}>
+              <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 12 }}>{payModal.client.name} — {fmt(payModal.monthlyFee)} EGP/شهر</p>
+              <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>المبلغ</label>
+              <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
+                style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4, direction: "ltr" }} />
+            </div>
+            <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => { setPayModal(null); setPayAmount(""); }} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, cursor: "pointer" }}>إلغاء</button>
+              <button onClick={() => { if (payAmount && payModal) { const inv = payModal.invoices.find(i => i.month === currentMonth && i.year === currentYear); if (inv) handlePay(payModal.id, inv.id, parseFloat(payAmount)); } }}
+                style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: "#0d9488", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>تأكيد الدفع</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Form */}
+      {showForm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={e => { if (e.target === e.currentTarget) setShowForm(false); }}>
+          <div style={{ background: "var(--surface)", borderRadius: 14, maxWidth: 500, width: "95%", border: "1px solid var(--border)" }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", margin: 0 }}>اشتراك شهر جديد</h3>
+              <button onClick={() => setShowForm(false)} style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "var(--surface-hover)", color: "var(--muted)", fontSize: 14, cursor: "pointer" }}>✕</button>
+            </div>
+            <form onSubmit={handleCreate}>
+              <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>هاتف العميل *</label>
+                  <input required placeholder="05XXXXXXXX" value={form.clientPhone} dir="ltr"
+                    style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3 }}
+                    onChange={e => setForm(f => ({ ...f, clientPhone: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>اسم العميل</label>
+                  <input value={form.clientName} placeholder=" اختياري إذا كان العميل مسجل"
+                    style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3 }}
+                    onChange={e => setForm(f => ({ ...f, clientName: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>القيمة الشهرية (EGP) *</label>
+                  <input required type="number" min="1" value={form.monthlyFee} dir="ltr"
+                    style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3 }}
+                    onChange={e => setForm(f => ({ ...f, monthlyFee: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>تاريخ البداية *</label>
+                  <input required type="date" value={form.startDate}
+                    style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3 }}
+                    onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} />
+                </div>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>الخدمات (مفصولة بفاصلة)</label>
+                  <input placeholder="مثال: تسويق إلكتروني, إدارة سوشيال" value={form.services}
+                    style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3 }}
+                    onChange={e => setForm(f => ({ ...f, services: e.target.value }))} />
+                </div>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>ملاحظات</label>
+                  <textarea rows={2} value={form.notes}
+                    style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3, resize: "vertical" }}
+                    onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+                </div>
+              </div>
+              <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button type="button" onClick={() => setShowForm(false)} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, cursor: "pointer" }}>إلغاء</button>
+                <button type="submit" style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: "#0d9488", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>حفظ</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ═══════════════════════ MAIN PAGE ═══════════════════════ */
 export default function NexupClientsPage() {
+  const [activeTab, setActiveTab] = useState<"one-time" | "recurring">("one-time");
   const [projects, setProjects] = useState<Project[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -482,15 +718,31 @@ export default function NexupClientsPage() {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--text)", margin: 0 }}>Clients</h1>
-          <p style={{ fontSize: 12, color: "var(--muted)", margin: "3px 0 0" }}>Manage client records & service projects</p>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--text)", margin: 0 }}>إدارة العملاء</h1>
+          <p style={{ fontSize: 12, color: "var(--muted)", margin: "3px 0 0" }}>NEXUP Client Management</p>
         </div>
-        <button onClick={() => { setShowForm(true); resetForm(); }} style={{ display: "flex", alignItems: "center", gap: 5, padding: "9px 16px", borderRadius: 8, background: "#0d9488", color: "#fff", border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", boxShadow: "0 2px 6px rgba(13,148,136,0.3)" }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          New Record +
-        </button>
+        {activeTab === "one-time" && (
+          <button onClick={() => { setShowForm(true); resetForm(); }} style={{ display: "flex", alignItems: "center", gap: 5, padding: "9px 16px", borderRadius: 8, background: "#0d9488", color: "#fff", border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", boxShadow: "0 2px 6px rgba(13,148,136,0.3)" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+            سجل جديد +
+          </button>
+        )}
       </div>
 
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 0, marginBottom: 16, borderBottom: "2px solid var(--border)" }}>
+        {[{ k: "one-time", l: "لمرة واحدة", icon: "📋" }, { k: "recurring", l: "اشتراكات شهرية", icon: "🔄" }].map(tab => (
+          <button key={tab.k} onClick={() => setActiveTab(tab.k as typeof activeTab)}
+            style={{ padding: "10px 20px", border: "none", borderBottom: activeTab === tab.k ? "2px solid #0d9488" : "2px solid transparent", marginBottom: -2, background: "transparent", color: activeTab === tab.k ? "#0d9488" : "var(--muted)", fontSize: 12, fontWeight: activeTab === tab.k ? 700 : 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, transition: "all 0.15s" }}>
+            <span>{tab.icon}</span> {tab.l}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "recurring" && <RecurringTab />}
+
+      {activeTab === "one-time" && (
+      <>
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10, marginBottom: 16 }}>
         {[{ l: "Total", v: stats.total, c: "var(--text)" }, { l: "In Progress", v: stats.inProgress, c: "#3b82f6" }, { l: "Completed", v: stats.completed, c: "#10b981" }, { l: "Unpaid", v: stats.unpaid, c: "#ef4444" }, { l: "Clients", v: stats.clients, c: "#8b5cf6" }, { l: "Revenue", v: `${fmt(stats.revenue)} SAR`, c: "#0d9488" }].map(s => (
@@ -646,6 +898,7 @@ export default function NexupClientsPage() {
       {/* Create Form Modal */}
       {showForm && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={e => { if (e.target === e.currentTarget) { setShowForm(false); resetForm(); } }}>
+
           <div style={{ background: "var(--surface)", borderRadius: 14, maxWidth: 620, width: "95%", maxHeight: "90vh", overflow: "auto", border: "1px solid var(--border)" }}>
             <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
@@ -759,6 +1012,8 @@ export default function NexupClientsPage() {
             </form>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

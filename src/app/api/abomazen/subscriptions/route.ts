@@ -4,24 +4,14 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-// GET all subscriptions for a business (pass ?slug=nexup or ?slug=rebound)
 export async function GET(request: NextRequest) {
   const session = await getCurrentSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const business = await prisma.business.findUnique({ where: { slug: "abomazen" } });
+  if (!business) return NextResponse.json({ error: "ABOMAZEN not found" }, { status: 404 });
+
   const { searchParams } = new URL(request.url);
-  const slug = searchParams.get("slug") || "rebound";
-
-  const business = await prisma.business.findUnique({ where: { slug } });
-  if (!business) return NextResponse.json({ error: "Business not found" }, { status: 404 });
-
-  // Access check
-  if (session.role !== "SUPER_ADMIN") {
-    if (slug === "nexup" && !session.canAccessNexup) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    if (slug === "rebound" && !session.canAccessRebound) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    if (slug === "abomazen" && !session.canAccessAbomazen) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const status = searchParams.get("status") || "";
 
   const where: Record<string, unknown> = { businessId: business.id };
@@ -36,17 +26,15 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(subscriptions);
 }
 
-// POST create a new subscription (pass businessSlug in body)
 export async function POST(request: NextRequest) {
   const session = await getCurrentSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await request.json();
-  const { clientId, clientPhone, clientName, services, monthlyFee, startDate, billingDay, notes, businessSlug } = body;
+  const business = await prisma.business.findUnique({ where: { slug: "abomazen" } });
+  if (!business) return NextResponse.json({ error: "ABOMAZEN not found" }, { status: 404 });
 
-  const slug = businessSlug || "rebound";
-  const business = await prisma.business.findUnique({ where: { slug } });
-  if (!business) return NextResponse.json({ error: "Business not found" }, { status: 404 });
+  const body = await request.json();
+  const { clientId, clientPhone, clientName, services, monthlyFee, startDate, billingDay, notes } = body;
 
   // Find or create client
   let clientIdFinal = clientId;
@@ -68,7 +56,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Client, monthlyFee, and startDate are required" }, { status: 400 });
   }
 
-  // Create subscription
   const subscription = await prisma.subscription.create({
     data: {
       clientId: clientIdFinal,
@@ -97,16 +84,10 @@ export async function POST(request: NextRequest) {
 
   subscription.invoices = [invoice];
 
-  // Log activity
   const userId = session.userId;
   if (userId) {
     await prisma.activityLog.create({
-      data: {
-        userId,
-        action: "CREATE",
-        entityType: "Subscription",
-        entityId: subscription.id,
-      },
+      data: { userId, action: "CREATE", entityType: "Subscription", entityId: subscription.id },
     });
   }
 

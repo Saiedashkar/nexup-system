@@ -9,23 +9,24 @@ type DashboardData = {
   totalCollected: number;
   activeProjects: number;
   completedProjects: number;
-  unpaidProjects: number;
   monthlyRevenue: { month: string; revenue: number; projects: number }[];
   topClients: { name: string; projects: number; totalPaid: number }[];
   workStatusBreakdown: { status: string; count: number }[];
   poolBalance: number;
   mrr: number;
+  activeSubscriptions: number;
+  totalSubscriptions: number;
 };
 
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-export default function NexupAnalyticsPage() {
+export default function ReboundAnalyticsPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/nexup/dashboard").then(r => r.ok ? r.json() : null).then(d => { setData(d); setLoading(false); }).catch(() => setLoading(false));
+    fetch("/api/rebound/dashboard").then(r => r.ok ? r.json() : null).then(d => { setData(d); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
   if (loading) return <div style={{ textAlign: "center", padding: 60, color: "var(--muted)" }}>جاري تحميل التحليلات...</div>;
@@ -34,22 +35,21 @@ export default function NexupAnalyticsPage() {
   const maxRev = Math.max(...data.monthlyRevenue.map(m => m.revenue), 1);
   const collectionRate = data.totalRevenue > 0 ? (data.totalCollected / data.totalRevenue) * 100 : 0;
   const avgPerClient = data.totalClients > 0 ? data.totalCollected / data.totalClients : 0;
-  const avgPerProject = data.totalProjects > 0 ? data.totalCollected / data.totalProjects : 0;
 
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>📊 تحليلات NEXUP</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>📊 تحليلات REBOUND</h1>
         <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>Analytics & Performance Insights</p>
       </div>
 
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
         {[
-          { label: "معدل التحصيل", value: `${Math.round(collectionRate)}%`, color: collectionRate > 80 ? "#10b981" : collectionRate > 50 ? "#f59e0b" : "#ef4444", icon: "📈" },
-          { label: "متوسط الدخل لكل عميل", value: `${fmt(avgPerClient)} SAR`, color: "#3b82f6", icon: "👤" },
-          { label: "متوسط الدخل لكل مشروع", value: `${fmt(avgPerProject)} SAR`, color: "#8b5cf6", icon: "📋" },
-          { label: "المشاريع غير المحصلة", value: data.unpaidProjects, color: "#ef4444", icon: "⚠️" },
+          { label: "معدل التحصيل", value: `${Math.round(collectionRate)}%`, color: collectionRate > 80 ? "#10b981" : "#f59e0b", icon: "📈" },
+          { label: "متوسط الدخل لكل عميل", value: `${fmt(avgPerClient)} EGP`, color: "#3b82f6", icon: "👤" },
+          { label: "الاشتراكات النشطة", value: data.activeSubscriptions || 0, color: "#10b981", icon: "🔄" },
+          { label: "الدخل الشهري المتكرر", value: `${fmt(data.mrr || 0)} EGP`, color: "#8b5cf6", icon: "💰" },
         ].map((kpi, i) => (
           <div key={i} style={{ padding: "20px 24px", borderRadius: 14, background: "var(--surface)", border: "1px solid var(--border)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
@@ -65,13 +65,13 @@ export default function NexupAnalyticsPage() {
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 24 }}>
         <div style={{ padding: "20px 24px", borderRadius: 14, background: "var(--surface)", border: "1px solid var(--border)" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 20 }}>📈 الإيرادات الشهرية</div>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 200, padding: "0 4px" }}>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 200 }}>
             {data.monthlyRevenue.map((m, i) => {
               const h = maxRev > 0 ? (m.revenue / maxRev) * 160 : 0;
               return (
                 <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                   {m.revenue > 0 && <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600 }}>{fmt(m.revenue)}</span>}
-                  <div style={{ width: "100%", maxWidth: 40, height: Math.max(h, 4), background: "linear-gradient(180deg, #0d9488, #14b8a6)", borderRadius: "6px 6px 2px 2px" }} />
+                  <div style={{ width: "100%", maxWidth: 40, height: Math.max(h, 4), background: "linear-gradient(180deg, #2563eb, #3b82f6)", borderRadius: "6px 6px 2px 2px" }} />
                   <span style={{ fontSize: 10, color: "var(--muted)" }}>{MONTHS[i]}</span>
                 </div>
               );
@@ -81,7 +81,7 @@ export default function NexupAnalyticsPage() {
 
         <div style={{ padding: "20px 24px", borderRadius: 14, background: "var(--surface)", border: "1px solid var(--border)" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 20 }}>🔄 حالة المشاريع</div>
-          {data.workStatusBreakdown.map((s, i) => {
+          {data.workStatusBreakdown.map(s => {
             const pct = data.totalProjects > 0 ? (s.count / data.totalProjects) * 100 : 0;
             const colors: Record<string, string> = { WAITING: "#f59e0b", IN_PROGRESS: "#3b82f6", COMPLETED: "#10b981", PAUSED: "#6b7280" };
             const labels: Record<string, string> = { WAITING: "في الانتظار", IN_PROGRESS: "قيد التنفيذ", COMPLETED: "مكتمل", PAUSED: "متوقف" };
@@ -109,12 +109,12 @@ export default function NexupAnalyticsPage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 12 }}>
             {data.topClients.map((c, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 10, background: "var(--surface-hover)" }}>
-                <div style={{ width: 36, height: 36, borderRadius: 8, background: `hsl(${i * 60}, 60%, 50%)`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 14, fontWeight: 700 }}>{c.name.charAt(0)}</div>
+                <div style={{ width: 36, height: 36, borderRadius: 8, background: `hsl(${i * 60 + 200}, 60%, 50%)`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 14, fontWeight: 700 }}>{c.name.charAt(0)}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{c.name}</div>
                   <div style={{ fontSize: 11, color: "var(--muted)" }}>{c.projects} مشروع</div>
                 </div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#0d9488" }}>{fmt(c.totalPaid)} <span style={{ fontSize: 10, color: "var(--muted)" }}>SAR</span></div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#2563eb" }}>{fmt(c.totalPaid)} <span style={{ fontSize: 10, color: "var(--muted)" }}>EGP</span></div>
               </div>
             ))}
           </div>

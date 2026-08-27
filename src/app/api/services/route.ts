@@ -9,8 +9,15 @@ export async function GET(request: NextRequest) {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    const { searchParams } = new URL(request.url);
+    const businessSlug = searchParams.get("businessSlug");
+
     const where: Record<string, unknown> = {};
-    if (session.role !== "SUPER_ADMIN") {
+
+    if (businessSlug) {
+      const business = await prisma.business.findUnique({ where: { slug: businessSlug } });
+      if (business) where.businessId = business.id;
+    } else if (session.role !== "SUPER_ADMIN") {
       where.businessId = session.businessId;
     }
 
@@ -32,13 +39,22 @@ export async function POST(request: NextRequest) {
     if (session.role === "EMPLOYEE") return NextResponse.json({ error: "Access denied" }, { status: 403 });
 
     const body = await request.json();
-    const { name, isCustom } = body;
+    const { name, isCustom, businessSlug } = body;
 
     if (!name) return NextResponse.json({ error: "Service name is required" }, { status: 400 });
 
+    // Resolve businessId from slug or session
+    let businessId = session.businessId;
+    if (businessSlug && session.role === "SUPER_ADMIN") {
+      const business = await prisma.business.findUnique({ where: { slug: businessSlug } });
+      if (business) businessId = business.id;
+    }
+
+    if (!businessId) return NextResponse.json({ error: "Business ID required" }, { status: 400 });
+
     const service = await prisma.serviceType.create({
       data: {
-        businessId: session.businessId,
+        businessId,
         name,
         isCustom: isCustom || false,
       },

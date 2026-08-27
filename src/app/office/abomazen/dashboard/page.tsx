@@ -1,35 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type DashboardData = {
-  poolBalance: number;
-  mrr: number;
   availableBalance: number;
-  totalExpenses: number;
-  totalTransferred: number;
-  totalClients: number;
-  totalProjects: number;
-  totalRevenue: number;
-  totalCollected: number;
-  activeProjects: number;
-  completedProjects: number;
-  activeSubscriptions: number;
-  totalSubscriptions: number;
-  monthlyRevenue: { month: string; revenue: number; projects: number }[];
-  workStatusBreakdown: { status: string; count: number }[];
-  topClients: { name: string; projects: number; totalPaid: number }[];
-  recentActivity: { date: string; text: string }[];
+  totalDealsThisMonth: number;
+  availableProperties: number;
+  totalDeals: number;
+  recentDeals: { id: string; dealType: string; date: string; abomazenNetAmount: number; propertyName: string }[];
 };
 
-function formatNum(n: number) {
-  return n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-}
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const STATUS_COLORS: Record<string, string> = {
-  WAITING: "#f59e0b", IN_PROGRESS: "#f59e0b", COMPLETED: "#10b981", PAUSED: "#6b7280",
-};
+function fmt(n: number) { return n.toLocaleString("en-US"); }
+function fmtDate(d: string) { return new Date(d).toLocaleDateString("ar-EG", { day: "2-digit", month: "short", year: "numeric" }); }
 
 export default function AbomazenDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -43,265 +26,126 @@ export default function AbomazenDashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
-          <p style={{ color: "var(--muted)" }}>جاري التحميل...</p>
-        </div>
+  if (loading) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>⏳</div>
+        <p style={{ color: "var(--muted)", fontSize: 16 }}>جاري تحميل البيانات...</p>
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (!data) {
-    return (
-      <div style={{ textAlign: "center", padding: 60 }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🏢</div>
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>مرحبًا بك في ABOMAZEN</h2>
-        <p style={{ color: "var(--muted)", fontSize: 14 }}>ابدأ بإضافة أول عميل في قسم إدارة العملاء</p>
+  if (!data) return (
+    <div style={{ textAlign: "center", padding: 60 }}>
+      <div style={{ fontSize: 64, marginBottom: 16 }}>🏠</div>
+      <h2 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>مرحبًا بيك في ABOMAZEN</h2>
+      <p style={{ color: "var(--muted)", fontSize: 16, marginBottom: 24 }}>نظام إدارة وساطة عقارية بسيط ومباشر</p>
+      <div style={{ display: "flex", gap: 16, justifyContent: "center" }}>
+        <Link href="/office/abomazen/new-deal" style={{ padding: "14px 28px", borderRadius: 12, background: "#f59e0b", color: "#fff", fontSize: 16, fontWeight: 700, textDecoration: "none" }}>📝 سجّل أول صفقة</Link>
+        <Link href="/office/abomazen/guide" style={{ padding: "14px 28px", borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)", fontSize: 16, fontWeight: 700, textDecoration: "none" }}>❓ إزاي أستخدم النظام؟</Link>
       </div>
-    );
-  }
-
-  const maxRevenue = Math.max(...data.monthlyRevenue.map(m => m.revenue), 1);
+    </div>
+  );
 
   return (
-    <div>
-      {/* Page Header */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: "var(--text)", margin: 0, letterSpacing: "-0.02em" }}>
-          لوحة تحكم ABOMAZEN
-        </h1>
-        <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>
-          نظرة عامة على الأداء والبيانات — تسويق عقاري
-        </p>
+    <div style={{ maxWidth: 900, margin: "0 auto" }}>
+      {/* Welcome */}
+      <div style={{ marginBottom: 28, textAlign: "center" }}>
+        <h1 style={{ fontSize: 28, fontWeight: 800, color: "var(--text)", margin: 0 }}>مرحبًا 👋</h1>
+        <p style={{ fontSize: 14, color: "var(--muted)", margin: "6px 0 0" }}>ABOMAZEN — وساطة عقارية</p>
       </div>
 
-      {/* ═══ Balance Cards ═══ */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
-        {/* Pool Balance (EGP direct) */}
-        <div style={{
-          padding: "20px 24px", borderRadius: 14,
-          background: "linear-gradient(135deg, rgba(245,158,11,0.1) 0%, rgba(245,158,11,0.03) 100%)",
-          border: "1px solid rgba(245,158,11,0.2)",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(245,158,11,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>💰</div>
-            <div>
-              <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>الرصيد المتاح</div>
-              <div style={{ fontSize: 10, color: "var(--muted)" }}>Available Balance (EGP)</div>
-            </div>
+      {/* Big Action Buttons */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 28 }}>
+        <Link href="/office/abomazen/new-deal" style={{ textDecoration: "none" }}>
+          <div style={{
+            padding: "24px 20px", borderRadius: 16, textAlign: "center",
+            background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+            color: "#fff", cursor: "pointer", transition: "transform 0.2s", boxShadow: "0 4px 16px rgba(245,158,11,0.3)",
+          }}
+            onMouseEnter={e => (e.currentTarget.style.transform = "translateY(-4px)")}
+            onMouseLeave={e => (e.currentTarget.style.transform = "translateY(0)")}
+          >
+            <div style={{ fontSize: 40, marginBottom: 8 }}>📝</div>
+            <div style={{ fontSize: 20, fontWeight: 800 }}>تسجيل صفقة جديدة</div>
+            <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>اضغط هنا لتسجيل صفقة إيجار أو بيع</div>
           </div>
-          <div style={{ fontSize: 28, fontWeight: 800, color: "#f59e0b", direction: "ltr", marginTop: 4 }}>
-            {formatNum(data.poolBalance)} <span style={{ fontSize: 14, fontWeight: 600 }}>EGP</span>
+        </Link>
+        <Link href="/office/abomazen/properties" style={{ textDecoration: "none" }}>
+          <div style={{
+            padding: "24px 20px", borderRadius: 16, textAlign: "center",
+            background: "var(--surface)", border: "2px solid var(--border)",
+            color: "var(--text)", cursor: "pointer", transition: "transform 0.2s",
+          }}
+            onMouseEnter={e => (e.currentTarget.style.transform = "translateY(-4px)")}
+            onMouseLeave={e => (e.currentTarget.style.transform = "translateY(0)")}
+          >
+            <div style={{ fontSize: 40, marginBottom: 8 }}>🏘️</div>
+            <div style={{ fontSize: 20, fontWeight: 800 }}>إضافة عقار جديد</div>
+            <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 4 }}>سجّل عقار جديد في القائمة</div>
           </div>
-          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>
-            مجموع كل الدفعات الفعلية بعد خصم المصروفات والتحويلات
-          </div>
-        </div>
+        </Link>
+      </div>
 
-        {/* MRR Card */}
-        <div style={{
-          padding: "20px 24px", borderRadius: 14,
-          background: "linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(16,185,129,0.03) 100%)",
-          border: "1px solid rgba(16,185,129,0.2)",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(16,185,129,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📈</div>
-            <div>
-              <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>الدخل الشهري المتكرر</div>
-              <div style={{ fontSize: 10, color: "var(--muted)" }}>Monthly Recurring Revenue</div>
-            </div>
-          </div>
-          <div style={{ fontSize: 28, fontWeight: 800, color: "#10b981", direction: "ltr", marginTop: 4 }}>
-            {formatNum(data.mrr)} <span style={{ fontSize: 14, fontWeight: 600 }}>EGP</span>
-          </div>
-          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>
-            من {data.activeSubscriptions} اشتراك نشط من أصل {data.totalSubscriptions}
-          </div>
+      {/* Balance Card - BIG */}
+      <div style={{
+        padding: "28px 32px", borderRadius: 16, marginBottom: 24,
+        background: "linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(245,158,11,0.03) 100%)",
+        border: "1px solid rgba(245,158,11,0.25)", textAlign: "center",
+      }}>
+        <div style={{ fontSize: 14, color: "var(--muted)", fontWeight: 600, marginBottom: 8 }}>💰 رصيد ABOMAZEN المتاح حاليًا</div>
+        <div style={{ fontSize: 48, fontWeight: 900, color: data.availableBalance >= 0 ? "#f59e0b" : "#ef4444", direction: "ltr" }}>
+          {fmt(data.availableBalance)} <span style={{ fontSize: 20, fontWeight: 600 }}>EGP</span>
+        </div>
+        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 8 }}>صافي مبلغ الصفقات بعد خصم المصروفات والتحويلات</div>
+      </div>
+
+      {/* Stats Row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 28 }}>
+        <div style={{ padding: "20px", borderRadius: 14, background: "var(--surface)", border: "1px solid var(--border)", textAlign: "center" }}>
+          <div style={{ fontSize: 32, fontWeight: 800, color: "#f59e0b" }}>{data.totalDealsThisMonth}</div>
+          <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 4 }}>صفقات هذا الشهر</div>
+        </div>
+        <div style={{ padding: "20px", borderRadius: 14, background: "var(--surface)", border: "1px solid var(--border)", textAlign: "center" }}>
+          <div style={{ fontSize: 32, fontWeight: 800, color: "#10b981" }}>{data.availableProperties}</div>
+          <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 4 }}>عقارات متاحة حاليًا</div>
         </div>
       </div>
 
-      {/* Main Stats Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
-        {[
-          { label: "إجمالي الإيرادات", labelEn: "Revenue", value: `${formatNum(data.totalRevenue)} EGP`, color: "#f59e0b", icon: "💰", bg: "rgba(245,158,11,0.08)" },
-          { label: "مشاريع نشطة", labelEn: "Active Projects", value: data.activeProjects, color: "#f59e0b", icon: "🔄", bg: "rgba(245,158,11,0.08)" },
-          { label: "مشاريع مكتملة", labelEn: "Completed", value: data.completedProjects, color: "#10b981", icon: "✅", bg: "rgba(16,185,129,0.08)" },
-          { label: "عدد العملاء", labelEn: "Clients", value: data.totalClients, color: "#8b5cf6", icon: "👥", bg: "rgba(139,92,246,0.08)" },
-        ].map((s) => (
-          <div key={s.labelEn} style={{
-            padding: "20px 24px", borderRadius: 14,
-            background: "var(--surface)", border: "1px solid var(--border)",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
-                {s.icon}
+      {/* Recent Deals */}
+      <div style={{ padding: "20px 24px", borderRadius: 14, background: "var(--surface)", border: "1px solid var(--border)", marginBottom: 20 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 16 }}>آخر 5 صفقات</div>
+        {data.recentDeals.length === 0 ? (
+          <div style={{ textAlign: "center", padding: 24 }}>
+            <div style={{ fontSize: 36, marginBottom: 8 }}>📋</div>
+            <p style={{ color: "var(--muted)", fontSize: 14 }}>لسه معندكش أي صفقات، <Link href="/office/abomazen/new-deal" style={{ color: "#f59e0b", fontWeight: 600 }}>دوس هنا عشان تسجل أول صفقة</Link></p>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {data.recentDeals.map(d => (
+              <div key={d.id} style={{
+                display: "flex", alignItems: "center", gap: 14, padding: "12px 16px",
+                borderRadius: 10, background: "var(--surface-hover)", transition: "background 0.1s",
+              }}>
+                <span style={{ fontSize: 24 }}>{d.dealType === "RENT" ? "🔑" : "🏷️"}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>{d.propertyName}</div>
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>{fmtDate(d.date)}</div>
+                </div>
+                <div style={{ textAlign: "left" }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: "#f59e0b", direction: "ltr" }}>{fmt(d.abomazenNetAmount)} EGP</div>
+                  <div style={{ fontSize: 11, color: "var(--muted)" }}>صافي ABOMAZEN</div>
+                </div>
               </div>
-              <div>
-                <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 500 }}>{s.label}</div>
-                <div style={{ fontSize: 10, color: "var(--muted)", opacity: 0.6 }}>{s.labelEn}</div>
-              </div>
-            </div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: s.color, letterSpacing: "-0.02em" }}>
-              {s.value}
-            </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
 
-      {/* Revenue Chart + Status Breakdown */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 24 }}>
-        {/* Monthly Revenue Chart */}
-        <div style={{
-          padding: "20px 24px", borderRadius: 14,
-          background: "var(--surface)", border: "1px solid var(--border)",
-        }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 20 }}>
-            الإيرادات الشهرية
-          </div>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 180, padding: "0 4px" }}>
-            {data.monthlyRevenue.map((m, i) => {
-              const height = maxRevenue > 0 ? (m.revenue / maxRevenue) * 140 : 0;
-              return (
-                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                  {m.revenue > 0 && (
-                    <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600 }}>
-                      {formatNum(m.revenue)}
-                    </span>
-                  )}
-                  <div style={{
-                    width: "100%", maxWidth: 40, height: Math.max(height, 4),
-                    background: "linear-gradient(180deg, #f59e0b 0%, #fbbf24 100%)",
-                    borderRadius: "6px 6px 2px 2px",
-                  }} />
-                  <span style={{ fontSize: 10, color: "var(--muted)" }}>{MONTHS[i]}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Work Status Breakdown */}
-        <div style={{
-          padding: "20px 24px", borderRadius: 14,
-          background: "var(--surface)", border: "1px solid var(--border)",
-        }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 20 }}>
-            حالة المشاريع
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {data.workStatusBreakdown.map((s) => {
-              const pct = data.totalProjects > 0 ? (s.count / data.totalProjects) * 100 : 0;
-              const color = STATUS_COLORS[s.status] || "#6b7280";
-              const label = s.status === "WAITING" ? "انتظار" : s.status === "IN_PROGRESS" ? "قيد التنفيذ" : s.status === "COMPLETED" ? "مكتمل" : "متوقف";
-              return (
-                <div key={s.status}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500 }}>{label}</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color }}>{s.count} ({Math.round(pct)}%)</span>
-                  </div>
-                  <div style={{ height: 6, borderRadius: 3, background: "var(--border)", overflow: "hidden" }}>
-                    <div style={{ height: "100%", borderRadius: 3, width: `${pct}%`, background: color }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Collection Rate */}
-          <div style={{ marginTop: 20, padding: "12px 14px", borderRadius: 10, background: "var(--surface-hover)" }}>
-            <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>نسبة التحصيل</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ flex: 1, height: 8, borderRadius: 4, background: "var(--border)", overflow: "hidden" }}>
-                <div style={{
-                  height: "100%", borderRadius: 4,
-                  width: `${data.totalRevenue > 0 ? (data.totalCollected / data.totalRevenue) * 100 : 0}%`,
-                  background: "linear-gradient(90deg, #f59e0b, #fbbf24)",
-                }} />
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#f59e0b" }}>
-                {data.totalRevenue > 0 ? Math.round((data.totalCollected / data.totalRevenue) * 100) : 0}%
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Top Clients + Recent Activity */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        {/* Top Clients */}
-        <div style={{
-          padding: "20px 24px", borderRadius: 14,
-          background: "var(--surface)", border: "1px solid var(--border)",
-        }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 16 }}>
-            أفضل العملاء
-          </div>
-          {data.topClients.length === 0 ? (
-            <p style={{ fontSize: 13, color: "var(--muted)", textAlign: "center", padding: 20 }}>لا يوجد عملاء بعد</p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {data.topClients.map((c, i) => (
-                <div key={i} style={{
-                  display: "flex", alignItems: "center", gap: 12,
-                  padding: "10px 12px", borderRadius: 10,
-                  background: "var(--surface-hover)",
-                }}>
-                  <div style={{
-                    width: 32, height: 32, borderRadius: 8,
-                    background: `hsl(${38 + i * 15}, 80%, 55%)`,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    color: "#fff", fontSize: 13, fontWeight: 700,
-                  }}>
-                    {c.name.charAt(0)}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{c.name}</div>
-                    <div style={{ fontSize: 11, color: "var(--muted)" }}>{c.projects} مشاريع</div>
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#f59e0b" }}>
-                    {formatNum(c.totalPaid)} <span style={{ fontSize: 10, color: "var(--muted)" }}>EGP</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Recent Activity */}
-        <div style={{
-          padding: "20px 24px", borderRadius: 14,
-          background: "var(--surface)", border: "1px solid var(--border)",
-        }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 16 }}>
-            آخر النشاطات
-          </div>
-          {data.recentActivity.length === 0 ? (
-            <p style={{ fontSize: 13, color: "var(--muted)", textAlign: "center", padding: 20 }}>لا يوجد نشاط بعد</p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {data.recentActivity.map((a, i) => (
-                <div key={i} style={{
-                  display: "flex", alignItems: "flex-start", gap: 10,
-                  padding: "8px 0", borderBottom: i < data.recentActivity.length - 1 ? "1px solid var(--border)" : "none",
-                }}>
-                  <div style={{
-                    width: 6, height: 6, borderRadius: "50%",
-                    background: "#f59e0b", marginTop: 6, flexShrink: 0,
-                  }} />
-                  <div>
-                    <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{a.text}</div>
-                    <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
-                      {new Date(a.date).toLocaleDateString("ar-EG", { day: "2-digit", month: "short", year: "numeric" })}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* Quick Links */}
+      <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+        <Link href="/office/abomazen/deals" style={{ padding: "10px 20px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)", fontSize: 14, fontWeight: 600, textDecoration: "none" }}>عرض كل الصفقات ←</Link>
+        <Link href="/office/abomazen/properties" style={{ padding: "10px 20px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)", fontSize: 14, fontWeight: 600, textDecoration: "none" }}>عرض كل العقارات ←</Link>
       </div>
     </div>
   );

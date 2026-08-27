@@ -89,6 +89,9 @@ model Business {
   expenses          Expense[]
   // Subscription relations
   subscriptions          Subscription[]
+  // ABOMAZEN relations
+  properties             Property[]
+  deals                  Deal[]
   // Office admin relations
   ownerships             BusinessOwnership[]
   partnerTransactions    PartnerTransaction[]
@@ -186,6 +189,7 @@ model PoolTransaction {
   id              String              @id @default(cuid())
   businessId      String
   projectRecordId String?
+  dealId          String?
   withdrawalId    String?             @unique
   amountSAR       Decimal             @db.Decimal(12, 2)
   type            PoolTransactionType
@@ -194,6 +198,7 @@ model PoolTransaction {
   createdAt       DateTime            @default(now())
   business        Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
   projectRecord   ProjectRecord?      @relation(fields: [projectRecordId], references: [id], onDelete: SetNull)
+  deal            Deal?               @relation(fields: [dealId], references: [id], onDelete: SetNull)
   withdrawal      Withdrawal?         @relation(fields: [withdrawalId], references: [id], onDelete: SetNull)
 
   @@index([businessId])
@@ -402,6 +407,56 @@ model NexupProfitLedger {
 
   @@index([partnerId])
   @@index([date])
+}
+
+// ═══════════════════════════════════════════════════════
+// ABOMAZEN Properties & Deals (Real Estate Brokerage)
+// ═══════════════════════════════════════════════════════
+
+model Property {
+  id            String    @id @default(cuid())
+  businessId    String
+  ownerName     String
+  ownerPhone    String?
+  propertyType  String    // شقة، فيلا، محل... (free text)
+  location      String
+  listingType   String    @default("RENT") // RENT or SALE
+  askingPrice   Float?
+  status        String    @default("AVAILABLE") // AVAILABLE, RENTED, SOLD
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  business      Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  deals         Deal[]
+
+  @@index([businessId])
+  @@index([status])
+}
+
+model Deal {
+  id                   String    @id @default(cuid())
+  businessId           String
+  propertyId           String?
+  dealType             String    // RENT or SALE
+  dealValue            Float?
+  totalCommission      Float     // Total commission collected (required)
+  externalOfficeAmount Float?
+  personalAmount       Float?
+  abomazenNetAmount    Float     // Net amount that enters ABOMAZEN balance (required)
+  date                 DateTime
+  seekerName           String?
+  seekerPhone          String?
+  notes                String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  business             Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  property             Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  poolTransactions     PoolTransaction[]
+
+  @@index([businessId])
+  @@index([propertyId])
+  @@index([date])
+  @@index([dealType])
 }
 
 // ═══════════════════════════════════════════════════════

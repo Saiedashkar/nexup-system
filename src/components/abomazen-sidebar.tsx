@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
+import { MobileNav } from "@/components/mobile-nav";
 
 // SVG Icons
 const HomeIcon = ({ size = 20 }: { size?: number }) => (
@@ -95,6 +96,24 @@ const NAV_ITEMS = [
   { href: "/office/abomazen/guide", label: "إزاي أستخدم النظام؟", icon: HelpCircleIcon },
 ];
 
+const iconPaths = {
+  home: "M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10",
+  deal: "M12 5v14M5 12h14",
+  deals: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6",
+  building: "M3 21h18M9 3h6M12 3v7M5 21V7l7-4 7 4v14M9 21v-6h6v6",
+  finance: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6",
+  help: "M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3 M12 17h.01",
+};
+
+const MOBILE_NAV = [
+  { href: "/office/abomazen/dashboard", label: "لوحة التحكم", sub: "Dashboard", icon: iconPaths.home },
+  { href: "/office/abomazen/new-deal", label: "تسجيل صفقة جديدة", sub: "New Deal", icon: iconPaths.deal },
+  { href: "/office/abomazen/deals", label: "كل الصفقات", sub: "All Deals", icon: iconPaths.deals },
+  { href: "/office/abomazen/properties", label: "العقارات", sub: "Properties", icon: iconPaths.building },
+  { href: "/office/abomazen/finance", label: "الحسابات", sub: "Finance", icon: iconPaths.finance },
+  { href: "/office/abomazen/guide", label: "إزاي أستخدم النظام؟", sub: "Guide", icon: iconPaths.help },
+];
+
 export function AbomazenSidebar() {
   const pathname = usePathname();
   const [theme, setTheme] = useState<"light" | "dark">("dark");
@@ -116,6 +135,19 @@ export function AbomazenSidebar() {
   };
 
   return (
+    <>
+    {/* Mobile Navigation */}
+    <MobileNav
+      brandName="ABOMAZEN"
+      brandSub="وساطة عقارية"
+      brandHref="/office"
+      brandColor="#8b5cf6"
+      items={MOBILE_NAV}
+      isSuperAdmin={false}
+      theme={theme}
+      onToggleTheme={toggleTheme}
+    />
+    {/* Desktop Sidebar */}
     <aside
       style={{
         width: collapsed ? 80 : 280,
@@ -350,5 +382,6 @@ export function AbomazenSidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

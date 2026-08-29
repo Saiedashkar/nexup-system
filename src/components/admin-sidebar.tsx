@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
+import { MobileNav } from "@/components/mobile-nav";
 
 function NavIcon({ d, size = 20 }: { d: string; size?: number }) {
   return (
@@ -58,6 +59,25 @@ export function AdminSidebar() {
   };
 
   return (
+    <>
+    {/* Mobile Navigation */}
+    <MobileNav
+      brandName="إدارة المكتب"
+      brandSub="Office Management"
+      brandHref="/office"
+      brandColor="#a78bfa"
+      items={NAV.map(item => ({
+        href: item.href,
+        label: item.label,
+        sub: item.sub,
+        icon: item.icon,
+        superAdminOnly: item.superAdminOnly,
+      }))}
+      isSuperAdmin={isSuperAdmin}
+      theme={theme}
+      onToggleTheme={toggleTheme}
+    />
+    {/* Desktop Sidebar */}
     <aside style={{
       width: collapsed ? 72 : 260, transition: "width 0.2s ease", background: "#0f172a",
       color: "#e2e8f0", display: "flex", flexDirection: "column", height: "100vh",
@@ -122,5 +142,6 @@ export function AdminSidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

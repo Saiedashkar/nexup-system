@@ -50,17 +50,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, []);
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
+    <div className="admin-layout" style={{ display: "flex", minHeight: "100vh" }}>
       <AdminSidebar />
-      <main style={{ flex: 1, overflow: "auto" }}>
+      <main className="admin-main" style={{ flex: 1, overflow: "auto" }}>
         {/* ═══ Fixed Treasury Bar — appears on ALL admin pages ═══ */}
-        <div style={{
+        <div className="treasury-bar" style={{
           position: "sticky", top: 0, zIndex: 40,
           background: "var(--surface)",
           borderBottom: "1px solid var(--border)",
           boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
         }}>
-          <div style={{
+          <div className="treasury-grid" style={{
             display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr 1fr",
             maxWidth: 1440, margin: "0 auto", padding: "16px 28px", gap: 16,
           }}>

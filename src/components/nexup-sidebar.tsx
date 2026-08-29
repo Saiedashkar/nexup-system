@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
+import { MobileNav } from "@/components/mobile-nav";
 
 // Check if current user is SUPER_ADMIN (from session)
 function useIsSuperAdmin() {
@@ -35,12 +36,12 @@ const icons = {
 };
 
 const NAV_ITEMS = [
-  { href: "/office/nexup/dashboard", label: "Dashboard", icon: icons.dashboard },
-  { href: "/office/nexup/clients", label: "Clients", icon: icons.clients },
-  { href: "/office/nexup/finance", label: "Finance", icon: icons.finance },
-  { href: "/office/nexup/analytics", label: "Analytics", icon: icons.analytics },
-  { href: "/office/nexup/profit-distribution", label: "توزيع الأرباح", icon: icons.finance, superAdminOnly: true },
-  { href: "/office/nexup/settings", label: "Settings", icon: icons.settings },
+  { href: "/office/nexup/dashboard", label: "لوحة التحكم", sub: "Dashboard", icon: icons.dashboard },
+  { href: "/office/nexup/clients", label: "العملاء", sub: "Clients", icon: icons.clients },
+  { href: "/office/nexup/finance", label: "الحسابات", sub: "Finance", icon: icons.finance },
+  { href: "/office/nexup/analytics", label: "التحليلات", sub: "Analytics", icon: icons.analytics },
+  { href: "/office/nexup/profit-distribution", label: "توزيع الأرباح", sub: "Profit Distribution", icon: icons.finance, superAdminOnly: true },
+  { href: "/office/nexup/settings", label: "الإعدادات", sub: "Settings", icon: icons.settings },
 ];
 
 export function NexupSidebar() {
@@ -65,115 +66,135 @@ export function NexupSidebar() {
   };
 
   return (
-    <aside
-      className="nexup-sidebar"
-      style={{
-        width: collapsed ? 72 : 240,
-        transition: "width 0.2s ease",
-      }}
-    >
-      {/* Brand */}
-      <div style={{ padding: collapsed ? "20px 12px" : "20px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Link
-            href="/office"
-            style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: "rgba(13,148,136,0.2)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "#14b8a6", textDecoration: "none", flexShrink: 0,
-            }}
-            title="Back to Office"
-          >
-            <NavIcon d={icons.back} size={18} />
-          </Link>
-          {!collapsed && (
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>
-                NEXUP
-              </div>
-              <div style={{ fontSize: 10, color: "#64748b", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                Design Studio
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Navigation */}
-      <nav style={{ padding: "12px 8px", flex: 1 }}>
-        {NAV_ITEMS.filter(item => !(item as Record<string, unknown>).superAdminOnly || isSuperAdmin).map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-          return (
+    <>
+      {/* Mobile Navigation */}
+      <MobileNav
+        brandName="NEXUP"
+        brandSub="Design Studio"
+        brandHref="/office"
+        brandColor="#14b8a6"
+        items={NAV_ITEMS.map(item => ({
+          href: item.href,
+          label: item.label,
+          sub: item.sub,
+          icon: item.icon,
+          superAdminOnly: item.superAdminOnly,
+        }))}
+        isSuperAdmin={isSuperAdmin}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
+      {/* Desktop Sidebar */}
+      <aside
+        className="nexup-sidebar"
+        style={{
+          width: collapsed ? 72 : 240,
+          transition: "width 0.2s ease",
+        }}
+      >
+        {/* Brand */}
+        <div style={{ padding: collapsed ? "20px 12px" : "20px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <Link
-              key={item.href}
-              href={item.href}
+              href="/office"
               style={{
-                display: "flex", alignItems: "center", gap: 12,
-                padding: collapsed ? "10px 0" : "10px 14px",
-                justifyContent: collapsed ? "center" : "flex-start",
-                borderRadius: 10,
-                color: isActive ? "#14b8a6" : "#94a3b8",
-                background: isActive ? "rgba(13,148,136,0.12)" : "transparent",
-                textDecoration: "none",
-                fontSize: 13, fontWeight: isActive ? 600 : 500,
-                transition: "all 0.15s",
-                marginBottom: 2,
+                width: 36, height: 36, borderRadius: 10,
+                background: "rgba(13,148,136,0.2)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "#14b8a6", textDecoration: "none", flexShrink: 0,
               }}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.05)";
-                  e.currentTarget.style.color = "#e2e8f0";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.color = "#94a3b8";
-                }
-              }}
-              title={collapsed ? item.label : undefined}
+              title="Back to Office"
             >
-              <NavIcon d={item.icon} size={18} />
-              {!collapsed && <span>{item.label}</span>}
+              <NavIcon d={icons.back} size={18} />
             </Link>
-          );
-        })}
-      </nav>
+            {!collapsed && (
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>
+                  NEXUP
+                </div>
+                <div style={{ fontSize: 10, color: "#64748b", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                  Design Studio
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
 
-      {/* Bottom Controls */}
-      <div style={{ padding: collapsed ? "12px 8px" : "12px 16px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-        {/* Collapse Toggle */}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start",
-            gap: 10, width: "100%", padding: "8px 0",
-            background: "none", border: "none", color: "#64748b",
-            cursor: "pointer", fontSize: 12, borderRadius: 8,
-          }}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={16} height={16}
-            style={{ transform: collapsed ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-          {!collapsed && <span>Collapse</span>}
-        </button>
+        {/* Navigation */}
+        <nav style={{ padding: "12px 8px", flex: 1 }}>
+          {NAV_ITEMS.filter(item => !(item as Record<string, unknown>).superAdminOnly || isSuperAdmin).map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: collapsed ? "10px 0" : "10px 14px",
+                  justifyContent: collapsed ? "center" : "flex-start",
+                  borderRadius: 10,
+                  color: isActive ? "#14b8a6" : "#94a3b8",
+                  background: isActive ? "rgba(13,148,136,0.12)" : "transparent",
+                  textDecoration: "none",
+                  fontSize: 13, fontWeight: isActive ? 600 : 500,
+                  transition: "all 0.15s",
+                  marginBottom: 2,
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+                    e.currentTarget.style.color = "#e2e8f0";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "#94a3b8";
+                  }
+                }}
+                title={collapsed ? item.label : undefined}
+              >
+                <NavIcon d={item.icon} size={18} />
+                {!collapsed && <span>{item.label}</span>}
+              </Link>
+            );
+          })}
+        </nav>
 
-        {/* Theme Toggle */}
-        <button
-          onClick={toggleTheme}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start",
-            gap: 10, width: "100%", padding: "8px 0",
-            background: "none", border: "none", color: "#64748b",
-            cursor: "pointer", fontSize: 12, borderRadius: 8,
-          }}
-        >
-          <NavIcon d={theme === "light" ? icons.moon : icons.sun} size={16} />
-          {!collapsed && <span>{theme === "light" ? "Dark Mode" : "Light Mode"}</span>}
-        </button>
-      </div>
-    </aside>
+        {/* Bottom Controls */}
+        <div style={{ padding: collapsed ? "12px 8px" : "12px 16px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+          {/* Collapse Toggle */}
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start",
+              gap: 10, width: "100%", padding: "8px 0",
+              background: "none", border: "none", color: "#64748b",
+              cursor: "pointer", fontSize: 12, borderRadius: 8,
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={16} height={16}
+              style={{ transform: collapsed ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+            {!collapsed && <span>طي</span>}
+          </button>
+
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start",
+              gap: 10, width: "100%", padding: "8px 0",
+              background: "none", border: "none", color: "#64748b",
+              cursor: "pointer", fontSize: 12, borderRadius: 8,
+            }}
+          >
+            <NavIcon d={theme === "light" ? icons.moon : icons.sun} size={16} />
+            {!collapsed && <span>{theme === "light" ? "Dark Mode" : "Light Mode"}</span>}
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
+import { MobileNav } from "@/components/mobile-nav";
 
 function NavIcon({ d, size = 20 }: { d: string; size?: number }) {
   return (
@@ -52,6 +53,24 @@ export function ReboundSidebar() {
   };
 
   return (
+    <>
+    {/* Mobile Navigation */}
+    <MobileNav
+      brandName="REBOUND"
+      brandSub="Marketing"
+      brandHref="/office"
+      brandColor="#3b82f6"
+      items={NAV_ITEMS.map(item => ({
+        href: item.href,
+        label: item.label,
+        sub: item.labelEn,
+        icon: item.icon,
+      }))}
+      isSuperAdmin={false}
+      theme={theme}
+      onToggleTheme={toggleTheme}
+    />
+    {/* Desktop Sidebar */}
     <aside
       className="rebound-sidebar"
       style={{
@@ -159,5 +178,6 @@ export function ReboundSidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

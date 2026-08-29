@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { LogoutButton } from "@/components/logout-button";
+import { MobileNav } from "@/components/mobile-nav"
 
 function NavIcon({ d }: { d: string }) {
   return (
@@ -79,7 +80,22 @@ export function AppShell({
 
   const isSuperAdmin = userRole === "SUPER_ADMIN";
 
+  const mobileNavItems = [
+    { href: "/office", label: "لوحة تحكم المكتب", sub: "Office Dashboard", icon: icons.office },
+  ];
+
   return (
+    <>
+    <MobileNav
+      brandName="Office"
+      brandSub={isSuperAdmin ? "Multi-Business Management" : "Business Management"}
+      brandHref="/office"
+      brandColor="var(--brand)"
+      items={mobileNavItems}
+      isSuperAdmin={isSuperAdmin}
+      theme={theme}
+      onToggleTheme={toggleTheme}
+    />
     <div className="shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
@@ -148,5 +164,6 @@ export function AppShell({
         {children}
       </main>
     </div>
+    </>
   );
 }

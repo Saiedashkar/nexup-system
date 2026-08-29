@@ -32,17 +32,22 @@ const NAV = [
   { href: "/office/admin/office-expenses", label: "مصاريف المكتب", sub: "Office Expenses", icon: icons.expenses },
   { href: "/office/admin/capital", label: "رأس المال والتمويل", sub: "Capital & Funding", icon: icons.capital },
   { href: "/office/admin/settings", label: "إعدادات التوزيع", sub: "Allocation Settings", icon: icons.settings },
-  { href: "/office/admin/users", label: "إدارة المستخدمين", sub: "User Management", icon: icons.users },
+  { href: "/office/admin/users", label: "إدارة المستخدمين", sub: "User Management", icon: icons.users, superAdminOnly: true },
 ];
 
 export function AdminSidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem("nexup-theme") as "light" | "dark" | null;
     if (saved) { setTheme(saved); document.documentElement.setAttribute("data-theme", saved); }
+    // Check if user is SUPER_ADMIN
+    fetch("/api/auth/me").then(r => r.json()).then(d => {
+      setIsSuperAdmin(d.user?.role === "SUPER_ADMIN");
+    }).catch(() => {});
   }, []);
 
   const toggleTheme = () => {
@@ -75,7 +80,7 @@ export function AdminSidebar() {
 
       {/* Nav */}
       <nav style={{ padding: "12px 8px", flex: 1, overflowY: "auto" }}>
-        {NAV.map(item => {
+        {NAV.filter(item => !(item as Record<string, unknown>).superAdminOnly || isSuperAdmin).map(item => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Link key={item.href} href={item.href} style={{

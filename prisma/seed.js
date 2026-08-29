@@ -55,13 +55,18 @@ async function main() {
     }
     console.log("✅ Partners created");
 
-    // Create users
+    // ═══════════════════════════════════════════════════════
+    // Users: Only ONE SUPER_ADMIN (superadmin@nexup)
+    // Others are ADMIN with specific permissions
+    // ═══════════════════════════════════════════════════════
     const users = [
-      { name: "SAIED", email: "saied@nexup.local", role: Role.SUPER_ADMIN, canAccessNexup: true, canAccessRebound: true, canAccessAbomazen: true, canAccessOfficeFinanceFull: true },
-      { name: "ADEL", email: "adel@nexup.local", role: Role.SUPER_ADMIN, canAccessNexup: true, canAccessRebound: true, canAccessAbomazen: true, canAccessOfficeFinanceFull: true },
+      // SUPER_ADMIN — Full access to everything
+      { name: "Super Admin", email: "superadmin@nexup", role: Role.SUPER_ADMIN, canAccessNexup: true, canAccessRebound: true, canAccessAbomazen: true, canAccessOfficeFinanceFull: true },
+      // ADMIN users — Each has specific permissions
+      { name: "SAIED", email: "saied@nexup.local", role: Role.ADMIN, canAccessNexup: true, canAccessRebound: true, canAccessAbomazen: true, canAccessOfficeFinanceFull: true },
+      { name: "ADEL", email: "adel@nexup.local", role: Role.ADMIN, canAccessNexup: true, canAccessRebound: true, canAccessAbomazen: true, canAccessOfficeFinanceFull: true },
       { name: "MOATASEM", email: "moatasem@nexup.local", role: Role.ADMIN, canAccessNexup: false, canAccessRebound: true, canAccessAbomazen: true, canAccessOfficeFinanceFull: true },
       { name: "MOUSSA", email: "moussa@nexup.local", role: Role.ADMIN, canAccessNexup: false, canAccessRebound: true, canAccessAbomazen: true, canAccessOfficeFinanceFull: true },
-      { name: "Admin", email: "admin@nexup.local", role: Role.ADMIN, canAccessNexup: false, canAccessRebound: true, canAccessAbomazen: false, canAccessOfficeFinanceFull: true },
     ];
 
     for (const u of users) {
@@ -74,9 +79,16 @@ async function main() {
     console.log("✅ Users created");
 
     console.log("\n🎉 Seed completed!");
-    console.log("📧 All passwords: Admin@12345");
-    console.log("   saied@nexup.local | adel@nexup.local (SUPER_ADMIN)");
-    console.log("   moatasem@nexup.local | moussa@nexup.local (no NEXUP)");
+    console.log("═══════════════════════════════════════════════════");
+    console.log("📧 Default Login (SUPER_ADMIN):");
+    console.log("   Email: superadmin@nexup");
+    console.log("   Password: Admin@12345");
+    console.log("═══════════════════════════════════════════════════");
+    console.log("📧 Other users (ADMIN role):");
+    console.log("   saied@nexup.local | adel@nexup.local (Full access)");
+    console.log("   moatasem@nexup.local | moussa@nexup.local (REBOUND + ABOMAZEN + Office)");
+    console.log("   All passwords: Admin@12345");
+    console.log("═══════════════════════════════════════════════════");
   } finally {
     await prisma.$disconnect();
   }

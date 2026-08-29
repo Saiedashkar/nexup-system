@@ -83,8 +83,8 @@ export function AppShell({
     <div className="shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <Link className="sidebar-brand-text" href={isSuperAdmin ? "/office" : isAdmin ? "/dashboard" : "/clients"}>
-            {isSuperAdmin ? "Office" : "Nexup"}
+          <Link className="sidebar-brand-text" href="/office">
+            {"Office"}
           </Link>
           <div className="sidebar-brand-sub">
             {isSuperAdmin ? "Multi-Business Management" : "Business Management"}
@@ -95,19 +95,11 @@ export function AppShell({
           <div className="sidebar-section">
             <div className="sidebar-section-title">Main Menu</div>
 
-            {/* SUPER_ADMIN: Office link */}
-            {isSuperAdmin && (
+            {/* Office Dashboard link — visible to all admin roles */}
+            {isAdmin && (
               <Link className={`sidebar-link ${activePage === "office" ? "active" : ""}`} href="/office">
                 <NavIcon d={icons.office} />
-                Office Dashboard
-              </Link>
-            )}
-
-            {/* ADMIN/EMPLOYEE: Dashboard link */}
-            {isAdmin && !isSuperAdmin && (
-              <Link className={`sidebar-link ${activePage === "dashboard" ? "active" : ""}`} href="/dashboard">
-                <NavIcon d={icons.dashboard} />
-                Dashboard
+                {isSuperAdmin ? "Office Dashboard" : "Dashboard"}
               </Link>
             )}
 

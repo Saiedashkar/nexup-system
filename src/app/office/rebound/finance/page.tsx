@@ -192,64 +192,180 @@ export default function ReboundFinancePage() {
   /* ═══ Render ═══ */
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-      {/* ═══ STICKY BALANCE BAR ═══ */}
+      {/* ═══ ENHANCED BALANCE BAR ═══ */}
       <div style={{
-        display: "grid", gridTemplateColumns: "auto 1fr 1fr 1fr", alignItems: "center", gap: 0, padding: "16px 20px", marginBottom: 20,
-        borderRadius: 14, background: "linear-gradient(135deg, rgba(59,130,246,0.1) 0%, rgba(59,130,246,0.03) 100%)",
-        border: "1px solid rgba(59,130,246,0.2)", boxShadow: "0 2px 12px rgba(59,130,246,0.08)",
+        display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr", gap: 16, padding: "24px", marginBottom: 28,
+        borderRadius: 16, background: "linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(59,130,246,0.02) 100%)",
+        border: "1px solid rgba(59,130,246,0.15)", boxShadow: "0 4px 16px rgba(59,130,246,0.12)",
       }}>
-        {/* Available Balance */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, paddingRight: 20 }}>
-          <div style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(59,130,246,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>💰</div>
-          <div>
-            <div style={{ fontSize: 9, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>الرصيد المتاح</div>
-            <div style={{ fontSize: 9, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Available Balance</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "#3b82f6", direction: "ltr", lineHeight: 1 }}>{fmt(poolBalance)} <span style={{ fontSize: 12, fontWeight: 600 }}>EGP</span></div>
+        {/* Available Balance - Hero Card */}
+        <div style={{
+          padding: "20px 24px", borderRadius: 14,
+          background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+          boxShadow: "0 8px 24px rgba(59,130,246,0.3)",
+          position: "relative", overflow: "hidden",
+        }}>
+          <div style={{ position: "absolute", top: -20, right: -20, width: 100, height: 100, borderRadius: "50%", background: "rgba(255,255,255,0.1)" }} />
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>💰</div>
+              <div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)", fontWeight: 600 }}>الرصيد المتاح</div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>Available Balance</div>
+              </div>
+            </div>
+            <div style={{ fontSize: 32, fontWeight: 900, color: "#fff", direction: "ltr", lineHeight: 1, letterSpacing: "-0.02em" }}>
+              {fmt(poolBalance)} <span style={{ fontSize: 14, fontWeight: 600 }}>EGP</span>
+            </div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px", borderLeft: "1px solid var(--border)", height: 40 }}>
-          <div style={{ width: 8, height: 8, borderRadius: 2, background: "#10b981" }} />
-          <div>
-            <div style={{ fontSize: 9, color: "var(--muted)" }}>الدخل الكلي · Total Income</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "#10b981", direction: "ltr" }}>{fmt(poolTotalIn)} <span style={{ fontSize: 10, fontWeight: 500 }}>EGP</span></div>
+
+        {/* Income Card */}
+        <div style={{
+          padding: "20px", borderRadius: 14,
+          background: "var(--surface)", border: "1px solid var(--border)",
+          transition: "all 0.2s",
+        }}
+          onMouseEnter={e => {
+            e.currentTarget.style.borderColor = "#10b981";
+            e.currentTarget.style.transform = "translateY(-2px)";
+            e.currentTarget.style.boxShadow = "0 8px 20px rgba(16,185,129,0.15)";
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = "var(--border)";
+            e.currentTarget.style.transform = "translateY(0)";
+            e.currentTarget.style.boxShadow = "none";
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#10b981", boxShadow: "0 0 10px rgba(16,185,129,0.5)" }} />
+            <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>الدخل الكلي</div>
+          </div>
+          <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 6 }}>Total Income</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "#10b981", direction: "ltr", lineHeight: 1 }}>
+            {fmt(poolTotalIn)} <span style={{ fontSize: 11, fontWeight: 500, color: "var(--muted)" }}>EGP</span>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px", borderLeft: "1px solid var(--border)", height: 40 }}>
-          <div style={{ width: 8, height: 8, borderRadius: 2, background: "#ef4444" }} />
-          <div>
-            <div style={{ fontSize: 9, color: "var(--muted)" }}>إجمالي المصروفات · Total Expenses</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "#ef4444", direction: "ltr" }}>{fmt(totalExpenses)} <span style={{ fontSize: 10, fontWeight: 500 }}>EGP</span></div>
+
+        {/* Expenses Card */}
+        <div style={{
+          padding: "20px", borderRadius: 14,
+          background: "var(--surface)", border: "1px solid var(--border)",
+          transition: "all 0.2s",
+        }}
+          onMouseEnter={e => {
+            e.currentTarget.style.borderColor = "#ef4444";
+            e.currentTarget.style.transform = "translateY(-2px)";
+            e.currentTarget.style.boxShadow = "0 8px 20px rgba(239,68,68,0.15)";
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = "var(--border)";
+            e.currentTarget.style.transform = "translateY(0)";
+            e.currentTarget.style.boxShadow = "none";
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ef4444", boxShadow: "0 0 10px rgba(239,68,68,0.5)" }} />
+            <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>المصروفات</div>
+          </div>
+          <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 6 }}>Total Expenses</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "#ef4444", direction: "ltr", lineHeight: 1 }}>
+            {fmt(totalExpenses)} <span style={{ fontSize: 11, fontWeight: 500, color: "var(--muted)" }}>EGP</span>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px", borderLeft: "1px solid var(--border)", height: 40 }}>
-          <div style={{ width: 8, height: 8, borderRadius: 2, background: netProfit >= 0 ? "#10b981" : "#ef4444" }} />
-          <div>
-            <div style={{ fontSize: 9, color: "var(--muted)" }}>صافي الربح · Net Profit</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: netProfit >= 0 ? "#10b981" : "#ef4444", direction: "ltr" }}>{netProfit >= 0 ? "+" : ""}{fmt(netProfit)} <span style={{ fontSize: 10, fontWeight: 500 }}>EGP</span></div>
+
+        {/* Net Profit Card */}
+        <div style={{
+          padding: "20px", borderRadius: 14,
+          background: netProfit >= 0 ? "linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(16,185,129,0.02) 100%)" : "linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(239,68,68,0.02) 100%)",
+          border: `1px solid ${netProfit >= 0 ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.2)"}`,
+          transition: "all 0.2s",
+        }}
+          onMouseEnter={e => {
+            e.currentTarget.style.transform = "translateY(-2px)";
+            e.currentTarget.style.boxShadow = `0 8px 20px ${netProfit >= 0 ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.2)"}`;
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.transform = "translateY(0)";
+            e.currentTarget.style.boxShadow = "none";
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: netProfit >= 0 ? "#10b981" : "#ef4444", boxShadow: `0 0 10px ${netProfit >= 0 ? "rgba(16,185,129,0.5)" : "rgba(239,68,68,0.5)"}` }} />
+            <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>صافي الربح</div>
+          </div>
+          <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 6 }}>Net Profit</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: netProfit >= 0 ? "#10b981" : "#ef4444", direction: "ltr", lineHeight: 1 }}>
+            {netProfit >= 0 ? "+" : ""}{fmt(netProfit)} <span style={{ fontSize: 11, fontWeight: 500, color: "var(--muted)" }}>EGP</span>
           </div>
         </div>
       </div>
 
-      {/* ═══ Header ═══ */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>الحسابات <span style={{ fontSize: 14, fontWeight: 500, color: "var(--muted)", marginLeft: 6 }}>Finance — REBOUND</span></h1>
-          <p style={{ fontSize: 12, color: "var(--muted)", margin: "4px 0 0" }}>الدخل · المصروفات · الملخص الشهري — كل شيء بالجنيه المصري</p>
+      {/* ═══ Enhanced Header ═══ */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 8 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 14,
+            background: "linear-gradient(135deg, #3b82f6, #2563eb)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 24, boxShadow: "0 4px 16px rgba(59,130,246,0.3)",
+          }}>
+            💰
+          </div>
+          <div>
+            <h1 style={{
+              fontSize: 26, fontWeight: 900, color: "var(--text)",
+              margin: 0, letterSpacing: "-0.02em",
+            }}>
+              الحسابات <span style={{ fontSize: 14, fontWeight: 500, color: "var(--muted)", marginLeft: 8 }}>Finance — REBOUND</span>
+            </h1>
+            <p style={{ fontSize: 12, color: "var(--muted)", margin: "4px 0 0", fontWeight: 500 }}>
+              الدخل · المصروفات · الملخص الشهري — Income · Expenses · Monthly Summary
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* ═══ Tabs ═══ */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 20, background: "var(--surface)", padding: 4, borderRadius: 10, border: "1px solid var(--border)" }}>
+      {/* ═══ Enhanced Tabs ═══ */}
+      <div style={{
+        display: "flex", gap: 6, marginBottom: 24,
+        background: "var(--surface)", padding: 6,
+        borderRadius: 12, border: "1px solid var(--border)",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+      }}>
         {([
-          { key: "income" as const, label: "الدخل", labelEn: "Income", icon: "💰" },
-          { key: "expenses" as const, label: "المصروفات", labelEn: "Expenses", icon: "🧾" },
-          { key: "summary" as const, label: "الملخص الشهري", labelEn: "Monthly Summary", icon: "📊" },
+          { key: "income" as const, label: "الدخل", labelEn: "Income", icon: "💰", color: "#10b981" },
+          { key: "expenses" as const, label: "المصروفات", labelEn: "Expenses", icon: "🧾", color: "#ef4444" },
+          { key: "summary" as const, label: "الملخص الشهري", labelEn: "Monthly Summary", icon: "📊", color: "#8b5cf6" },
         ]).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
-            padding: "8px 20px", borderRadius: 8, border: "none", display: "flex", alignItems: "center", gap: 6,
-            background: tab === t.key ? "#3b82f6" : "transparent",
-            color: tab === t.key ? "#fff" : "var(--muted)", fontSize: 13, fontWeight: 600, cursor: "pointer",
-          }}><span>{t.icon}</span><span>{t.label}</span><span style={{ fontSize: 10, opacity: 0.7 }}>{t.labelEn}</span></button>
+            flex: 1, padding: "12px 20px", borderRadius: 10, border: "none",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            background: tab === t.key ? t.color : "transparent",
+            color: tab === t.key ? "#fff" : "var(--muted)",
+            fontSize: 13, fontWeight: 700, cursor: "pointer",
+            transition: "all 0.2s",
+            boxShadow: tab === t.key ? `0 4px 12px ${t.color}40` : "none",
+          }}
+            onMouseEnter={e => {
+              if (tab !== t.key) {
+                e.currentTarget.style.background = "var(--surface-hover)";
+                e.currentTarget.style.color = "var(--text)";
+              }
+            }}
+            onMouseLeave={e => {
+              if (tab !== t.key) {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = "var(--muted)";
+              }
+            }}
+          >
+            <span style={{ fontSize: 16 }}>{t.icon}</span>
+            <div style={{ textAlign: "right" }}>
+              <div>{t.label}</div>
+              <div style={{ fontSize: 10, opacity: 0.7, marginTop: 1 }}>{t.labelEn}</div>
+            </div>
+          </button>
         ))}
       </div>
 

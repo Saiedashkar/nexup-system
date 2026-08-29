@@ -15,10 +15,8 @@ export function LoginForm() {
       // Store role and business info for AppShell
       sessionStorage.setItem("nexup-role", data.user.role);
       sessionStorage.setItem("nexup-business", data.user.businessId || "");
-      // Navigate based on role
-      if (data.user.role === "SUPER_ADMIN") window.location.assign("/office");
-      else if (data.user.role === "ADMIN") window.location.assign("/dashboard");
-      else window.location.assign("/clients");
+      // All users go to /office — the page filters by permissions
+      window.location.assign("/office");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Login failed."); } finally { setLoading(false); }
   }
   return <form onSubmit={submit}>

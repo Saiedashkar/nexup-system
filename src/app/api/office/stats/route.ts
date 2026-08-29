@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentSession } from "@/lib/auth";
+import { getCurrentSession, canAccessBusiness, isSuperAdmin } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   try {
     const session = await getCurrentSession();
-    if (!session || session.role !== "SUPER_ADMIN") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // Get all businesses with counts
-    const businesses = await prisma.business.findMany({
+    const superAdmin = isSuperAdmin(session);
+
+    // Filter businesses by what the user can access
+    const allBusinesses = await prisma.business.findMany({
       include: {
         _count: {
           select: {
@@ -26,23 +26,56 @@ export async function GET() {
       orderBy: { name: "asc" },
     });
 
-    // Aggregate stats across all businesses
+    const accessibleSlugs = allBusinesses
+      .filter(b => superAdmin || canAccessBusiness(session, b.slug))
+      .map(b => b.slug);
+
+    const businesses = allBusinesses.filter(b => accessibleSlugs.includes(b.slug));
+
+    // Aggregate stats ONLY for accessible businesses
     const [totalClients, totalProjects, revenueResult, expenseResult] = await Promise.all([
-      prisma.client.count(),
-      prisma.projectRecord.count(),
+      prisma.client.count({ where: { businessId: { in: businesses.map(b => b.id) } } }),
+      prisma.projectRecord.count({ where: { businessId: { in: businesses.map(b => b.id) } } }),
       prisma.poolTransaction.aggregate({
-        where: { type: "IN" },
+        where: { type: "IN", businessId: { in: businesses.map(b => b.id) } },
         _sum: { amountSAR: true },
       }),
       prisma.expense.aggregate({
+        where: { businessId: { in: businesses.map(b => b.id) } },
         _sum: { cost: true },
       }),
     ]);
 
-    // Convert SAR to EGP for NEXUP business (use approximate rate if needed)
-    // For now, we'll show raw amounts
     const totalRevenue = Number(revenueResult._sum.amountSAR ?? 0);
     const totalExpenses = Number(expenseResult._sum.cost ?? 0);
+
+    // Office treasury balance (only for super admin or office finance access)
+    let officeTreasury = null;
+    if (superAdmin || session.canAccessOfficeFinanceFull) {
+      const [capital, profitTransfers, officeExpenses, partnerTx] = await Promise.all([
+        prisma.capitalContribution.findMany({ where: { type: "CASH" }, select: { amount: true } }),
+        prisma.profitTransfer.findMany({ select: { amount: true } }),
+        prisma.officeExpense.findMany({ select: { cost: true } }),
+        prisma.partnerTransaction.findMany({ select: { type: true, amount: true } }),
+      ]);
+
+      const cashCapital = capital.reduce((s, c) => s + c.amount, 0);
+      const totalProfitTransfers = profitTransfers.reduce((s, t) => s + t.amount, 0);
+      const totalOfficeExpenses = officeExpenses.reduce((s, e) => s + e.cost, 0);
+      const outflows = partnerTx
+        .filter(t => ["SALARY", "ADVANCE", "WITHDRAWAL", "PROFIT_SHARE"].includes(t.type))
+        .reduce((s, t) => s + t.amount, 0);
+      const inflows = partnerTx
+        .filter(t => t.type === "LOAN_SETTLEMENT")
+        .reduce((s, t) => s + t.amount, 0);
+
+      officeTreasury = {
+        balance: cashCapital + totalProfitTransfers - totalOfficeExpenses - outflows + inflows,
+        cashCapital,
+        profitTransfers: totalProfitTransfers,
+        officeExpenses: totalOfficeExpenses,
+      };
+    }
 
     return NextResponse.json({
       businesses,
@@ -51,6 +84,14 @@ export async function GET() {
         totalExpenses,
         totalClients,
         totalProjects,
+      },
+      officeTreasury,
+      userPermissions: {
+        canAccessNexup: superAdmin || session.canAccessNexup,
+        canAccessRebound: superAdmin || session.canAccessRebound,
+        canAccessAbomazen: superAdmin || session.canAccessAbomazen,
+        canAccessOffice: superAdmin || session.canAccessOfficeFinanceFull,
+        isSuperAdmin: superAdmin,
       },
     });
   } catch (error) {

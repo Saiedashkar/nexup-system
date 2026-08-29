@@ -29,7 +29,7 @@ const TIER: Record<string, { l: string; c: string; bg: string }> = {
   DELINQUENT: { l: "At Risk", c: "#ef4444", bg: "rgba(239,68,68,0.12)" },
 };
 
-function fmt(n: number) { return n.toLocaleString("en-US"); }
+function fmt(n: number | undefined | null) { return (n ?? 0).toLocaleString("en-US"); }
 function fmtDate(d: string) { return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); }
 function monthKey(d: string) { const dt = new Date(d); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`; }
 function monthLabel(d: string) { return new Date(d).toLocaleDateString("en-US", { month: "long", year: "numeric" }); }
@@ -641,7 +641,7 @@ export default function NexupClientsPage() {
     setLoading(false);
   }, [search, wsFilter, psFilter]);
 
-  const fetchMeta = async () => { try { const [s, u] = await Promise.all([fetch("/api/services"), fetch("/api/users")]); if (s.ok) setServices(await s.json()); if (u.ok) setUsers(await s.json()); } catch {} };
+  const fetchMeta = async () => { try { const [s, u] = await Promise.all([fetch("/api/services?businessSlug=nexup"), fetch("/api/users")]); if (s.ok) setServices(await s.json()); if (u.ok) setUsers(await s.json()); } catch {} };
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
   useEffect(() => { fetchMeta(); }, []);
 

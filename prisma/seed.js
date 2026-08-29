@@ -59,8 +59,9 @@ async function main() {
     const users = [
       { name: "SAIED", email: "saied@nexup.local", role: Role.SUPER_ADMIN, canAccessNexup: true, canAccessRebound: true, canAccessAbomazen: true, canAccessOfficeFinanceFull: true },
       { name: "ADEL", email: "adel@nexup.local", role: Role.SUPER_ADMIN, canAccessNexup: true, canAccessRebound: true, canAccessAbomazen: true, canAccessOfficeFinanceFull: true },
-      { name: "MOATASEM", email: "moatasem@nexup.local", role: Role.SUPER_ADMIN, canAccessNexup: false, canAccessRebound: true, canAccessAbomazen: true, canAccessOfficeFinanceFull: true },
-      { name: "MOUSSA", email: "moussa@nexup.local", role: Role.SUPER_ADMIN, canAccessNexup: false, canAccessRebound: true, canAccessAbomazen: true, canAccessOfficeFinanceFull: true },
+      { name: "MOATASEM", email: "moatasem@nexup.local", role: Role.ADMIN, canAccessNexup: false, canAccessRebound: true, canAccessAbomazen: true, canAccessOfficeFinanceFull: true },
+      { name: "MOUSSA", email: "moussa@nexup.local", role: Role.ADMIN, canAccessNexup: false, canAccessRebound: true, canAccessAbomazen: true, canAccessOfficeFinanceFull: true },
+      { name: "Admin", email: "admin@nexup.local", role: Role.ADMIN, canAccessNexup: false, canAccessRebound: true, canAccessAbomazen: false, canAccessOfficeFinanceFull: true },
     ];
 
     for (const u of users) {

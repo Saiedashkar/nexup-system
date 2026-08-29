@@ -42,10 +42,14 @@ export default async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Redirect away from login page if already authenticated
   if (pathname === "/login") {
-    if (session.role === "SUPER_ADMIN") return NextResponse.redirect(new URL("/office", request.url));
-    if (session.role === "ADMIN") return NextResponse.redirect(new URL("/dashboard", request.url));
-    return NextResponse.redirect(new URL("/clients", request.url));
+    return NextResponse.redirect(new URL("/office", request.url));
+  }
+
+  // Root page goes to /office
+  if (pathname === "/") {
+    return NextResponse.redirect(new URL("/office", request.url));
   }
 
   // SUPER_ADMIN bypasses ALL permission checks
@@ -74,18 +78,7 @@ export default async function middleware(request: NextRequest) {
     }
   }
 
-  // ADMIN can access admin + employee routes (legacy support)
-  if (session.role === "ADMIN") return NextResponse.next();
-
-  // EMPLOYEE: restricted to client-work routes only
-  if (session.role === "EMPLOYEE") {
-    const employeePaths = ["/clients", "/api/clients"];
-    if (!employeePaths.some(p => pathname === p || pathname.startsWith(p + "/"))) {
-      if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Access denied" }, { status: 403 });
-      return NextResponse.redirect(new URL("/clients", request.url));
-    }
-  }
-
+  // ADMIN/EMPLOYEE: allowed for anything not caught above
   return NextResponse.next();
 }
 

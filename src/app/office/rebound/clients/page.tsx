@@ -75,19 +75,49 @@ function WSToggle({ status, onToggle }: { status: string; onToggle: (next: strin
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }; document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h); }, []);
   return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <button onClick={() => setOpen(!open)} style={{ padding: "3px 8px", borderRadius: 5, border: "none", background: cur.bg, color: cur.c, fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
-        {cur.l} ▾
+    <div ref={ref} style={{ position: "relative", zIndex: open ? 200 : 1 }}>
+      <button onClick={() => setOpen(!open)} style={{
+        padding: "4px 10px", borderRadius: 6, border: "none",
+        background: cur.bg, color: cur.c,
+        fontSize: 11, fontWeight: 600, cursor: "pointer",
+        whiteSpace: "nowrap", transition: "all 0.2s ease",
+        boxShadow: open ? "0 4px 12px rgba(0,0,0,0.15)" : "none",
+      }}>
+        {cur.l} {open ? "▴" : "▾"}
       </button>
       {open && (
-        <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 3, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 3, zIndex: 100, minWidth: 120, boxShadow: "0 8px 24px rgba(0,0,0,0.15)" }}>
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0,
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: 10, padding: 6, zIndex: 999,
+          minWidth: 140, boxShadow: "0 12px 32px rgba(0,0,0,0.25)",
+          animation: "slideDown 0.2s ease",
+        }}>
           {WS_LIST.map(s => (
             <button key={s.v} onClick={() => { onToggle(s.v); setOpen(false); }}
-              style={{ display: "block", width: "100%", padding: "5px 8px", borderRadius: 5, border: "none", textAlign: "right", background: status === s.v ? s.bg : "transparent", color: s.c, fontSize: 11, fontWeight: 600, cursor: "pointer" }}
-            >{s.l}</button>
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                width: "100%", padding: "7px 10px", borderRadius: 7,
+                border: "none", textAlign: "right",
+                background: status === s.v ? s.bg : "transparent",
+                color: s.c, fontSize: 12, fontWeight: 600,
+                cursor: "pointer", transition: "all 0.15s ease",
+              }}
+              onMouseEnter={e => { if (status !== s.v) e.currentTarget.style.background = "var(--surface-hover)"; }}
+              onMouseLeave={e => { if (status !== s.v) e.currentTarget.style.background = "transparent"; }}
+            >
+              {status === s.v && <span style={{ fontSize: 10 }}>✓</span>}
+              {s.l}
+            </button>
           ))}
         </div>
       )}
+      <style>{`
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }

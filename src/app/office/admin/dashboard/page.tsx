@@ -128,29 +128,37 @@ export default function AdminDashboardPage() {
   );
   if (!stats) return <div style={{ textAlign: "center", padding: 48, color: "var(--muted)" }}>فشل في تحميل البيانات</div>;
 
-  const maxMonthly = Math.max(...stats.monthlyBreakdown.map(m => m.total), 1);
+  const monthlyBreakdown = stats.monthlyBreakdown || [];
+  const monthlyPartnerOutflows = stats.monthlyPartnerOutflows || [];
+  const partnerSummary = stats.partnerSummary || [];
+  const txByType = stats.txByType || {};
+  const officeTreasury = stats.officeTreasury || { balance: 0, cashCapital: 0, profitTransfers: 0, partnerOutflows: 0, partnerInflows: 0 };
+  const allTimeStats = stats.allTime || { totalExpenses: 0, totalCapital: 0, expenseCount: 0 };
+  const expenseBreakdownStats = stats.expenseBreakdown || { fixed: 0, variable: 0 };
+  const recentPartnerTx = stats.recentPartnerTx || [];
+  const maxMonthly = monthlyBreakdown.length > 0 ? Math.max(...monthlyBreakdown.map(m => m.total), 1) : 1;
 
   // Treasury donut segments
   const treasuryInSegments = [
-    { value: stats.officeTreasury.cashCapital, color: "#3b82f6", label: "التمويل النقدي" },
-    { value: stats.officeTreasury.profitTransfers, color: "#0d9488", label: "تحويلات الأرباح" },
-    { value: stats.officeTreasury.partnerInflows, color: "#10b981", label: "تسوية سلف" },
+    { value: officeTreasury.cashCapital, color: "#3b82f6", label: "التمويل النقدي" },
+    { value: officeTreasury.profitTransfers, color: "#0d9488", label: "تحويلات الأرباح" },
+    { value: officeTreasury.partnerInflows, color: "#10b981", label: "تسوية سلف" },
   ].filter(s => s.value > 0);
 
   const treasuryOutSegments = [
-    { value: stats.allTime.totalExpenses, color: "#ef4444", label: "مصاريف المكتب" },
-    { value: stats.officeTreasury.partnerOutflows, color: "#f59e0b", label: "صرف للشركاء" },
+    { value: allTimeStats.totalExpenses, color: "#ef4444", label: "مصاريف المكتب" },
+    { value: officeTreasury.partnerOutflows, color: "#f59e0b", label: "صرف للشركاء" },
   ].filter(s => s.value > 0);
 
   // Partner balance donut
-  const partnerBalanceSegments = stats.partnerSummary.map((p, i) => ({
+  const partnerBalanceSegments = partnerSummary.map((p, i) => ({
     value: Math.abs(p.balance),
     color: ["#8b5cf6", "#3b82f6", "#0d9488", "#f59e0b"][i % 4],
     label: p.name,
   })).filter(s => s.value > 0);
 
   // Sparkline data from monthly breakdown
-  const expenseSparkline = stats.monthlyBreakdown.slice(-6).map(m => m.total);
+  const expenseSparkline = monthlyBreakdown.slice(-6).map(m => m.total);
 
   return (
     <div style={{ maxWidth: 1440, margin: "0 auto", direction: "rtl" }}>
@@ -212,7 +220,7 @@ export default function AdminDashboardPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
             <DonutChart segments={partnerBalanceSegments.length > 0 ? partnerBalanceSegments : [{ value: 1, color: "var(--surface-hover)", label: "فارغ" }]} size={140} thickness={18} />
             <div style={{ flex: 1 }}>
-              {stats.partnerSummary.map((p, i) => (
+              {partnerSummary.map((p, i) => (
                 <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                   <div style={{ width: 12, height: 12, borderRadius: 4, background: ["#8b5cf6", "#3b82f6", "#0d9488", "#f59e0b"][i % 4], flexShrink: 0, boxShadow: `0 0 8px ${["#8b5cf6", "#3b82f6", "#0d9488", "#f59e0b"][i % 4]}40` }} />
                   <div style={{ flex: 1, fontSize: 12, color: "var(--muted)", fontWeight: 500 }}>{p.name}</div>
@@ -231,18 +239,18 @@ export default function AdminDashboardPage() {
           <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 16, fontWeight: 500 }}>حسب النوع — إجمالي القيم</div>
           <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
             <DonutChart
-              segments={Object.entries(stats.txByType).map(([type, amount]) => ({ value: amount, color: TX_TYPE_COLOR[type] || "#6b7280", label: TX_TYPE_AR[type] || type })).filter(s => s.value > 0)}
+              segments={Object.entries(txByType).map(([type, amount]) => ({ value: amount, color: TX_TYPE_COLOR[type] || "#6b7280", label: TX_TYPE_AR[type] || type })).filter(s => s.value > 0)}
               size={140} thickness={18}
             />
             <div style={{ flex: 1 }}>
-              {Object.entries(stats.txByType).map(([type, amount]) => (
+              {Object.entries(txByType).map(([type, amount]) => (
                 <div key={type} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                   <div style={{ width: 12, height: 12, borderRadius: 4, background: TX_TYPE_COLOR[type] || "#6b7280", flexShrink: 0, boxShadow: `0 0 8px ${TX_TYPE_COLOR[type] || "#6b7280"}40` }} />
                   <div style={{ flex: 1, fontSize: 12, color: "var(--muted)", fontWeight: 500 }}>{TX_TYPE_AR[type] || type}</div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", direction: "ltr" }}>{fmt(amount)}</div>
                 </div>
               ))}
-              {Object.keys(stats.txByType).length === 0 && (
+              {Object.keys(txByType).length === 0 && (
                 <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "center", padding: 16 }}>لا توجد حركات بعد</div>
               )}
             </div>
@@ -271,8 +279,8 @@ export default function AdminDashboardPage() {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 200, paddingBottom: 28, borderBottom: "1px solid var(--border)", position: "relative" }}>
-            {stats.monthlyBreakdown.slice().reverse().map((m, i) => {
-              const partnerOut = stats.monthlyPartnerOutflows.find(po => po.month === m.month && po.year === m.year)?.total || 0;
+            {monthlyBreakdown.slice().reverse().map((m, i) => {
+              const partnerOut = monthlyPartnerOutflows.find(po => po.month === m.month && po.year === m.year)?.total || 0;
               const barH = maxMonthly > 0 ? (m.total / maxMonthly) * 160 : 0;
               const partnerH = maxMonthly > 0 ? (partnerOut / maxMonthly) * 160 : 0;
               return (
@@ -304,9 +312,9 @@ export default function AdminDashboardPage() {
         <div style={{ padding: "24px", borderRadius: 16, background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>آخر الحركات</div>
           <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 16, fontWeight: 500 }}>Recent Partner Transactions</div>
-          {stats.recentPartnerTx.length === 0 ? (
+          {recentPartnerTx.length === 0 ? (
             <div style={{ textAlign: "center", padding: 32, color: "var(--muted)", fontSize: 12 }}>لا توجد حركات بعد</div>
-          ) : stats.recentPartnerTx.map(tx => (
+          ) : recentPartnerTx.map(tx => (
             <div key={tx.id} style={{
               display: "flex", alignItems: "center", gap: 12, padding: "12px 0",
               borderBottom: "1px solid var(--border)",
@@ -350,9 +358,9 @@ export default function AdminDashboardPage() {
                   <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 600 }}>مصاريف ثابتة</div>
                   <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Fixed Expenses</div>
                 </div>
-                <ProgressCircle value={stats.expenseBreakdown.fixed} max={stats.allTime.totalExpenses || 1} color="#f59e0b" label={stats.allTime.totalExpenses > 0 ? `${Math.round(stats.expenseBreakdown.fixed / stats.allTime.totalExpenses * 100)}%` : "0%"} />
+                <ProgressCircle value={expenseBreakdownStats.fixed} max={allTimeStats.totalExpenses || 1} color="#f59e0b" label={allTimeStats.totalExpenses > 0 ? `${Math.round(expenseBreakdownStats.fixed / allTimeStats.totalExpenses * 100)}%` : "0%"} />
               </div>
-              <div style={{ fontSize: 24, fontWeight: 800, color: "#f59e0b", direction: "ltr" }}>{fmt(stats.expenseBreakdown.fixed)} EGP</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: "#f59e0b", direction: "ltr" }}>{fmt(expenseBreakdownStats.fixed)} EGP</div>
             </div>
             {/* Variable */}
             <div style={{
@@ -364,9 +372,9 @@ export default function AdminDashboardPage() {
                   <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 600 }}>مصاريف متغيرة</div>
                   <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Variable Expenses</div>
                 </div>
-                <ProgressCircle value={stats.expenseBreakdown.variable} max={stats.allTime.totalExpenses || 1} color="#3b82f6" label={stats.allTime.totalExpenses > 0 ? `${Math.round(stats.expenseBreakdown.variable / stats.allTime.totalExpenses * 100)}%` : "0%"} />
+                <ProgressCircle value={expenseBreakdownStats.variable} max={allTimeStats.totalExpenses || 1} color="#3b82f6" label={allTimeStats.totalExpenses > 0 ? `${Math.round(expenseBreakdownStats.variable / allTimeStats.totalExpenses * 100)}%` : "0%"} />
               </div>
-              <div style={{ fontSize: 24, fontWeight: 800, color: "#3b82f6", direction: "ltr" }}>{fmt(stats.expenseBreakdown.variable)} EGP</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: "#3b82f6", direction: "ltr" }}>{fmt(expenseBreakdownStats.variable)} EGP</div>
             </div>
           </div>
         </div>
@@ -387,7 +395,7 @@ export default function AdminDashboardPage() {
           }}>
             <div>الشريك</div><div style={{ textAlign: "right" }}>الرصيد</div><div style={{ textAlign: "right" }}>السلف</div><div style={{ textAlign: "right" }}>الحركات</div>
           </div>
-          {stats.partnerSummary.map((p, i) => (
+          {partnerSummary.map((p, i) => (
             <div key={p.id} style={{
               display: "grid", gridTemplateColumns: "1fr 90px 90px 70px",
               padding: "12px", borderRadius: 10, marginBottom: 4,
@@ -410,7 +418,7 @@ export default function AdminDashboardPage() {
               <div style={{ textAlign: "right", fontSize: 12, color: "var(--muted)", fontWeight: 500 }}>{p.txCount}</div>
             </div>
           ))}
-          {stats.partnerSummary.length === 0 && (
+          {partnerSummary.length === 0 && (
             <div style={{ textAlign: "center", padding: 24, color: "var(--muted)", fontSize: 12 }}>لا يوجد شركاء بعد</div>
           )}
         </div>

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getCurrentSession } from "@/lib/auth";
+import { getCurrentSession, canAccessOfficeFinance } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   const session = await getCurrentSession();
-  if (!session || session.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!session || !canAccessOfficeFinance(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1;

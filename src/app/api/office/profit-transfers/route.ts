@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getCurrentSession } from "@/lib/auth";
+import { getCurrentSession, canAccessOfficeFinance } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   const session = await getCurrentSession();
-  if (!session || session.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!session || !canAccessOfficeFinance(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const transfers = await prisma.profitTransfer.findMany({
     include: { business: { select: { name: true, slug: true } } },
@@ -17,7 +17,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const session = await getCurrentSession();
-  if (!session || session.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!session || !canAccessOfficeFinance(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json();
   const { businessId, amount, date, note } = body;

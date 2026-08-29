@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentSession } from "@/lib/auth";
+import { getCurrentSession, canAccessOfficeFinance } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   const session = await getCurrentSession();
-  if (!session || session.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!session || !canAccessOfficeFinance(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const settings = await prisma.officeAllocationSetting.findMany({
     include: { business: true },
     orderBy: { effectiveDate: "desc" },
@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await getCurrentSession();
-  if (!session || session.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!session || !canAccessOfficeFinance(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
   if (!body.businessId || body.allocationPct === undefined) {

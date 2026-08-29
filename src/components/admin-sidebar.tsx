@@ -66,8 +66,8 @@ export function AdminSidebar() {
           </Link>
           {!collapsed && (
             <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>الإدارة المكتبية</div>
-              <div style={{ fontSize: 10, color: "#64748b", letterSpacing: "0.05em" }}>Office Administration</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>إدارة المكتب</div>
+              <div style={{ fontSize: 10, color: "#64748b", letterSpacing: "0.05em" }}>Office Management</div>
             </div>
           )}
         </div>

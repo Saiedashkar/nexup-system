@@ -4,7 +4,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 const prismaGlobal = globalThis as unknown as { prisma?: PrismaClient };
 
 function createPrismaClient() {
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+  const url = process.env.DATABASE_URL || "";
+  const adapter = new PrismaPg({ connectionString: url, ssl: { rejectUnauthorized: false } });
   return new PrismaClient({ adapter });
 }
 

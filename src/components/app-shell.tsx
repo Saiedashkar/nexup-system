@@ -82,6 +82,7 @@ export function AppShell({
 
   const mobileNavItems = [
     { href: "/office", label: "لوحة تحكم المكتب", sub: "Office Dashboard", icon: icons.office },
+    ...(isSuperAdmin ? [{ href: "/office/admin/users", label: "إدارة المستخدمين", sub: "User Management", icon: icons.clients, superAdminOnly: true }] : []),
   ];
 
   return (
@@ -133,6 +134,17 @@ export function AppShell({
               <Link className={`sidebar-link ${activePage === "finance" ? "active" : ""}`} href="/finance">
                 <NavIcon d={icons.treasury} />
                 Treasury & Expenses
+              </Link>
+            </div>
+          )}
+
+          {/* Users Management — SUPER_ADMIN only */}
+          {isSuperAdmin && (
+            <div className="sidebar-section">
+              <div className="sidebar-section-title">Admin</div>
+              <Link className={`sidebar-link ${activePage === "users" ? "active" : ""}`} href="/office/admin/users">
+                <NavIcon d={icons.clients} />
+                إدارة المستخدمين
               </Link>
             </div>
           )}

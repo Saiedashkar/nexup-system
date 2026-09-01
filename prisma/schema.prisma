@@ -502,3 +502,54 @@ model SubscriptionInvoice {
   @@index([month, year])
   @@index([status])
 }
+
+// ═══════════════════════════════════════════════════════
+// Office Tools & Equipment (managed from capital)
+// ═══════════════════════════════════════════════════════
+
+enum ToolType {
+  ONE_TIME            // Purchased once from capital
+  MONTHLY_SUBSCRIPTION // Recurring monthly cost
+  PERIODIC            // Recurring at irregular intervals
+}
+
+enum ToolStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+}
+
+model OfficeTool {
+  id              String     @id @default(cuid())
+  name            String     // e.g. "Adobe Photoshop", "Office Desk"
+  type            ToolType   @default(ONE_TIME)
+  category        String     // e.g. "Software", "Hardware", "Furniture"
+  cost            Float      // Purchase price or monthly subscription cost
+  purchaseDate    DateTime   // When purchased or subscription started
+  nextDueDate     DateTime?  // Next payment due (for MONTHLY_SUBSCRIPTION & PERIODIC)
+  intervalDays    Int?       // For PERIODIC: days between payments
+  status          ToolStatus @default(ACTIVE)
+  paidBy          String     @default("CAPITAL") // CAPITAL or PARTNER name
+  notes           String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  payments        OfficeToolPayment[]
+
+  @@index([type])
+  @@index([status])
+  @@index([category])
+  @@index([nextDueDate])
+}
+
+model OfficeToolPayment {
+  id          String     @id @default(cuid())
+  toolId      String
+  amount      Float
+  paidDate    DateTime
+  notes       String?
+  createdAt   DateTime   @default(now())
+  tool        OfficeTool @relation(fields: [toolId], references: [id], onDelete: Restrict)
+
+  @@index([toolId])
+  @@index([paidDate])
+}

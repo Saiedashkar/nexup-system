@@ -22,6 +22,7 @@ const icons = {
   profitTransfer: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",
   settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z",
   users: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75",
+  tools: "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z",
   back: "M19 12H5M12 19l-7-7 7-7",
 };
 
@@ -31,6 +32,7 @@ const NAV = [
   { href: "/office/admin/partner-ledger", label: "كشف حساب الشريك", sub: "Partner Ledger", icon: icons.ledger },
   { href: "/office/admin/profit-transfers", label: "تحويل الأرباح", sub: "Profit Transfers", icon: icons.profitTransfer },
   { href: "/office/admin/office-expenses", label: "مصاريف المكتب", sub: "Office Expenses", icon: icons.expenses },
+  { href: "/office/admin/tools", label: "الادوات", sub: "Tools", icon: icons.tools, superAdminOnly: true },
   { href: "/office/admin/capital", label: "رأس المال والتمويل", sub: "Capital & Funding", icon: icons.capital },
   { href: "/office/admin/settings", label: "إعدادات التوزيع", sub: "Allocation Settings", icon: icons.settings },
   { href: "/office/admin/users", label: "إدارة المستخدمين", sub: "User Management", icon: icons.users, superAdminOnly: true },

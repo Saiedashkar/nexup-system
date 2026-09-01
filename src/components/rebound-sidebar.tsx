@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { MobileNav } from "@/components/mobile-nav";
+import { BottomNavBar, BottomNavItem } from "@/components/bottom-nav-bar";
 
 function NavIcon({ d, size = 20 }: { d: string; size?: number }) {
   return (
@@ -30,6 +31,14 @@ const NAV_ITEMS = [
   { href: "/office/rebound/finance", label: "الحسابات", labelEn: "Finance", icon: icons.finance },
   { href: "/office/rebound/analytics", label: "التحليلات", labelEn: "Analytics", icon: icons.analytics },
   { href: "/office/rebound/settings", label: "الإعدادات", labelEn: "Settings", icon: icons.settings },
+];
+
+const BOTTOM_NAV_ITEMS: BottomNavItem[] = [
+  { href: "/office/rebound/dashboard", label: "الرئيسية", icon: icons.dashboard },
+  { href: "/office/rebound/clients", label: "العملاء", icon: icons.clients },
+  { href: "/office/rebound/clients", label: "إضافة", icon: "M12 5v14M5 12h14", isPrimary: true },
+  { href: "/office/rebound/finance", label: "الحسابات", icon: icons.finance },
+  { href: "/office/rebound/settings", label: "المزيد", icon: icons.settings },
 ];
 
 export function ReboundSidebar() {
@@ -178,6 +187,8 @@ export function ReboundSidebar() {
         </button>
       </div>
     </aside>
+      {/* Bottom Nav Bar for mobile */}
+      <BottomNavBar items={BOTTOM_NAV_ITEMS} brandColor="#3b82f6" />
     </>
   );
 }

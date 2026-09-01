@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { MobileNav } from "@/components/mobile-nav";
+import { BottomNavBar, BottomNavItem } from "@/components/bottom-nav-bar";
 
 // SVG Icons
 const HomeIcon = ({ size = 20 }: { size?: number }) => (
@@ -112,6 +113,14 @@ const MOBILE_NAV = [
   { href: "/office/abomazen/properties", label: "العقارات", sub: "Properties", icon: iconPaths.building },
   { href: "/office/abomazen/finance", label: "الحسابات", sub: "Finance", icon: iconPaths.finance },
   { href: "/office/abomazen/guide", label: "إزاي أستخدم النظام؟", sub: "Guide", icon: iconPaths.help },
+];
+
+const BOTTOM_NAV_ITEMS: BottomNavItem[] = [
+  { href: "/office/abomazen/dashboard", label: "الرئيسية", icon: iconPaths.home },
+  { href: "/office/abomazen/deals", label: "الصفقات", icon: iconPaths.deals },
+  { href: "/office/abomazen/new-deal", label: "صفقة جديدة", icon: "M12 5v14M5 12h14", isPrimary: true },
+  { href: "/office/abomazen/properties", label: "العقارات", icon: iconPaths.building },
+  { href: "/office/abomazen/finance", label: "الحسابات", icon: iconPaths.finance },
 ];
 
 export function AbomazenSidebar() {
@@ -382,6 +391,8 @@ export function AbomazenSidebar() {
         </button>
       </div>
     </aside>
+      {/* Bottom Nav Bar for mobile */}
+      <BottomNavBar items={BOTTOM_NAV_ITEMS} brandColor="#8b5cf6" />
     </>
   );
 }

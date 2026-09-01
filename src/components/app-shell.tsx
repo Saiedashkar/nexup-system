@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { LogoutButton } from "@/components/logout-button";
 import { MobileNav } from "@/components/mobile-nav"
+import { BottomNavBar, BottomNavItem } from "@/components/bottom-nav-bar"
 
 function NavIcon({ d }: { d: string }) {
   return (
@@ -83,6 +84,13 @@ export function AppShell({
   const mobileNavItems = [
     { href: "/office", label: "لوحة تحكم المكتب", sub: "Office Dashboard", icon: icons.office },
     ...(isSuperAdmin ? [{ href: "/office/admin/users", label: "إدارة المستخدمين", sub: "User Management", icon: icons.clients, superAdminOnly: true }] : []),
+  ];
+
+  const bottomNavItems: BottomNavItem[] = [
+    { href: "/office", label: "الرئيسية", icon: icons.office },
+    { href: "/clients", label: "العملاء", icon: icons.clients },
+    { href: "/finance", label: "المالية", icon: icons.treasury },
+    ...(isSuperAdmin ? [{ href: "/office/admin/users", label: "المستخدمين", icon: icons.clients }] : []),
   ];
 
   return (
@@ -176,6 +184,7 @@ export function AppShell({
         {children}
       </main>
     </div>
+    <BottomNavBar items={bottomNavItems} />
     </>
   );
 }

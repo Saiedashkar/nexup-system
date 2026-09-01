@@ -9,7 +9,7 @@ export default function ReboundLayout({ children }: { children: React.ReactNode 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
       <ReboundSidebar />
-      <main style={{ flex: 1, overflow: "auto", padding: "28px 32px" }}>
+      <main style={{ flex: 1, overflow: "auto", padding: "28px 32px" }} className="main-content-mobile-pad">
         {children}
       </main>
     </div>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { MobileNav } from "@/components/mobile-nav";
+import { BottomNavBar, BottomNavItem } from "@/components/bottom-nav-bar";
 
 // Check if current user is SUPER_ADMIN (from session)
 function useIsSuperAdmin() {
@@ -42,6 +43,14 @@ const NAV_ITEMS = [
   { href: "/office/nexup/analytics", label: "التحليلات", sub: "Analytics", icon: icons.analytics },
   { href: "/office/nexup/profit-distribution", label: "توزيع الأرباح", sub: "Profit Distribution", icon: icons.finance, superAdminOnly: true },
   { href: "/office/nexup/settings", label: "الإعدادات", sub: "Settings", icon: icons.settings },
+];
+
+const BOTTOM_NAV_ITEMS: BottomNavItem[] = [
+  { href: "/office/nexup/dashboard", label: "الرئيسية", icon: icons.dashboard },
+  { href: "/office/nexup/clients", label: "العملاء", icon: icons.clients },
+  { href: "/office/nexup/clients", label: "إضافة", icon: "M12 5v14M5 12h14", isPrimary: true },
+  { href: "/office/nexup/finance", label: "الحسابات", icon: icons.finance },
+  { href: "/office/nexup/settings", label: "المزيد", icon: icons.settings },
 ];
 
 export function NexupSidebar() {
@@ -195,6 +204,8 @@ export function NexupSidebar() {
           </button>
         </div>
       </aside>
+      {/* Bottom Nav Bar for mobile */}
+      <BottomNavBar items={BOTTOM_NAV_ITEMS} brandColor="#14b8a6" />
     </>
   );
 }

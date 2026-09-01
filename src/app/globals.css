@@ -826,6 +826,269 @@ a { color: inherit; text-decoration: none; }
 
 
 /* ═══════════════════════════════════════════════════════
+   Bottom Navigation Bar (Mobile)
+   ═══════════════════════════════════════════════════════ */
+.bottom-nav-bar {
+  display: none; /* hidden on desktop */
+}
+
+@media (max-width: 768px) {
+  .bottom-nav-bar {
+    display: flex;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 60;
+    height: 64px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 4px;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.2);
+  }
+
+  .bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 8px;
+    border-radius: 10px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 10px;
+    font-weight: 600;
+    min-width: 56px;
+    min-height: 48px;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .bottom-nav-item.active {
+    color: var(--bottom-nav-color, var(--brand));
+    background: rgba(13,148,136,0.08);
+  }
+  .bottom-nav-item:active {
+    transform: scale(0.92);
+  }
+
+  .bottom-nav-primary {
+    position: relative;
+    margin-top: -20px;
+  }
+  .bottom-nav-primary-btn {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(13,148,136,0.4);
+    transition: transform 0.15s;
+  }
+  .bottom-nav-primary:active .bottom-nav-primary-btn {
+    transform: scale(0.92);
+  }
+
+  /* Add bottom padding to main content so it doesn't hide behind bottom nav */
+  .main-content,
+  .main-content-mobile-pad {
+    padding-bottom: 80px !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   Mobile Card (Table → Card conversion)
+   ═══════════════════════════════════════════════════════ */
+.mobile-card {
+  display: none; /* hidden on desktop */
+}
+
+@media (max-width: 768px) {
+  /* Hide desktop table, show mobile cards */
+  .mobile-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0 0 16px 0;
+  }
+
+  .mobile-card {
+    display: block;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    box-shadow: var(--card-shadow);
+    position: relative;
+  }
+
+  .mobile-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .mobile-card-title {
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--text);
+  }
+
+  .mobile-card-menu {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: var(--surface-hover);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 18px;
+    transition: background 0.15s;
+  }
+  .mobile-card-menu:active {
+    background: var(--border);
+    transform: scale(0.92);
+  }
+
+  .mobile-card-body {
+    display: grid;
+    gap: 8px;
+  }
+
+  .mobile-card-field {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(148,163,184,0.08);
+  }
+  .mobile-card-field:last-child {
+    border-bottom: none;
+  }
+
+  .mobile-card-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .mobile-card-value {
+    font-size: 14px;
+    color: var(--text);
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .mobile-card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .mobile-card-actions .btn {
+    flex: 1;
+    min-height: 40px;
+    font-size: 13px;
+  }
+
+  /* Hide desktop table on mobile */
+  .table-container {
+    display: none !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   Mobile Bottom Sheet (Action Menu)
+   ═══════════════════════════════════════════════════════ */
+.mobile-sheet-backdrop {
+  display: none;
+}
+.mobile-sheet {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-sheet-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+    animation: fadeIn 0.2s ease;
+  }
+
+  .mobile-sheet {
+    display: block;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: var(--surface);
+    border-radius: 20px 20px 0 0;
+    padding: 8px 16px 24px;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0));
+    animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.3);
+  }
+
+  .mobile-sheet-handle {
+    width: 36px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 12px;
+  }
+
+  .mobile-sheet-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    text-align: center;
+    margin-bottom: 16px;
+  }
+
+  .mobile-sheet-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    color: var(--text);
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 600;
+    transition: background 0.15s;
+    min-height: 52px;
+    border: none;
+    background: none;
+    width: 100%;
+    cursor: pointer;
+    text-align: right;
+  }
+  .mobile-sheet-item:active {
+    background: var(--surface-hover);
+    transform: scale(0.98);
+  }
+  .mobile-sheet-item.danger {
+    color: var(--danger);
+  }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════════════════════
    Animations — Performance Optimized
    ═══════════════════════════════════════════════════════ */
 @keyframes fadeIn {

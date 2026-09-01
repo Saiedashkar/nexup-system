@@ -108,8 +108,8 @@ export default function ReboundFinancePage() {
   const fetchData = useCallback(async () => {
     try {
       const [poolRes, eRes] = await Promise.all([
-        fetch("/api/pool"),
-        fetch("/api/expenses"),
+        fetch("/api/pool?businessSlug=rebound"),
+        fetch("/api/expenses?businessSlug=rebound"),
       ]);
       if (poolRes.ok) {
         const d = await poolRes.json();
@@ -172,7 +172,7 @@ export default function ReboundFinancePage() {
     if (!expForm.description || !expForm.cost || !expForm.name) { setError("يجب ملء الوصف والتكلفة والمستلم"); return; }
     setSaving(true); setError("");
     const r = await fetch("/api/expenses", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...expForm, cost: parseFloat(expForm.cost) }) });
+      body: JSON.stringify({ ...expForm, cost: parseFloat(expForm.cost), businessSlug: "rebound" }) });
     if (r.ok) { setShowExpForm(false); setExpForm({ date: new Date().toISOString().split("T")[0], description: "", cost: "", category: "FIXED", name: "", notes: "" }); fetchData(); }
     else { const d = await r.json(); setError(d.error || "Failed"); }
     setSaving(false);

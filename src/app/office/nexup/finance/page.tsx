@@ -114,7 +114,7 @@ export default function NexupFinancePage() {
 
   /* ── Fetch ── */
   const fetchData = useCallback(async () => {
-    const [poolRes, wRes, eRes] = await Promise.all([fetch("/api/pool"), fetch("/api/withdrawals"), fetch("/api/expenses")]);
+    const [poolRes, wRes, eRes] = await Promise.all([fetch("/api/pool?businessSlug=nexup"), fetch("/api/withdrawals?businessSlug=nexup"), fetch("/api/expenses?businessSlug=nexup")]);
     if (poolRes.ok) {
       const d = await poolRes.json();
       setPoolBalance(d.balance || 0);
@@ -160,18 +160,20 @@ export default function NexupFinancePage() {
   const submitInc = async () => {
     if (!incForm.amountSAR || !incForm.exchangeRate) { setError("Fill in amount and exchange rate"); return; }
     setSaving(true); setError("");
-    const r = await fetch("/api/withdrawals", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amountSAR: parseFloat(incForm.amountSAR), exchangeRate: parseFloat(incForm.exchangeRate), commissionPct: parseFloat(incForm.commissionPct || "10"), date: incForm.date }) });
-    if (r.ok) { setShowIncForm(false); setIncForm({ amountSAR: "", exchangeRate: "12.5", commissionPct: "10", date: new Date().toISOString().split("T")[0] }); fetchData(); }
-    else { const d = await r.json(); setError(d.error || "Failed"); }
-    setSaving(false);
+    try {
+      const r = await fetch("/api/withdrawals", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amountSAR: parseFloat(incForm.amountSAR), exchangeRate: parseFloat(incForm.exchangeRate), commissionPct: parseFloat(incForm.commissionPct || "10"), date: incForm.date }) });
+      if (r.ok) { setShowIncForm(false); setIncForm({ amountSAR: "", exchangeRate: "12.5", commissionPct: "10", date: new Date().toISOString().split("T")[0] }); fetchData(); }
+      else { const d = await r.json().catch(() => ({})); setError(d.error || "Failed to save"); }
+    } catch (err) { setError("Network error — please try again"); }
+    finally { setSaving(false); }
   };
 
   const submitExp = async () => {
     if (!expForm.description || !expForm.cost || !expForm.name) { setError("Fill in description, cost, and name"); return; }
     setSaving(true); setError("");
     const r = await fetch("/api/expenses", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...expForm, cost: parseFloat(expForm.cost) }) });
+      body: JSON.stringify({ ...expForm, cost: parseFloat(expForm.cost), businessSlug: "nexup" }) });
     if (r.ok) { setShowExpForm(false); setExpForm({ date: new Date().toISOString().split("T")[0], description: "", cost: "", category: "FIXED", name: "", notes: "" }); fetchData(); }
     else { const d = await r.json(); setError(d.error || "Failed"); }
     setSaving(false);

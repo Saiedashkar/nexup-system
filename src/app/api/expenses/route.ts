@@ -13,11 +13,19 @@ export async function GET(req: NextRequest) {
   const month = searchParams.get("month");
   const year = searchParams.get("year");
   const category = searchParams.get("category") as "FIXED" | "VARIABLE" | null;
+  const businessSlug = searchParams.get("businessSlug");
+
+  // Resolve business filter
+  let filterBusinessId: string | undefined;
+  if (businessSlug) {
+    const biz = await prisma.business.findUnique({ where: { slug: businessSlug }, select: { id: true } });
+    if (biz) filterBusinessId = biz.id;
+  } else if (session.role !== "SUPER_ADMIN") {
+    filterBusinessId = session.businessId;
+  }
 
   const where: Record<string, unknown> = {};
-  if (session.role !== "SUPER_ADMIN") {
-    where.businessId = session.businessId;
-  }
+  if (filterBusinessId) where.businessId = filterBusinessId;
   if (month) where.month = parseInt(month);
   if (year) where.year = parseInt(year);
   if (category) where.category = category;
@@ -41,17 +49,28 @@ export async function POST(req: NextRequest) {
   if (session.role === "EMPLOYEE") return NextResponse.json({ error: "Access denied" }, { status: 403 });
 
   const body = await req.json();
-  const { description, cost, category, name, notes, date } = body;
+  const { description, cost, category, name, notes, date, businessSlug } = body;
 
   if (!description || !cost || !category || !name || !date) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  }
+
+  // Resolve businessId
+  let businessId = session.businessId;
+  if (session.role === "SUPER_ADMIN" && (!businessId || businessId === "all")) {
+    const slug = businessSlug || "nexup";
+    const biz = await prisma.business.findUnique({ where: { slug }, select: { id: true } });
+    if (biz) businessId = biz.id;
+  }
+  if (!businessId || businessId === "all") {
+    return NextResponse.json({ error: "Could not determine business" }, { status: 400 });
   }
 
   const d = new Date(date);
 
   const expense = await prisma.expense.create({
     data: {
-      businessId: session.businessId,
+      businessId,
       description,
       cost: parseFloat(cost),
       category,

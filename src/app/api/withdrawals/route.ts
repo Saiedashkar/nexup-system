@@ -12,11 +12,19 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const month = searchParams.get("month");
   const year = searchParams.get("year");
+  const businessSlug = searchParams.get("businessSlug");
+
+  // Resolve business filter
+  let filterBusinessId: string | undefined;
+  if (businessSlug) {
+    const biz = await prisma.business.findUnique({ where: { slug: businessSlug }, select: { id: true } });
+    if (biz) filterBusinessId = biz.id;
+  } else if (session.role !== "SUPER_ADMIN") {
+    filterBusinessId = session.businessId;
+  }
 
   const where: Record<string, unknown> = {};
-  if (session.role !== "SUPER_ADMIN") {
-    where.businessId = session.businessId;
-  }
+  if (filterBusinessId) where.businessId = filterBusinessId;
   if (month) where.month = parseInt(month);
   if (year) where.year = parseInt(year);
 
@@ -48,9 +56,20 @@ export async function POST(req: NextRequest) {
 
   const d = new Date(date);
 
+  // Resolve real businessId — SUPER_ADMIN gets "all" from session which is not a valid FK
+  let businessId = session.businessId;
+  if (session.role === "SUPER_ADMIN" && (!businessId || businessId === "all")) {
+    // NEXUP withdrawals go to the NEXUP business
+    const biz = await prisma.business.findUnique({ where: { slug: "nexup" }, select: { id: true } });
+    if (biz) businessId = biz.id;
+  }
+  if (!businessId || businessId === "all") {
+    return NextResponse.json({ error: "Could not determine business for this operation" }, { status: 400 });
+  }
+
   const withdrawal = await prisma.withdrawal.create({
     data: {
-      businessId: session.businessId,
+      businessId,
       amountSAR: amount,
       exchangeRate: rate,
       commissionPct: commission,
@@ -63,7 +82,7 @@ export async function POST(req: NextRequest) {
 
   await prisma.poolTransaction.create({
     data: {
-      businessId: session.businessId,
+      businessId,
       withdrawalId: withdrawal.id,
       amountSAR: amount,
       type: "OUT",

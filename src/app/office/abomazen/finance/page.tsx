@@ -25,7 +25,7 @@ export default function AbomazenFinancePage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    const [poolRes, eRes] = await Promise.all([fetch("/api/pool"), fetch("/api/expenses")]);
+    const [poolRes, eRes] = await Promise.all([fetch("/api/pool?businessSlug=abomazen"), fetch("/api/expenses?businessSlug=abomazen")]);
     if (poolRes.ok) { const d = await poolRes.json(); setPoolBalance(d.balance || 0); const txs: PoolTx[] = d.transactions || []; setPoolTx(txs); setPoolTotalIn(txs.filter(t => t.type === "IN").reduce((s, t) => s + Number(t.amountSAR), 0)); }
     if (eRes.ok) { const d = await eRes.json(); setExpenses(d.expenses || []); }
   }, []);
@@ -55,7 +55,7 @@ export default function AbomazenFinancePage() {
   const submitExp = async () => {
     if (!expForm.description || !expForm.cost || !expForm.name) { setError("يجب ملء الوصف والتكلفة والمستلم"); return; }
     setSaving(true); setError("");
-    const r = await fetch("/api/expenses", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...expForm, cost: parseFloat(expForm.cost) }) });
+    const r = await fetch("/api/expenses", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...expForm, cost: parseFloat(expForm.cost), businessSlug: "abomazen" }) });
     if (r.ok) { setShowExpForm(false); setExpForm({ date: new Date().toISOString().split("T")[0], description: "", cost: "", category: "FIXED", name: "", notes: "" }); fetchData(); }
     else { const d = await r.json(); setError(d.error || "حدث خطأ"); }
     setSaving(false);

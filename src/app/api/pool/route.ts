@@ -13,11 +13,21 @@ export async function GET(req: NextRequest) {
   const type = searchParams.get("type") as "IN" | "OUT" | null;
   const from = searchParams.get("from");
   const to = searchParams.get("to");
+  const businessSlug = searchParams.get("businessSlug");
+
+  // Resolve businessId: explicit slug > session businessId > all for non-super-admin
+  let filterBusinessId: string | undefined;
+  if (businessSlug) {
+    const biz = await prisma.business.findUnique({ where: { slug: businessSlug }, select: { id: true } });
+    if (!biz) return NextResponse.json({ error: "Business not found" }, { status: 404 });
+    filterBusinessId = biz.id;
+  } else if (session.role !== "SUPER_ADMIN") {
+    filterBusinessId = session.businessId;
+  }
+  // else: SUPER_ADMIN with no slug = all businesses (original behavior)
 
   const where: Record<string, unknown> = {};
-  if (session.role !== "SUPER_ADMIN") {
-    where.businessId = session.businessId;
-  }
+  if (filterBusinessId) where.businessId = filterBusinessId;
   if (type) where.type = type;
   if (from || to) {
     where.date = {};
@@ -32,9 +42,7 @@ export async function GET(req: NextRequest) {
   });
 
   const balanceWhere: Record<string, unknown> = {};
-  if (session.role !== "SUPER_ADMIN") {
-    balanceWhere.businessId = session.businessId;
-  }
+  if (filterBusinessId) balanceWhere.businessId = filterBusinessId;
   const allTransactions = await prisma.poolTransaction.findMany({
     where: balanceWhere,
     select: { type: true, amountSAR: true },

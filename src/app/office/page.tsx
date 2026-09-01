@@ -19,6 +19,7 @@ type OfficeStats = {
   totalExpenses: number;
   totalClients: number;
   totalProjects: number;
+  perBusinessRevenue: Record<string, number>;
 };
 
 type OfficeTreasury = {
@@ -124,34 +125,43 @@ export default function OfficePage() {
           </div>
         ) : (
           <>
-            {/* ═══ Stat Cards — only for super admin or if multiple systems ═══ */}
+            {/* ═══ Stat Cards — only for super admin ═══ */}
             {perms?.isSuperAdmin && stats && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 28 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 14, marginBottom: 28 }}>
                 {[
                   { label: "إجمالي العملاء", value: String(stats.totalClients), color: "#8b5cf6", bg: "rgba(139,92,246,0.12)", icon: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" },
                   { label: "إجمالي المشاريع", value: String(stats.totalProjects), color: "#3b82f6", bg: "rgba(59,130,246,0.12)", icon: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" },
-                  { label: "إيرادات NEXUP", value: `${formatNum(stats.totalRevenueSAR)} SAR`, color: "#10b981", bg: "rgba(16,185,129,0.12)", icon: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
-                  { label: "إيرادات REBOUND+ABOMAZEN", value: `${formatNum(stats.totalRevenueEGP)} EGP`, color: "#14b8a6", bg: "rgba(20,184,166,0.12)", icon: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
+                  ...businesses.map(b => {
+                    const revenue = stats.perBusinessRevenue?.[b.id] ?? 0;
+                    const cfg = BUSINESS_CONFIG[b.slug];
+                    return {
+                      label: `إيرادات ${b.name}`,
+                      value: b.currencyMode === "SAR_TO_EGP" ? `${formatNum(revenue)} SAR` : `${formatNum(revenue)} EGP`,
+                      color: cfg?.color || "#6b7280",
+                      bg: (cfg?.color || "#6b7280") + "14",
+                      icon: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6",
+                    };
+                  }),
                   { label: "إجمالي المصروفات", value: `${formatNum(stats.totalExpenses)} EGP`, color: "#ef4444", bg: "rgba(239,68,68,0.12)", icon: "M9 5H2v7l6.29 6.29c.94.94 2.48.94 3.42 0l3.58-3.58c.94-.94.94-2.48 0-3.42L9 5z" },
                 ].map((s) => (
                   <div key={s.label} style={{
-                    padding: "22px 24px", borderRadius: 16,
+                    padding: "18px 16px", borderRadius: 14,
                     background: "var(--surface)", border: "1px solid var(--border)",
-                    display: "flex", alignItems: "center", gap: 16,
+                    display: "flex", alignItems: "center", gap: 12,
                     boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
                   }}>
                     <div style={{
-                      width: 50, height: 50, borderRadius: 14,
+                      width: 44, height: 44, borderRadius: 12,
                       background: s.bg, color: s.color,
                       display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                     }}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" width={22} height={22}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" width={20} height={20}>
                         <path d={s.icon} />
                       </svg>
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 28, fontWeight: 800, color: "var(--text)", lineHeight: 1.1, direction: "ltr", textAlign: "right" }}>{s.value}</div>
-                      <div style={{ fontSize: 13, color: "var(--muted)", fontWeight: 600, marginTop: 4 }}>{s.label}</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text)", lineHeight: 1.1, direction: "ltr", textAlign: "right" }}>{s.value}</div>
+                      <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, marginTop: 4 }}>{s.label}</div>
                     </div>
                   </div>
                 ))}

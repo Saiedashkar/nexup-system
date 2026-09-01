@@ -32,34 +32,33 @@ export async function GET() {
 
     const businesses = allBusinesses.filter(b => accessibleSlugs.includes(b.slug));
 
-    // Aggregate stats ONLY for accessible businesses
-    // Separate SAR (NEXUP) and EGP (REBOUND, ABOMAZEN) currencies
-    const sarBusinessIds = businesses.filter(b => b.currencyMode === "SAR_TO_EGP").map(b => b.id);
-    const egpBusinessIds = businesses.filter(b => b.currencyMode === "EGP_DIRECT").map(b => b.id);
+    // Aggregate stats per-business for accessible businesses
+    const allBizIds = businesses.map(b => b.id);
 
-    const [totalClients, totalProjects, sarRevenueResult, egpRevenueResult, expenseResult] = await Promise.all([
-      prisma.client.count({ where: { businessId: { in: businesses.map(b => b.id) } } }),
-      prisma.projectRecord.count({ where: { businessId: { in: businesses.map(b => b.id) } } }),
-      sarBusinessIds.length > 0
-        ? prisma.poolTransaction.aggregate({
-            where: { type: "IN", businessId: { in: sarBusinessIds } },
-            _sum: { amountSAR: true },
-          })
-        : Promise.resolve({ _sum: { amountSAR: null } }),
-      egpBusinessIds.length > 0
-        ? prisma.poolTransaction.aggregate({
-            where: { type: "IN", businessId: { in: egpBusinessIds } },
-            _sum: { amountSAR: true },
-          })
-        : Promise.resolve({ _sum: { amountSAR: null } }),
+    const [totalClients, totalProjects, expenseResult] = await Promise.all([
+      prisma.client.count({ where: { businessId: { in: allBizIds } } }),
+      prisma.projectRecord.count({ where: { businessId: { in: allBizIds } } }),
       prisma.expense.aggregate({
-        where: { businessId: { in: businesses.map(b => b.id) } },
+        where: { businessId: { in: allBizIds } },
         _sum: { cost: true },
       }),
     ]);
 
-    const totalRevenueSAR = Number(sarRevenueResult._sum.amountSAR ?? 0);
-    const totalRevenueEGP = Number(egpRevenueResult._sum.amountSAR ?? 0);
+    // Per-business revenue (pool IN transactions)
+    const perBusinessRevenue: Record<string, number> = {};
+    const revenueAggByBiz = await prisma.poolTransaction.groupBy({
+      by: ["businessId"],
+      where: { type: "IN", businessId: { in: allBizIds } },
+      _sum: { amountSAR: true },
+    });
+    for (const row of revenueAggByBiz) {
+      perBusinessRevenue[row.businessId] = Number(row._sum.amountSAR ?? 0);
+    }
+
+    const totalRevenueSAR = Number(perBusinessRevenue[businesses.find(b => b.currencyMode === "SAR_TO_EGP")?.id ?? ""] ?? 0);
+    const totalRevenueEGP = businesses
+      .filter(b => b.currencyMode === "EGP_DIRECT")
+      .reduce((s, b) => s + (perBusinessRevenue[b.id] ?? 0), 0);
     const totalRevenue = totalRevenueSAR + totalRevenueEGP;
     const totalExpenses = Number(expenseResult._sum.cost ?? 0);
 
@@ -100,6 +99,7 @@ export async function GET() {
         totalExpenses,
         totalClients,
         totalProjects,
+        perBusinessRevenue,
       },
       officeTreasury,
       userPermissions: {

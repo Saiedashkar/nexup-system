@@ -33,6 +33,7 @@ export default function AbomazenFinancePage() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const totalExpenses = useMemo(() => expenses.reduce((s, e) => s + Number(e.cost), 0), [expenses]);
+  const availableBalance = poolBalance - totalExpenses;
   const netProfit = poolTotalIn - totalExpenses;
   const toggle = (k: string) => setCollapsed(p => ({ ...p, [k]: !p[k] }));
 
@@ -69,7 +70,7 @@ export default function AbomazenFinancePage() {
       {/* Balance Bar */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 24 }}>
         {[
-          { label: "💰 الرصيد المتاح", value: poolBalance, color: "#f59e0b", bg: "rgba(245,158,11,0.1)", border: "rgba(245,158,11,0.2)" },
+          { label: "💰 الرصيد المتاح", value: availableBalance, color: availableBalance >= 0 ? "#10b981" : "#ef4444", bg: availableBalance >= 0 ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)", border: availableBalance >= 0 ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.2)" },
           { label: "📈 إجمالي الدخل", value: poolTotalIn, color: "#10b981", bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.2)" },
           { label: "📉 صافي الربح", value: netProfit, color: netProfit >= 0 ? "#10b981" : "#ef4444", bg: netProfit >= 0 ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)", border: netProfit >= 0 ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.2)" },
         ].map(s => (
@@ -102,7 +103,7 @@ export default function AbomazenFinancePage() {
             {[
               { label: "إجمالي المحصّل", value: poolTotalIn, color: "#10b981" },
               { label: "عدد المعاملات", value: poolTx.filter(t => t.type === "IN").length, color: "#8b5cf6" },
-              { label: "الرصيد الحالي", value: poolBalance, color: "#f59e0b" },
+              { label: "الرصيد الحالي", value: availableBalance, color: availableBalance >= 0 ? "#10b981" : "#ef4444" },
             ].map(s => (
               <div key={s.label} style={{ padding: "16px", borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)", textAlign: "center" }}>
                 <div style={{ fontSize: 22, fontWeight: 800, color: s.color, direction: "ltr" }}>{fmt(s.value)} {s.label !== "عدد المعاملات" ? <span style={{ fontSize: 12 }}>EGP</span> : ""}</div>

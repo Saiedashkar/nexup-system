@@ -130,6 +130,7 @@ export default function ReboundFinancePage() {
 
   /* ── Computed ── */
   const totalExpenses = useMemo(() => expenses.reduce((s, e) => s + Number(e.cost), 0), [expenses]);
+  const availableBalance = poolBalance - totalExpenses;
   const netProfit = poolTotalIn - totalExpenses;
 
   const toggle = (k: string) => setCollapsed(p => ({ ...p, [k]: !p[k] }));
@@ -215,7 +216,7 @@ export default function ReboundFinancePage() {
               </div>
             </div>
             <div style={{ fontSize: 32, fontWeight: 900, color: "#fff", direction: "ltr", lineHeight: 1, letterSpacing: "-0.02em" }}>
-              {fmt(poolBalance)} <span style={{ fontSize: 14, fontWeight: 600 }}>EGP</span>
+              {fmt(availableBalance)} <span style={{ fontSize: 14, fontWeight: 600 }}>EGP</span>
             </div>
           </div>
         </div>

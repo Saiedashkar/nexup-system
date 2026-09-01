@@ -997,11 +997,6 @@ a { color: inherit; text-decoration: none; }
     min-height: 40px;
     font-size: 13px;
   }
-
-  /* Hide desktop table on mobile */
-  .table-container {
-    display: none !important;
-  }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1015,7 +1010,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 @media (max-width: 768px) {
-  .mobile-sheet-backdrop {
+  .mobile-sheet-backdrop.is-open {
     display: block;
     position: fixed;
     inset: 0;
@@ -1025,7 +1020,7 @@ a { color: inherit; text-decoration: none; }
     animation: fadeIn 0.2s ease;
   }
 
-  .mobile-sheet {
+  .mobile-sheet.is-open {
     display: block;
     position: fixed;
     bottom: 0;

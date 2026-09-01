@@ -1,5 +1,15 @@
 import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
+
+/* Self-host Inter via next/font — eliminates render-blocking Google Fonts CSS,
+   provides automatic font-display:swap, and reduces DNS+TLS overhead. */
+const inter = Inter({
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   title: "Nexup | النظام الإداري",
@@ -20,7 +30,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ar" dir="rtl" suppressHydrationWarning>
+    <html lang="ar" dir="rtl" suppressHydrationWarning className={inter.variable}>
       <head>
         {/* Prevent white flash: set dark theme before any CSS paints */}
         <script
@@ -34,22 +44,21 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           }}
         />
 
-        {/* Preconnect to Google Fonts */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-
-        {/* Preload critical font - Inter with Arabic subset */}
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-          rel="stylesheet"
-        />
-
         {/* Favicon */}
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
-        {/* DNS prefetch for external resources */}
-        <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+        {/* Speculation Rules: prefetch likely next navigations on hover */}
+        <script
+          type="speculationrules"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              prefetch: [
+                { source: "document", where: { href_matches: "/office/*" }, eagerness: "moderate" },
+              ],
+            }),
+          }}
+        />
       </head>
       <body suppressHydrationWarning>{children}</body>
     </html>

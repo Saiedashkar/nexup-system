@@ -1,5 +1,3 @@
-@import "tailwindcss";
-
 /* ═══════════════════════════════════════════════════════
    Nexup Design System — Light & Dark Theme
    ═══════════════════════════════════════════════════════ */
@@ -110,7 +108,7 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-inter, 'Inter'), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   /* Optimize layout containment */
@@ -1177,5 +1175,5 @@ html {
    ═══════════════════════════════════════════════════════ */
 /* Use system fonts as fallback to reduce font loading */
 body {
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-inter, 'Inter'), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }

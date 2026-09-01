@@ -44,15 +44,32 @@ export async function GET() {
       }),
     ]);
 
-    // Per-business revenue (pool IN transactions)
+    // Per-business revenue and balance (pool IN - OUT)
     const perBusinessRevenue: Record<string, number> = {};
+    const perBusinessBalance: Record<string, number> = {};
     const revenueAggByBiz = await prisma.poolTransaction.groupBy({
-      by: ["businessId"],
-      where: { type: "IN", businessId: { in: allBizIds } },
+      by: ["businessId", "type"],
+      where: { businessId: { in: allBizIds } },
       _sum: { amountSAR: true },
     });
     for (const row of revenueAggByBiz) {
-      perBusinessRevenue[row.businessId] = Number(row._sum.amountSAR ?? 0);
+      const amt = Number(row._sum.amountSAR ?? 0);
+      if (row.type === "IN") {
+        perBusinessRevenue[row.businessId] = (perBusinessRevenue[row.businessId] || 0) + amt;
+        perBusinessBalance[row.businessId] = (perBusinessBalance[row.businessId] || 0) + amt;
+      } else {
+        perBusinessBalance[row.businessId] = (perBusinessBalance[row.businessId] || 0) - amt;
+      }
+    }
+
+    // Deduct expenses from balance for EGP businesses
+    const expByBiz = await prisma.expense.groupBy({
+      by: ["businessId"],
+      where: { businessId: { in: allBizIds } },
+      _sum: { cost: true },
+    });
+    for (const row of expByBiz) {
+      perBusinessBalance[row.businessId] = (perBusinessBalance[row.businessId] || 0) - Number(row._sum.cost ?? 0);
     }
 
     const totalRevenueSAR = Number(perBusinessRevenue[businesses.find(b => b.currencyMode === "SAR_TO_EGP")?.id ?? ""] ?? 0);
@@ -100,6 +117,7 @@ export async function GET() {
         totalClients,
         totalProjects,
         perBusinessRevenue,
+        perBusinessBalance,
       },
       officeTreasury,
       userPermissions: {

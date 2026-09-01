@@ -95,6 +95,13 @@ export async function GET() {
     });
   }
 
+  // Recent expenses and profit transfers
+  const [recentExpenses, expenseByCategory, recentTransfers] = await Promise.all([
+    prisma.expense.findMany({ where: { businessId: biz.id }, orderBy: { date: "desc" }, take: 5, select: { id: true, description: true, cost: true, category: true, name: true, date: true } }),
+    prisma.expense.groupBy({ by: ["category"], where: { businessId: biz.id }, _sum: { cost: true }, _count: { id: true } }),
+    prisma.profitTransfer.findMany({ where: { businessId: biz.id }, orderBy: { date: "desc" }, take: 5, select: { id: true, amount: true, date: true, note: true } }),
+  ]);
+
   return NextResponse.json({
     availableBalance,
     totalDealsThisMonth: dealsThisMonth,
@@ -102,8 +109,12 @@ export async function GET() {
     totalDeals,
     totalRevenue,
     totalExpenses,
+    totalTransferred: totalTransferredVal,
     totalProperties,
     recentDeals: recentDealsFormatted,
     monthlyRevenue,
+    recentExpenses,
+    expenseByCategory: expenseByCategory.map(c => ({ category: c.category, total: Number(c._sum.cost ?? 0), count: c._count.id })),
+    recentTransfers,
   });
 }

@@ -111,6 +111,13 @@ export async function GET() {
     text: `${p.client?.name || "—"} — ${p.projectName} (${p.workStatus})`,
   }));
 
+  // Recent expenses and profit transfers
+  const [recentExpenses, expenseByCategory, recentTransfers] = await Promise.all([
+    prisma.expense.findMany({ where: { businessId: rebound.id }, orderBy: { date: "desc" }, take: 5, select: { id: true, description: true, cost: true, category: true, name: true, date: true } }),
+    prisma.expense.groupBy({ by: ["category"], where: { businessId: rebound.id }, _sum: { cost: true }, _count: { id: true } }),
+    prisma.profitTransfer.findMany({ where: { businessId: rebound.id }, orderBy: { date: "desc" }, take: 5, select: { id: true, amount: true, date: true, note: true } }),
+  ]);
+
   return NextResponse.json({
     poolBalance,
     mrr,
@@ -130,5 +137,8 @@ export async function GET() {
     collectionRate,
     activeSubscriptions,
     totalSubscriptions,
+    recentExpenses,
+    expenseByCategory: expenseByCategory.map(c => ({ category: c.category, total: Number(c._sum.cost ?? 0), count: c._count.id })),
+    recentTransfers,
   });
 }

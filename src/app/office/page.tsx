@@ -20,6 +20,7 @@ type OfficeStats = {
   totalClients: number;
   totalProjects: number;
   perBusinessRevenue: Record<string, number>;
+  perBusinessBalance: Record<string, number>;
 };
 
 type OfficeTreasury = {
@@ -332,6 +333,15 @@ export default function OfficePage() {
 
                           {/* Stats Body */}
                           <div style={{ padding: "24px 28px 28px" }}>
+                            {/* Available Balance */}
+                            {stats && (
+                              <div style={{ padding: "14px 18px", borderRadius: 12, background: `${config.color}10`, border: `1px solid ${config.color}25`, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>💰 الرصيد المتاح</span>
+                                <span style={{ fontSize: 20, fontWeight: 800, color: config.color, direction: "ltr" }}>
+                                  {formatNum(stats.perBusinessBalance?.[biz.id] ?? 0)} <span style={{ fontSize: 11, fontWeight: 600 }}>{biz.currencyMode === "SAR_TO_EGP" ? "SAR" : "EGP"}</span>
+                                </span>
+                              </div>
+                            )}
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
                               {[
                                 { labelAr: "العملاء", value: biz._count.clients, color: "#8b5cf6" },

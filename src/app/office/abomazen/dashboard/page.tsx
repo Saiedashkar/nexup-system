@@ -10,8 +10,12 @@ type DashboardData = {
   totalDeals: number;
   totalRevenue: number;
   totalExpenses: number;
+  totalTransferred: number;
   recentDeals: { id: string; dealType: string; date: string; abomazenNetAmount: number; propertyName: string }[];
   monthlyRevenue: { month: string; revenue: number; deals: number }[];
+  recentExpenses: { id: string; description: string; cost: number; category: string; name: string; date: string }[];
+  expenseByCategory: { category: string; total: number; count: number }[];
+  recentTransfers: { id: string; amount: number; date: string; note: string | null }[];
 };
 
 function fmt(n: number) { return n.toLocaleString("en-US"); }
@@ -193,6 +197,52 @@ export default function AbomazenDashboard() {
           </div>
           <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 500 }}>
             جاهزة للعرض والتسويق
+          </div>
+        </div>
+      </div>
+
+      {/* Financial Details Row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 24 }}>
+        {/* Expenses Summary */}
+        <div style={{ padding: "20px 24px", borderRadius: 14, background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 10 }}>🧾 المصروفات</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "#ef4444", direction: "ltr", marginBottom: 10 }}>{fmt(data.totalExpenses)} <span style={{ fontSize: 11 }}>EGP</span></div>
+          {data.expenseByCategory?.length > 0 && data.expenseByCategory.map(c => (
+            <div key={c.category} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "4px 0" }}>
+              <span style={{ color: "var(--muted)" }}>{c.category === "FIXED" ? "📌 ثابتة" : "🔄 متغيرة"}</span>
+              <span style={{ fontWeight: 700, direction: "ltr" }}>{fmt(c.total)} EGP <span style={{ color: "var(--muted)", fontSize: 9 }}>({c.count})</span></span>
+            </div>
+          ))}
+          {data.recentExpenses?.slice(0, 2).map(e => (
+            <div key={e.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "3px 0", borderTop: "1px solid var(--border)", marginTop: 4 }}>
+              <span style={{ color: "var(--muted)" }}>{e.name}</span>
+              <span style={{ fontWeight: 700, color: "#ef4444", direction: "ltr" }}>{fmt(e.cost)} EGP</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Transfers to Office */}
+        <div style={{ padding: "20px 24px", borderRadius: 14, background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 10 }}>🏦 المحول للمكتب</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "#8b5cf6", direction: "ltr", marginBottom: 10 }}>{fmt(data.totalTransferred || 0)} <span style={{ fontSize: 11 }}>EGP</span></div>
+          {data.recentTransfers?.length > 0 ? data.recentTransfers.slice(0, 3).map(t => (
+            <div key={t.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "4px 0" }}>
+              <span style={{ color: "var(--muted)", direction: "ltr" }}>{new Date(t.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
+              <span style={{ fontWeight: 700, color: "#8b5cf6", direction: "ltr" }}>{fmt(t.amount)} EGP</span>
+            </div>
+          )) : <div style={{ fontSize: 11, color: "var(--muted)", textAlign: "center", padding: 8 }}>لا توجد تحويلات</div>}
+        </div>
+
+        {/* Net Balance Breakdown */}
+        <div style={{ padding: "20px 24px", borderRadius: 14, background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 10 }}>💰 تفصيل الرصيد</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}><span style={{ color: "var(--muted)" }}>الدخل الكلي (صفقات)</span><span style={{ fontWeight: 700, color: "#10b981", direction: "ltr" }}>+{fmt(data.totalRevenue)} EGP</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}><span style={{ color: "var(--muted)" }}>المصروفات</span><span style={{ fontWeight: 700, color: "#ef4444", direction: "ltr" }}>-{fmt(data.totalExpenses)} EGP</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}><span style={{ color: "var(--muted)" }}>المحول للمكتب</span><span style={{ fontWeight: 700, color: "#8b5cf6", direction: "ltr" }}>-{fmt(data.totalTransferred || 0)} EGP</span></div>
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: 6, marginTop: 4 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 800 }}><span style={{ color: "var(--text)" }}>الرصيد المتاح</span><span style={{ color: data.availableBalance >= 0 ? "#10b981" : "#ef4444", direction: "ltr" }}>{fmt(data.availableBalance)} EGP</span></div>
+            </div>
           </div>
         </div>
       </div>

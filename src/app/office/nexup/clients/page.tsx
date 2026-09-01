@@ -691,7 +691,7 @@ export default function NexupClientsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setSubmitting(true); setError("");
     try {
-      const r = await fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" },
+      const r = await fetch("/api/nexup/projects", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ clientId: clientSuggestion?.id, clientPhone: form.clientPhone, clientName: form.clientName, projectName: form.projectName, date: form.date, customServiceText: form.customServiceText || undefined, totalPrice: parseFloat(form.totalPrice), deposit: parseFloat(form.deposit || "0"), workStatus: form.workStatus, designerId: form.designerId || undefined, designerName: form.designerName || undefined, serviceIds: form.serviceIds, notes: form.notes || undefined }) });
       if (!r.ok) { const d = await r.json(); throw new Error(d.error || "Failed"); }
       setShowForm(false); resetForm(); fetchProjects();

@@ -168,36 +168,33 @@ export default function OfficePage() {
               </div>
             )}
 
-            {/* ═══ Non-super-admin: compact stat summary ═══ */}
+            {/* ═══ Non-super-admin: per-business stat cards (only their businesses) ═══ */}
             {!perms?.isSuperAdmin && stats && (
-              <div style={{ display: "grid", gridTemplateColumns: accessibleSystems <= 2 ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: 16, marginBottom: 28 }}>
-                <div style={{ padding: "20px 24px", borderRadius: 16, background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 14 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(16,185,129,0.12)", color: "#10b981", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={20} height={20}><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
+              <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(accessibleSystems + 2, 5)}, 1fr)`, gap: 14, marginBottom: 28 }}>
+                {[
+                  ...businesses.map(b => {
+                    const revenue = stats.perBusinessRevenue?.[b.id] ?? 0;
+                    const cfg = BUSINESS_CONFIG[b.slug];
+                    return {
+                      label: `إيرادات ${b.name}`,
+                      value: b.currencyMode === "SAR_TO_EGP" ? `${formatNum(revenue)} SAR` : `${formatNum(revenue)} EGP`,
+                      color: cfg?.color || "#6b7280",
+                      bg: (cfg?.color || "#6b7280") + "14",
+                    };
+                  }),
+                  { label: "إجمالي المشاريع", value: String(stats.totalProjects), color: "#3b82f6", bg: "rgba(59,130,246,0.12)" },
+                  { label: "إجمالي العملاء", value: String(stats.totalClients), color: "#8b5cf6", bg: "rgba(139,92,246,0.12)" },
+                ].map((s) => (
+                  <div key={s.label} style={{ padding: "18px 16px", borderRadius: 14, background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 12, background: s.bg, color: s.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={18} height={18}><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text)", direction: "ltr" }}>{s.value}</div>
+                      <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>{s.label}</div>
+                    </div>
                   </div>
-                  <div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", direction: "ltr" }}>{formatNum(stats.totalRevenue)} SAR</div>
-                    <div style={{ fontSize: 12, color: "var(--muted)" }}>إجمالي الإيرادات</div>
-                  </div>
-                </div>
-                <div style={{ padding: "20px 24px", borderRadius: 16, background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 14 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(59,130,246,0.12)", color: "#3b82f6", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={20} height={20}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text)" }}>{stats.totalProjects}</div>
-                    <div style={{ fontSize: 12, color: "var(--muted)" }}>إجمالي المشاريع</div>
-                  </div>
-                </div>
-                <div style={{ padding: "20px 24px", borderRadius: 16, background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 14 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(139,92,246,0.12)", color: "#8b5cf6", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={20} height={20}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" /></svg>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text)" }}>{stats.totalClients}</div>
-                    <div style={{ fontSize: 12, color: "var(--muted)" }}>إجمالي العملاء</div>
-                  </div>
-                </div>
+                ))}
               </div>
             )}
 

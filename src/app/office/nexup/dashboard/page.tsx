@@ -21,6 +21,13 @@ type DashboardData = {
   mrr: number;
   activeSubscriptions: number;
   totalSubscriptions: number;
+  totalExpensesEGP: number;
+  totalWithdrawnEGP: number;
+  totalProfitDistributed: number;
+  recentExpenses: { id: string; description: string; cost: number; category: string; name: string; date: string }[];
+  expenseByCategory: { category: string; total: number; count: number }[];
+  recentWithdrawals: { id: string; amountSAR: number; exchangeRate: number; commissionPct: number; netEGP: number; date: string }[];
+  recentProfitDistributions: { id: string; amount: number; date: string; note: string | null; partner: { name: string } }[];
 };
 
 function fmt(n: number | undefined | null) {
@@ -234,7 +241,92 @@ export default function NexupDashboard() {
         </div>
       </div>
 
-      {/* ═══ Row 4: Top Clients + Recent Activity ═══ */}
+      {/* ═══ Row 4: Financial Summary ═══ */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 16 }}>
+        {/* Expenses Summary */}
+        <div style={{ padding: "20px 24px", borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>🧾 المصروفات · Expenses</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#ef4444", direction: "ltr", marginBottom: 12 }}>{fmt(data.totalExpensesEGP)} <span style={{ fontSize: 12 }}>EGP</span></div>
+          {data.expenseByCategory.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {data.expenseByCategory.map(c => (
+                <div key={c.category} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", borderRadius: 6, background: "var(--surface-hover)" }}>
+                  <span style={{ fontSize: 11, color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: c.category === "FIXED" ? "#f59e0b" : "#3b82f6" }} />
+                    {c.category === "FIXED" ? "ثابتة" : "متغيرة"}
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", direction: "ltr" }}>{fmt(c.total)} EGP <span style={{ fontSize: 9, color: "var(--muted)", fontWeight: 500 }}>({c.count})</span></span>
+                </div>
+              ))}
+            </div>
+          )}
+          {data.recentExpenses.length > 0 && (
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, marginBottom: 6 }}>آخر المصروفات</div>
+              {data.recentExpenses.slice(0, 3).map(e => (
+                <div key={e.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "3px 0" }}>
+                  <span style={{ color: "var(--muted)" }}>{e.name} — {e.description}</span>
+                  <span style={{ fontWeight: 700, color: "#ef4444", direction: "ltr" }}>{fmt(e.cost)} EGP</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Withdrawals Summary */}
+        <div style={{ padding: "20px 24px", borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>💱 التحويلات · Withdrawals</div>
+          <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 10, color: "var(--muted)" }}>محوّل للمصري</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#3b82f6", direction: "ltr" }}>{fmt(data.totalWithdrawnEGP)} <span style={{ fontSize: 10 }}>EGP</span></div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: "var(--muted)" }}>محوّل للمكتب</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#8b5cf6", direction: "ltr" }}>{fmt(data.totalProfitTransferred)} <span style={{ fontSize: 10 }}>EGP</span></div>
+            </div>
+          </div>
+          {data.recentWithdrawals.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, marginBottom: 6 }}>آخر التحويلات</div>
+              {data.recentWithdrawals.slice(0, 3).map(w => (
+                <div key={w.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "3px 0" }}>
+                  <span style={{ color: "var(--muted)", direction: "ltr" }}>{new Date(w.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })} — {fmt(w.amountSAR)} SAR</span>
+                  <span style={{ fontWeight: 700, color: "#0d9488", direction: "ltr" }}>{fmt(w.netEGP)} EGP</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Profit Distribution */}
+        <div style={{ padding: "20px 24px", borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>🤝 توزيع الأرباح · Profit Distribution</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#8b5cf6", direction: "ltr", marginBottom: 12 }}>{fmt(data.totalProfitDistributed)} <span style={{ fontSize: 12 }}>EGP</span></div>
+          {data.recentProfitDistributions.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {data.recentProfitDistributions.map(p => (
+                <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", borderRadius: 6, background: "var(--surface-hover)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ width: 24, height: 24, borderRadius: 6, background: "#8b5cf6", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 9, fontWeight: 700 }}>{p.partner.name.charAt(0)}</div>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text)" }}>{p.partner.name}</span>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#8b5cf6", direction: "ltr" }}>{fmt(p.amount)} EGP</div>
+                    <div style={{ fontSize: 9, color: "var(--muted)", direction: "ltr" }}>{new Date(p.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ textAlign: "center", padding: 12 }}>
+              <div style={{ fontSize: 11, color: "var(--muted)" }}>لا توجد توزيعات بعد</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ═══ Row 5: Top Clients + Recent Activity ═══ */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         {/* Top Clients */}
         <div style={{ padding: "20px 24px", borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--card-shadow)" }}>

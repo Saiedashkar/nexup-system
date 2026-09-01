@@ -43,6 +43,10 @@ export async function GET() {
     workStatusCounts,
     monthlyRevenueAgg,
     topClientsRaw,
+    recentExpenses,
+    expenseByCategory,
+    recentWithdrawals,
+    recentProfitDistributions,
   ] = await Promise.all([
     prisma.client.count({ where: { businessId: nexup.id } }),
     prisma.projectRecord.count({ where: { businessId: nexup.id } }),
@@ -94,6 +98,14 @@ export async function GET() {
       ORDER BY "totalPaid" DESC
       LIMIT 5
     `,
+    // Recent expenses (last 5)
+    prisma.expense.findMany({ where: { businessId: nexup.id }, orderBy: { date: "desc" }, take: 5, select: { id: true, description: true, cost: true, category: true, name: true, date: true } }),
+    // Expense by category
+    prisma.expense.groupBy({ by: ["category"], where: { businessId: nexup.id }, _sum: { cost: true }, _count: { id: true } }),
+    // Recent withdrawals (last 5)
+    prisma.withdrawal.findMany({ where: { businessId: nexup.id }, orderBy: { date: "desc" }, take: 5, select: { id: true, amountSAR: true, exchangeRate: true, commissionPct: true, netEGP: true, date: true } }),
+    // Recent profit distributions (last 5)
+    prisma.nexupProfitLedger.findMany({ orderBy: { date: "desc" }, take: 5, select: { id: true, amount: true, date: true, note: true, partner: { select: { name: true } } } }),
   ]);
 
   // Compute derived values
@@ -163,5 +175,12 @@ export async function GET() {
     activeSubscriptions,
     totalSubscriptions,
     collectionRate,
+    totalExpensesEGP,
+    totalWithdrawnEGP,
+    totalProfitDistributed,
+    recentExpenses,
+    expenseByCategory: expenseByCategory.map(c => ({ category: c.category, total: Number(c._sum.cost ?? 0), count: c._count.id })),
+    recentWithdrawals,
+    recentProfitDistributions,
   });
 }

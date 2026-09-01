@@ -33,20 +33,34 @@ export async function GET() {
     const businesses = allBusinesses.filter(b => accessibleSlugs.includes(b.slug));
 
     // Aggregate stats ONLY for accessible businesses
-    const [totalClients, totalProjects, revenueResult, expenseResult] = await Promise.all([
+    // Separate SAR (NEXUP) and EGP (REBOUND, ABOMAZEN) currencies
+    const sarBusinessIds = businesses.filter(b => b.currencyMode === "SAR_TO_EGP").map(b => b.id);
+    const egpBusinessIds = businesses.filter(b => b.currencyMode === "EGP_DIRECT").map(b => b.id);
+
+    const [totalClients, totalProjects, sarRevenueResult, egpRevenueResult, expenseResult] = await Promise.all([
       prisma.client.count({ where: { businessId: { in: businesses.map(b => b.id) } } }),
       prisma.projectRecord.count({ where: { businessId: { in: businesses.map(b => b.id) } } }),
-      prisma.poolTransaction.aggregate({
-        where: { type: "IN", businessId: { in: businesses.map(b => b.id) } },
-        _sum: { amountSAR: true },
-      }),
+      sarBusinessIds.length > 0
+        ? prisma.poolTransaction.aggregate({
+            where: { type: "IN", businessId: { in: sarBusinessIds } },
+            _sum: { amountSAR: true },
+          })
+        : Promise.resolve({ _sum: { amountSAR: null } }),
+      egpBusinessIds.length > 0
+        ? prisma.poolTransaction.aggregate({
+            where: { type: "IN", businessId: { in: egpBusinessIds } },
+            _sum: { amountSAR: true },
+          })
+        : Promise.resolve({ _sum: { amountSAR: null } }),
       prisma.expense.aggregate({
         where: { businessId: { in: businesses.map(b => b.id) } },
         _sum: { cost: true },
       }),
     ]);
 
-    const totalRevenue = Number(revenueResult._sum.amountSAR ?? 0);
+    const totalRevenueSAR = Number(sarRevenueResult._sum.amountSAR ?? 0);
+    const totalRevenueEGP = Number(egpRevenueResult._sum.amountSAR ?? 0);
+    const totalRevenue = totalRevenueSAR + totalRevenueEGP;
     const totalExpenses = Number(expenseResult._sum.cost ?? 0);
 
     // Office treasury balance (only for super admin or office finance access)
@@ -81,6 +95,8 @@ export async function GET() {
       businesses,
       stats: {
         totalRevenue,
+        totalRevenueSAR,
+        totalRevenueEGP,
         totalExpenses,
         totalClients,
         totalProjects,

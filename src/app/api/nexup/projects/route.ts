@@ -71,3 +71,108 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(enriched);
 }
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getCurrentSession();
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (session.role === "EMPLOYEE") return NextResponse.json({ error: "Access denied" }, { status: 403 });
+
+    const nexup = await prisma.business.findUnique({ where: { slug: "nexup" } });
+    if (!nexup) return NextResponse.json({ error: "NEXUP not found" }, { status: 404 });
+
+    const body = await request.json();
+    const {
+      clientId,
+      clientPhone,
+      clientName,
+      projectName,
+      date,
+      customServiceText,
+      totalPrice,
+      deposit,
+      workStatus,
+      designerId,
+      designerName,
+      serviceIds,
+      notes,
+    } = body;
+
+    if (!clientPhone || !clientName || !projectName || !date || !totalPrice) {
+      return NextResponse.json({ error: "Please fill all required fields" }, { status: 400 });
+    }
+
+    // Find or create client
+    let client = clientId
+      ? await prisma.client.findUnique({ where: { id: clientId } })
+      : await prisma.client.findUnique({ where: { businessId_phone: { businessId: nexup.id, phone: clientPhone } } });
+
+    if (!client) {
+      client = await prisma.client.create({
+        data: { businessId: nexup.id, phone: clientPhone, name: clientName, tier: "NORMAL" },
+      });
+    } else if (client.name !== clientName) {
+      client = await prisma.client.update({
+        where: { id: client.id },
+        data: { name: clientName },
+      });
+    }
+
+    const total = parseFloat(String(totalPrice));
+    const dep = parseFloat(String(deposit || 0));
+    const remaining = total - dep;
+
+    const project = await prisma.projectRecord.create({
+      data: {
+        businessId: nexup.id,
+        clientId: client.id,
+        projectName,
+        date: new Date(date),
+        customServiceText: customServiceText || null,
+        totalPrice: total,
+        deposit: dep,
+        remaining,
+        workStatus: workStatus || "WAITING",
+        paymentStatus: dep >= total ? "FULL" : dep > 0 ? "PARTIAL" : "UNPAID",
+        designerId: designerId || null,
+        designerName: designerName || null,
+        notes: notes || null,
+        services: serviceIds?.length ? { connect: serviceIds.map((id: string) => ({ id })) } : undefined,
+      },
+      include: {
+        client: { select: { id: true, name: true, phone: true, tier: true } },
+        designer: { select: { id: true, name: true } },
+        services: { select: { id: true, name: true } },
+      },
+    });
+
+    // AUTO: Create IN transaction when deposit > 0
+    if (dep > 0) {
+      await prisma.poolTransaction.create({
+        data: {
+          businessId: nexup.id,
+          projectRecordId: project.id,
+          amountSAR: dep,
+          type: "IN",
+          date: new Date(date),
+          note: `Deposit — ${clientName} — ${projectName}`,
+        },
+      });
+    }
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: session.userId,
+        action: "CREATE",
+        entityType: "ProjectRecord",
+        entityId: project.id,
+      },
+    });
+
+    return NextResponse.json(project, { status: 201 });
+  } catch (error) {
+    console.error("Failed to create NEXUP project:", error);
+    return NextResponse.json({ error: "Failed to create record" }, { status: 500 });
+  }
+}

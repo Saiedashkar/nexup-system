@@ -14,6 +14,8 @@ type Business = {
 
 type OfficeStats = {
   totalRevenue: number;
+  totalRevenueSAR: number;
+  totalRevenueEGP: number;
   totalExpenses: number;
   totalClients: number;
   totalProjects: number;
@@ -124,11 +126,12 @@ export default function OfficePage() {
           <>
             {/* ═══ Stat Cards — only for super admin or if multiple systems ═══ */}
             {perms?.isSuperAdmin && stats && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 28 }}>
                 {[
                   { label: "إجمالي العملاء", value: String(stats.totalClients), color: "#8b5cf6", bg: "rgba(139,92,246,0.12)", icon: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" },
                   { label: "إجمالي المشاريع", value: String(stats.totalProjects), color: "#3b82f6", bg: "rgba(59,130,246,0.12)", icon: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" },
-                  { label: "إجمالي الإيرادات", value: `${formatNum(stats.totalRevenue)} SAR`, color: "#10b981", bg: "rgba(16,185,129,0.12)", icon: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
+                  { label: "إيرادات NEXUP", value: `${formatNum(stats.totalRevenueSAR)} SAR`, color: "#10b981", bg: "rgba(16,185,129,0.12)", icon: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
+                  { label: "إيرادات REBOUND+ABOMAZEN", value: `${formatNum(stats.totalRevenueEGP)} EGP`, color: "#14b8a6", bg: "rgba(20,184,166,0.12)", icon: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
                   { label: "إجمالي المصروفات", value: `${formatNum(stats.totalExpenses)} EGP`, color: "#ef4444", bg: "rgba(239,68,68,0.12)", icon: "M9 5H2v7l6.29 6.29c.94.94 2.48.94 3.42 0l3.58-3.58c.94-.94.94-2.48 0-3.42L9 5z" },
                 ].map((s) => (
                   <div key={s.label} style={{

@@ -27,7 +27,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       .then(r => r.json())
       .then(d => {
         if (d.officeTreasury) {
-          const totalRevenue = d.officeTreasury.cashCapital + d.officeTreasury.profitTransfers;
+          // Revenue = profit transfers only (actual income from businesses)
+          // Capital contributions are NOT revenue — they're separate
+          const totalRevenue = d.officeTreasury.profitTransfers || 0;
           const totalExpenses = d.allTime?.totalExpenses || 0;
           // Monthly data (current month)
           const now = new Date();

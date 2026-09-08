@@ -164,7 +164,16 @@ export async function DELETE(
       where: { projectRecordId: id },
     });
 
+    const clientId = existing.clientId;
     await prisma.projectRecord.delete({ where: { id } });
+
+    // Auto-delete orphaned client (no projects remaining)
+    const remainingProjects = await prisma.projectRecord.count({ where: { clientId } });
+    if (remainingProjects === 0) {
+      // Clean up any subscriptions first
+      await prisma.subscription.deleteMany({ where: { clientId } });
+      await prisma.client.delete({ where: { id: clientId } });
+    }
 
     await prisma.activityLog.create({
       data: {

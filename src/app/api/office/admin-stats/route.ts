@@ -35,7 +35,8 @@ export async function GET() {
   // Capital contributions
   const capital = await prisma.capitalContribution.findMany({ include: { partner: true } });
   const totalCapital = capital.reduce((s, c) => s + c.amount, 0);
-  const cashCapital = capital.filter(c => c.type === "CASH").reduce((s, c) => s + c.amount, 0);
+  // Only STILL_IN_TREASURY cash contributions count as real money in the treasury
+  const cashCapital = capital.filter(c => c.type === "CASH" && c.fundFlow === "STILL_IN_TREASURY").reduce((s, c) => s + c.amount, 0);
   const assetCapital = capital.filter(c => c.type === "ASSET").reduce((s, c) => s + c.amount, 0);
 
   // Profit transfers
@@ -141,7 +142,7 @@ export async function GET() {
     expenseTrend: Math.round(expenseTrend * 10) / 10,
     allTime: { totalExpenses: totalAllExpenses, totalCapital, expenseCount: allExpenses.length },
     expenseBreakdown: { fixed: fixedExpenses, variable: variableExpenses },
-    capitalBreakdown: { cash: cashCapital, asset: assetCapital },
+    capitalBreakdown: { cash: cashCapital, asset: assetCapital, totalHistorical: totalCapital },
     officeTreasury: {
       balance: officeTreasuryBalance,
       cashCapital,

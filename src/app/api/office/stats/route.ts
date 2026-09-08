@@ -12,6 +12,18 @@ export async function GET() {
     const superAdmin = isSuperAdmin(session);
 
     // Filter businesses by what the user can access
+    // Auto-cleanup orphaned clients (clients with no projects)
+    try {
+      const orphanedClients = await prisma.client.findMany({
+        include: { _count: { select: { projectRecords: true } } },
+      });
+      const orphaned = orphanedClients.filter(c => c._count.projectRecords === 0);
+      for (const c of orphaned) {
+        await prisma.subscription.deleteMany({ where: { clientId: c.id } });
+        await prisma.client.delete({ where: { id: c.id } });
+      }
+    } catch { /* ignore cleanup errors */ }
+
     const allBusinesses = await prisma.business.findMany({
       include: {
         _count: {

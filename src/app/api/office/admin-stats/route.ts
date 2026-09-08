@@ -33,11 +33,26 @@ export async function GET() {
   const variableExpenses = allExpenses.filter(e => e.category === "VARIABLE").reduce((s, e) => s + e.cost, 0);
 
   // Capital contributions
-  const capital = await prisma.capitalContribution.findMany({ include: { partner: true } });
-  const totalCapital = capital.reduce((s, c) => s + c.amount, 0);
-  // Only STILL_IN_TREASURY cash contributions count as real money in the treasury
-  const cashCapital = capital.filter(c => c.type === "CASH" && c.fundFlow === "STILL_IN_TREASURY").reduce((s, c) => s + c.amount, 0);
-  const assetCapital = capital.filter(c => c.type === "ASSET").reduce((s, c) => s + c.amount, 0);
+  let capital: any[] = [];
+  let totalCapital = 0;
+  let cashCapital = 0;
+  let assetCapital = 0;
+  try {
+    capital = await prisma.capitalContribution.findMany({ include: { partner: true } });
+    totalCapital = capital.reduce((s, c) => s + c.amount, 0);
+    // Only STILL_IN_TREASURY cash contributions count as real money in the treasury
+    cashCapital = capital.filter((c: any) => c.type === "CASH" && c.fundFlow === "STILL_IN_TREASURY").reduce((s: number, c: any) => s + c.amount, 0);
+    assetCapital = capital.filter((c: any) => c.type === "ASSET").reduce((s: number, c: any) => s + c.amount, 0);
+  } catch (e) {
+    console.error("Capital query failed (fundFlow column may not exist):", e);
+    // Fallback: treat all CASH contributions as historical (no fundFlow column)
+    try {
+      capital = await prisma.capitalContribution.findMany();
+      totalCapital = capital.reduce((s: number, c: any) => s + c.amount, 0);
+      cashCapital = capital.filter((c: any) => c.type === "CASH").reduce((s: number, c: any) => s + c.amount, 0);
+      assetCapital = capital.filter((c: any) => c.type === "ASSET").reduce((s: number, c: any) => s + c.amount, 0);
+    } catch { /* last resort */ }
+  }
 
   // Profit transfers
   const profitTransfers = await prisma.profitTransfer.findMany();

@@ -26,6 +26,7 @@ type OfficeStats = {
 type OfficeTreasury = {
   balance: number;
   cashCapital: number;
+  totalCashCapitalAll?: number;
   profitTransfers: number;
   officeExpenses: number;
 };
@@ -261,7 +262,7 @@ export default function OfficePage() {
                       <div style={{ display: "flex", gap: 20, marginTop: 20, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
                         {[
                           { label: "رصيد الخزينة", value: `${formatNum(treasury.balance)} EGP`, color: treasury.balance >= 0 ? "#10b981" : "#ef4444" },
-                          { label: "رأس المال", value: `${formatNum(treasury.cashCapital)} EGP`, color: "#60a5fa" },
+                          { label: "رأس المال", value: `${formatNum(treasury.totalCashCapitalAll || treasury.cashCapital)} EGP`, color: "#60a5fa" },
                           { label: "تحويلات الأرباح", value: `${formatNum(treasury.profitTransfers)} EGP`, color: "#a78bfa" },
                           { label: "المصروفات", value: `${formatNum(treasury.officeExpenses)} EGP`, color: "#f97316" },
                         ].map(item => (

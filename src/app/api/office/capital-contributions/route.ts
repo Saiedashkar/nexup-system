@@ -23,19 +23,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  const fundFlow: string = body.fundFlow || "SPENT_ALREADY";
+  const amount = parseFloat(body.amount);
+  const date = new Date(body.date);
+  const description = body.description || null;
+
+  // Create the capital contribution
   const contrib = await prisma.capitalContribution.create({
     data: {
       partnerId: body.partnerId,
-      amount: parseFloat(body.amount),
+      amount,
       type: body.type,
-      description: body.description || null,
-      date: new Date(body.date),
+      fundFlow: fundFlow as any,
+      description,
+      date,
     },
   });
+
+  // If SPENT_ALREADY — auto-create paired OfficeExpense so treasury balance stays net-zero
+  let linkedExpenseId: string | null = null;
+  if (fundFlow === "SPENT_ALREADY") {
+    const partner = await prisma.partner.findUnique({ where: { id: body.partnerId }, select: { name: true } });
+    const expense = await prisma.officeExpense.create({
+      data: {
+        description: description || `مساهمة رأس مال — ${partner?.name || "شريك"}`,
+        cost: amount,
+        category: "VARIABLE",
+        name: partner?.name || "شريك",
+        notes: `مساهمة رأس مال رقم ${contrib.id} — مصروف بالفعل (fundFlow: SPENT_ALREADY)`,
+        date,
+        month: date.getMonth() + 1,
+        year: date.getFullYear(),
+      },
+    });
+    linkedExpenseId = expense.id;
+    // Update the contribution with the linked expense ID
+    await prisma.capitalContribution.update({
+      where: { id: contrib.id },
+      data: { linkedExpenseId: expense.id },
+    });
+  }
 
   await prisma.activityLog.create({
     data: { userId: session.userId, action: "CREATE", entityType: "CapitalContribution", entityId: contrib.id },
   });
 
-  return NextResponse.json(contrib, { status: 201 });
+  return NextResponse.json({ ...contrib, linkedExpenseId }, { status: 201 });
 }

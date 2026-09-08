@@ -291,6 +291,11 @@ enum CapitalType {
   ASSET
 }
 
+enum FundFlow {
+  SPENT_ALREADY     // Money was spent immediately — does NOT add to treasury
+  STILL_IN_TREASURY // Money is available as real cash in the office treasury
+}
+
 enum ExpenseCat {
   FIXED
   VARIABLE
@@ -356,17 +361,20 @@ model OfficeExpense {
 }
 
 model CapitalContribution {
-  id          String      @id @default(cuid())
-  partnerId   String
-  amount      Float
-  type        CapitalType
-  description String?
-  date        DateTime
-  createdAt   DateTime    @default(now())
-  partner     Partner     @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  id               String      @id @default(cuid())
+  partnerId        String
+  amount           Float
+  type             CapitalType
+  fundFlow         FundFlow    @default(SPENT_ALREADY)
+  description      String?
+  date             DateTime
+  linkedExpenseId  String?     // Auto-created OfficeExpense ID (for SPENT_ALREADY)
+  createdAt        DateTime    @default(now())
+  partner          Partner     @relation(fields: [partnerId], references: [id], onDelete: Restrict)
 
   @@index([partnerId])
   @@index([date])
+  @@index([fundFlow])
 }
 
 model OfficeAllocationSetting {

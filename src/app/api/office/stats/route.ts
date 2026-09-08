@@ -83,13 +83,17 @@ export async function GET() {
     let officeTreasury = null;
     if (superAdmin || session.canAccessOfficeFinanceFull) {
       const [capital, profitTransfers, officeExpenses, partnerTx] = await Promise.all([
-        prisma.capitalContribution.findMany({ where: { type: "CASH" }, select: { amount: true } }),
+        prisma.capitalContribution.findMany({ where: { type: "CASH" }, select: { amount: true, fundFlow: true } }),
         prisma.profitTransfer.findMany({ select: { amount: true } }),
         prisma.officeExpense.findMany({ select: { cost: true } }),
         prisma.partnerTransaction.findMany({ select: { type: true, amount: true } }),
       ]);
 
-      const cashCapital = capital.reduce((s, c) => s + c.amount, 0);
+      // Only STILL_IN_TREASURY contributions count as real cash in the treasury
+      const cashCapital = capital
+        .filter(c => c.fundFlow === "STILL_IN_TREASURY")
+        .reduce((s, c) => s + c.amount, 0);
+      const totalCashCapitalAll = capital.reduce((s, c) => s + c.amount, 0);
       const totalProfitTransfers = profitTransfers.reduce((s, t) => s + t.amount, 0);
       const totalOfficeExpenses = officeExpenses.reduce((s, e) => s + e.cost, 0);
       const outflows = partnerTx
@@ -102,6 +106,7 @@ export async function GET() {
       officeTreasury = {
         balance: cashCapital + totalProfitTransfers - totalOfficeExpenses - outflows + inflows,
         cashCapital,
+        totalCashCapitalAll,
         profitTransfers: totalProfitTransfers,
         officeExpenses: totalOfficeExpenses,
       };

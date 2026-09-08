@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 
-type Capital = { id: string; amount: number; type: string; description: string | null; date: string; partner: { name: string } };
+type Capital = { id: string; amount: number; type: string; fundFlow: string; linkedExpenseId: string | null; description: string | null; date: string; partner: { name: string } };
 type Partner = { id: string; name: string };
 
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -15,8 +15,8 @@ export default function CapitalPage() {
   const [showForm, setShowForm] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState({ partnerId: "", amount: "", type: "CASH", description: "", date: new Date().toISOString().split("T")[0] });
-  const [editForm, setEditForm] = useState({ amount: "", type: "", description: "" });
+  const [form, setForm] = useState({ partnerId: "", amount: "", type: "CASH", fundFlow: "SPENT_ALREADY", description: "", date: new Date().toISOString().split("T")[0] });
+  const [editForm, setEditForm] = useState({ amount: "", type: "", description: "", fundFlow: "" });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -29,6 +29,8 @@ export default function CapitalPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const totalCapital = contributions.reduce((s, c) => s + c.amount, 0);
+  const treasuryAvailable = contributions.filter(c => c.fundFlow === "STILL_IN_TREASURY").reduce((s, c) => s + c.amount, 0);
+  const spentAlready = contributions.filter(c => c.fundFlow === "SPENT_ALREADY").reduce((s, c) => s + c.amount, 0);
 
   const submit = async () => {
     if (!form.partnerId || !form.amount) return;
@@ -36,14 +38,14 @@ export default function CapitalPage() {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...form, amount: parseFloat(form.amount) }),
     });
-    setForm({ partnerId: "", amount: "", type: "CASH", description: "", date: new Date().toISOString().split("T")[0] });
+    setForm({ partnerId: "", amount: "", type: "CASH", fundFlow: "SPENT_ALREADY", description: "", date: new Date().toISOString().split("T")[0] });
     setShowForm(false); fetchData();
   };
 
   const update = async (id: string) => {
     await fetch(`/api/office/capital-contributions/${id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: parseFloat(editForm.amount), type: editForm.type, description: editForm.description || null }),
+      body: JSON.stringify({ amount: parseFloat(editForm.amount), type: editForm.type, description: editForm.description || null, fundFlow: editForm.fundFlow }),
     });
     setEditing(null); fetchData();
   };
@@ -63,9 +65,18 @@ export default function CapitalPage() {
         <button onClick={() => setShowForm(true)} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: "#10b981", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>＋ مساهمة جديدة</button>
       </div>
 
-      <div style={{ padding: "18px 24px", borderRadius: 12, background: "rgba(16,185,129,0.06)", border: "1px solid var(--border)", marginBottom: 20 }}>
-        <div style={{ fontSize: 11, color: "var(--muted)" }}>إجمالي رأس المال</div>
-        <div style={{ fontSize: 28, fontWeight: 800, color: "#10b981", direction: "ltr" }}>{fmt(totalCapital)} EGP</div>
+      {/* Dual Summary Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+        <div style={{ padding: "18px 24px", borderRadius: 12, background: "rgba(16,185,129,0.06)", border: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 11, color: "var(--muted)" }}>إجمالي رأس المال المُقدَّم تاريخيًا</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#10b981", direction: "ltr" }}>{fmt(totalCapital)} EGP</div>
+          <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>كل المساهمات بجميع أنواعها</div>
+        </div>
+        <div style={{ padding: "18px 24px", borderRadius: 12, background: "rgba(139,92,246,0.06)", border: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 11, color: "var(--muted)" }}>منه ما زال متاحًا في الخزينة</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#8b5cf6", direction: "ltr" }}>{fmt(treasuryAvailable)} EGP</div>
+          <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>فقط المساهمات المُعلَّمة بـ "متاح في الخزينة" — غير المصروف فعليًا ({fmt(spentAlready)} EGP صُرفت)</div>
+        </div>
       </div>
 
       {showForm && (
@@ -86,7 +97,38 @@ export default function CapitalPage() {
             </div>
             <div><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>التاريخ *</label><input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
           </div>
-          <div style={{ marginBottom: 12 }}><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>الوصف</label><input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="اختياري" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
+          <div style={{ marginBottom: 12 }}><label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>الوصف</label><input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="اختياري — مثال: صيانة سيارة، شراء أدوات" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 4 }} /></div>
+
+          {/* Fund Flow Toggle */}
+          <div style={{ padding: "12px 16px", borderRadius: 8, background: "rgba(139,92,246,0.04)", border: "1px solid rgba(139,92,246,0.15)", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
+                  {form.fundFlow === "SPENT_ALREADY" ? "✅ مصروف بالفعل" : "💰 متاح في الخزينة"}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>
+                  {form.fundFlow === "SPENT_ALREADY"
+                    ? "افتراضيًا سيتم تسجيل هذا المبلغ كمصروف مكتب أيضًا بنفس القيمة، ولن يُحتسب ضمن الرصيد المتاح، إلا إذا فعّلت هذا الخيار."
+                    : "سيُضاف هذا المبلغ كسيولة حقيقية في خزينة المكتب ويُصرف لاحقًا."}
+                </div>
+              </div>
+              <button
+                onClick={() => setForm(f => ({ ...f, fundFlow: f.fundFlow === "SPENT_ALREADY" ? "STILL_IN_TREASURY" : "SPENT_ALREADY" }))}
+                style={{
+                  width: 52, height: 28, borderRadius: 14, border: "none", cursor: "pointer", position: "relative",
+                  background: form.fundFlow === "STILL_IN_TREASURY" ? "#8b5cf6" : "rgba(107,114,128,0.3)",
+                  transition: "background 0.2s",
+                }}
+              >
+                <div style={{
+                  width: 22, height: 22, borderRadius: "50%", background: "#fff", position: "absolute", top: 3,
+                  left: form.fundFlow === "STILL_IN_TREASURY" ? 27 : 3,
+                  transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                }} />
+              </button>
+            </div>
+          </div>
+
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={submit} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "#10b981", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>حفظ</button>
             <button onClick={() => setShowForm(false)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 12, cursor: "pointer" }}>إلغاء</button>
@@ -103,7 +145,17 @@ export default function CapitalPage() {
               <div style={{ position: "absolute", left: -23, top: 18, width: 12, height: 12, borderRadius: "50%", background: c.type === "CASH" ? "#10b981" : "#3b82f6", border: "2px solid var(--bg)" }} />
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>{c.partner.name}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontWeight: 700, fontSize: 14 }}>{c.partner.name}</span>
+                    {/* FundFlow Badge */}
+                    <span style={{
+                      padding: "1px 8px", borderRadius: 10, fontSize: 9, fontWeight: 700,
+                      background: c.fundFlow === "SPENT_ALREADY" ? "rgba(239,68,68,0.1)" : "rgba(139,92,246,0.1)",
+                      color: c.fundFlow === "SPENT_ALREADY" ? "#ef4444" : "#8b5cf6",
+                    }}>
+                      {c.fundFlow === "SPENT_ALREADY" ? "✅ مصروف بالفعل" : "💰 متاح في الخزينة"}
+                    </span>
+                  </div>
                   <div style={{ fontSize: 12, color: "var(--muted)" }}>{toEN(c.date)} · {c.type === "CASH" ? "💵 نقدي" : "📦 عقار/أصل"}{c.description ? ` · ${c.description}` : ""}</div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -121,7 +173,7 @@ export default function CapitalPage() {
                   ) : (
                     <>
                       <span style={{ fontSize: 18, fontWeight: 800, color: "#10b981", direction: "ltr" }}>+{fmt(c.amount)} EGP</span>
-                      <button onClick={() => { setEditing(c.id); setEditForm({ amount: String(c.amount), type: c.type, description: c.description || "" }); }} style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 11, cursor: "pointer" }}>✏️</button>
+                      <button onClick={() => { setEditing(c.id); setEditForm({ amount: String(c.amount), type: c.type, description: c.description || "", fundFlow: c.fundFlow }); }} style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 11, cursor: "pointer" }}>✏️</button>
                       <button onClick={() => setConfirmDelete(c.id)} style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.05)", color: "#ef4444", fontSize: 11, cursor: "pointer" }}>🗑</button>
                     </>
                   )}

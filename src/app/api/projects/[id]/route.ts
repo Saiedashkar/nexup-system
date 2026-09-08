@@ -155,6 +155,11 @@ export async function DELETE(
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
 
+    // Delete related payments first (onDelete: Restrict blocks project deletion)
+    await prisma.clientPayment.deleteMany({
+      where: { projectRecordId: id },
+    });
+
     await prisma.poolTransaction.deleteMany({
       where: { projectRecordId: id },
     });

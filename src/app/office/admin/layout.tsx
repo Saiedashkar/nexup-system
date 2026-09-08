@@ -66,7 +66,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
         }}>
           <div className="treasury-grid" style={{
-            display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr",
+            display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1fr",
             maxWidth: 1440, margin: "0 auto", padding: "16px 28px", gap: 16,
           }}>
             {/* رصيد الخزينة — Main */}
@@ -95,6 +95,30 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   direction: "ltr",
                 }}>
                   {treasury ? `${treasury.balance >= 0 ? "+" : "-"}${fmt(treasury.balance)} EGP` : "—"}
+                </div>
+              </div>
+            </div>
+
+            {/* رأس المال الكلي */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 14,
+              padding: "14px 20px", borderRadius: 14,
+              background: "rgba(59,130,246,0.06)",
+              border: "1px solid rgba(59,130,246,0.15)",
+            }}>
+              <div style={{
+                width: 42, height: 42, borderRadius: 12,
+                background: "rgba(59,130,246,0.12)",
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round">
+                  <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                </svg>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>رأس المال</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#3b82f6", direction: "ltr", lineHeight: 1.1 }}>
+                  {treasury ? `${fmt(treasury.historicalCapital)} EGP` : "—"}
                 </div>
               </div>
             </div>

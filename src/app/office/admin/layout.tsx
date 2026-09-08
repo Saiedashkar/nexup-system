@@ -7,6 +7,7 @@ type TreasuryData = {
   balance: number;
   totalRevenue: number;
   totalExpenses: number;
+  historicalCapital: number;
   netProfit: number;
   // Monthly data
   monthlyRevenue: number;
@@ -31,6 +32,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           // Capital contributions are NOT revenue — they're separate
           const totalRevenue = d.officeTreasury.profitTransfers || 0;
           const totalExpenses = d.allTime?.totalExpenses || 0;
+          const historicalCapital = d.officeTreasury.totalHistoricalCapital || d.officeTreasury.cashCapital || 0;
           // Monthly data (current month)
           const now = new Date();
           const currentMonth = now.toLocaleDateString("ar-EG", { month: "long", year: "numeric" });
@@ -40,6 +42,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             balance: d.officeTreasury.balance,
             totalRevenue,
             totalExpenses,
+            historicalCapital,
             netProfit: totalRevenue - totalExpenses,
             monthlyRevenue,
             monthlyExpenses,
@@ -96,7 +99,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </div>
             </div>
 
-            {/* توتال الإيرادات */}
+            {/* رأس المال الكلي */}
             <div style={{
               display: "flex", alignItems: "center", gap: 14,
               padding: "14px 20px", borderRadius: 14,
@@ -109,14 +112,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
               }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round">
-                  <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-                  <polyline points="17 6 23 6 23 12"/>
+                  <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
                 </svg>
               </div>
               <div>
-                <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>إجمالي الدخل</div>
+                <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>رأس المال الكلي</div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: "#3b82f6", direction: "ltr", lineHeight: 1.1 }}>
-                  {treasury ? `${fmt(treasury.totalRevenue)} EGP` : "—"}
+                  {treasury ? `${fmt(treasury.historicalCapital)} EGP` : "—"}
                 </div>
               </div>
             </div>
@@ -146,28 +148,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </div>
             </div>
 
-            {/* صافي الربح — Net Profit */}
+            {/* تحويلات الأرباح */}
             <div style={{
               display: "flex", alignItems: "center", gap: 14,
               padding: "14px 20px", borderRadius: 14,
-              background: treasury && treasury.netProfit >= 0
-                ? "rgba(16,185,129,0.06)"
-                : "rgba(239,68,68,0.06)",
-              border: `1px solid ${treasury && treasury.netProfit >= 0 ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)"}`,
+              background: "rgba(139,92,246,0.06)",
+              border: "1px solid rgba(139,92,246,0.15)",
             }}>
               <div style={{
                 width: 42, height: 42, borderRadius: 12,
-                background: treasury && treasury.netProfit >= 0 ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)",
+                background: "rgba(139,92,246,0.12)",
                 display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
               }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={treasury && treasury.netProfit >= 0 ? "#10b981" : "#ef4444"} strokeWidth="2" strokeLinecap="round">
-                  <circle cx="12" cy="12" r="10"/><path d="M16 8l-4 4-4-4M12 12v6"/>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round">
+                  <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                  <polyline points="17 6 23 6 23 12"/>
                 </svg>
               </div>
               <div>
-                <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>صافي الربح</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: treasury && treasury.netProfit >= 0 ? "#10b981" : "#ef4444", direction: "ltr", lineHeight: 1.1 }}>
-                  {treasury ? `${treasury.netProfit >= 0 ? "+" : "-"}${fmt(treasury.netProfit)} EGP` : "—"}
+                <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>تحويلات الأرباح</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#8b5cf6", direction: "ltr", lineHeight: 1.1 }}>
+                  {treasury ? `${fmt(treasury.totalRevenue)} EGP` : "—"}
                 </div>
               </div>
             </div>

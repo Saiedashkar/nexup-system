@@ -58,6 +58,9 @@ export async function GET() {
     return acc;
   }, {} as Record<string, number>);
 
+  // Total historical capital (ALL contributions, regardless of fundFlow)
+  const totalHistoricalCapital = capital.reduce((s, c) => s + c.amount, 0);
+
   // Office Treasury Balance
   const officeTreasuryBalance = cashCapital + totalProfitTransfers - totalAllExpenses - partnerOutflows + partnerInflows;
 
@@ -146,6 +149,7 @@ export async function GET() {
     officeTreasury: {
       balance: officeTreasuryBalance,
       cashCapital,
+      totalHistoricalCapital,
       profitTransfers: totalProfitTransfers,
       partnerOutflows,
       partnerInflows,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { softDeleteRecord } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
 
@@ -35,11 +36,7 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
 
   const { id } = await context.params;
 
-  await prisma.profitTransfer.delete({ where: { id } });
-
-  await prisma.activityLog.create({
-    data: { userId: session.userId, action: "DELETE", entityType: "ProfitTransfer", entityId: id },
-  });
+  await softDeleteRecord("ProfitTransfer", id, session.userId);
 
   return NextResponse.json({ ok: true });
 }

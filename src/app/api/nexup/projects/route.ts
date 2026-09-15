@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { findOrReviveClient } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
 
@@ -102,10 +103,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Please fill all required fields" }, { status: 400 });
     }
 
-    // Find or create client
-    let client = clientId
+    // Find or create client. A previously soft-deleted client with the same phone
+    // is revived instead of colliding with the unique(businessId, phone) index.
+    let client: { id: string; name: string; phone: string } | null = clientId
       ? await prisma.client.findUnique({ where: { id: clientId } })
-      : await prisma.client.findUnique({ where: { businessId_phone: { businessId: nexup.id, phone: clientPhone } } });
+      : await findOrReviveClient(nexup.id, clientPhone, clientName);
 
     if (!client) {
       client = await prisma.client.create({

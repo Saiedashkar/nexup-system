@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { findOrReviveClient } from "@/lib/soft-delete";
 import { getCurrentSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -110,10 +111,12 @@ export async function POST(request: NextRequest) {
 
     const businessId = session.businessId;
 
-    // Find or create client (using compound unique for multi-business)
-    let client = clientId
+    // Find or create client (using compound unique for multi-business).
+    // A previously soft-deleted client with the same phone is revived instead of
+    // colliding with the unique(businessId, phone) index.
+    let client: { id: string; name: string; phone: string } | null = clientId
       ? await prisma.client.findUnique({ where: { id: clientId } })
-      : await prisma.client.findUnique({ where: { businessId_phone: { businessId, phone: clientPhone } } });
+      : await findOrReviveClient(businessId, clientPhone, clientName);
 
     if (!client) {
       client = await prisma.client.create({

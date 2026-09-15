@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentSession, isSuperAdmin } from "@/lib/auth";
+import { softDeleteMany, softDeleteRecord } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
 
@@ -29,45 +30,18 @@ export async function DELETE(
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    // Delete in order: ClientPayments → PoolTransactions → ProjectRecords → Client
+    // Soft-delete in order: ClientPayments → PoolTransactions → ProjectRecords → Subscriptions → Client.
+    // Nothing is really removed — everything is restorable from the recycle bin.
     const projectIds = client.projectRecords.map(p => p.id);
 
     if (projectIds.length > 0) {
-      // Delete ClientPayments for all projects
-      await prisma.clientPayment.deleteMany({
-        where: { projectRecordId: { in: projectIds } },
-      });
-
-      // Delete PoolTransactions for all projects
-      await prisma.poolTransaction.deleteMany({
-        where: { projectRecordId: { in: projectIds } },
-      });
-
-      // Delete ProjectRecords
-      await prisma.projectRecord.deleteMany({
-        where: { id: { in: projectIds } },
-      });
+      await softDeleteMany("ClientPayment", { projectRecordId: { in: projectIds } }, session.userId);
+      await softDeleteMany("PoolTransaction", { projectRecordId: { in: projectIds } }, session.userId);
+      await softDeleteMany("ProjectRecord", { id: { in: projectIds } }, session.userId);
     }
 
-    // Delete Subscriptions
-    await prisma.subscription.deleteMany({
-      where: { clientId: id },
-    });
-
-    // Delete the client
-    await prisma.client.delete({ where: { id } });
-
-    // Log the action
-    if (session.userId) {
-      await prisma.activityLog.create({
-        data: {
-          userId: session.userId,
-          action: "DELETE",
-          entityType: "Client",
-          entityId: id,
-        },
-      });
-    }
+    await softDeleteMany("Subscription", { clientId: id }, session.userId);
+    await softDeleteRecord("Client", id, session.userId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

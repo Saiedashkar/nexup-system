@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { softDeleteMany, softDeleteRecord } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
 
@@ -32,15 +33,9 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 
   const { id } = await params;
 
-  // Delete associated pool transactions first
-  await prisma.poolTransaction.deleteMany({ where: { dealId: id } });
-  await prisma.deal.delete({ where: { id } });
-
-  if (session.userId) {
-    await prisma.activityLog.create({
-      data: { userId: session.userId, action: "DELETE", entityType: "Deal", entityId: id },
-    });
-  }
+  // Soft-delete associated pool transactions first (recoverable)
+  await softDeleteMany("PoolTransaction", { dealId: id }, session.userId);
+  await softDeleteRecord("Deal", id, session.userId);
 
   return NextResponse.json({ ok: true });
 }

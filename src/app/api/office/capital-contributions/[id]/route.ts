@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { softDeleteRecord } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
 
@@ -46,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     } else if (newFundFlow === "STILL_IN_TREASURY" && existing.fundFlow === "SPENT_ALREADY") {
       // Transition: SPENT_ALREADY → STILL_IN_TREASURY → Delete paired expense
       if (existing.linkedExpenseId) {
-        await prisma.officeExpense.delete({ where: { id: existing.linkedExpenseId } }).catch(() => {});
+        await softDeleteRecord("OfficeExpense", existing.linkedExpenseId, session.userId).catch(() => {});
       }
       updateData.fundFlow = "STILL_IN_TREASURY";
       updateData.linkedExpenseId = null;
@@ -83,12 +84,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const existing = await prisma.capitalContribution.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Delete paired OfficeExpense if SPENT_ALREADY
+  // Soft-delete the paired OfficeExpense if SPENT_ALREADY (restored together on undo)
   if (existing.fundFlow === "SPENT_ALREADY" && existing.linkedExpenseId) {
-    await prisma.officeExpense.delete({ where: { id: existing.linkedExpenseId } }).catch(() => {});
+    await softDeleteRecord("OfficeExpense", existing.linkedExpenseId, session.userId).catch(() => {});
   }
 
-  await prisma.capitalContribution.delete({ where: { id } });
-  await prisma.activityLog.create({ data: { userId: session.userId, action: "DELETE", entityType: "CapitalContribution", entityId: id } });
+  await softDeleteRecord("CapitalContribution", id, session.userId);
   return NextResponse.json({ success: true });
 }

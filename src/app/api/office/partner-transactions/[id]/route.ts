@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentSession, canAccessOfficeFinance } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { softDeleteRecord } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
 
@@ -24,7 +25,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const session = await getCurrentSession();
   if (!session || !canAccessOfficeFinance(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
-  await prisma.partnerTransaction.delete({ where: { id } });
-  await prisma.activityLog.create({ data: { userId: session.userId, action: "DELETE", entityType: "PartnerTransaction", entityId: id } });
+  await softDeleteRecord("PartnerTransaction", id, session.userId);
   return NextResponse.json({ success: true });
 }

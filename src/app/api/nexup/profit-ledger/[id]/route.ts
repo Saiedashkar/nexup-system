@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentSession, isSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { softDeleteRecord } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
 
@@ -50,11 +51,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const existing = await prisma.nexupProfitLedger.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
 
-  await prisma.nexupProfitLedger.delete({ where: { id } });
-
-  await prisma.activityLog.create({
-    data: { userId: session.userId, action: "DELETE", entityType: "NexupProfitLedger", entityId: id },
-  });
+  await softDeleteRecord("NexupProfitLedger", id, session.userId);
 
   return NextResponse.json({ success: true });
 }

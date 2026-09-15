@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { UndoProvider } from "@/components/undo-toast";
 import "./globals.css";
 
 /* Self-host Inter via next/font — eliminates render-blocking Google Fonts CSS,
@@ -60,7 +61,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           }}
         />
       </head>
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        <UndoProvider>{children}</UndoProvider>
+      </body>
     </html>
   );
 }

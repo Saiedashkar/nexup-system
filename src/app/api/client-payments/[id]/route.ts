@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentSession } from "@/lib/auth";
+import { softDeleteMany, softDeleteRecord } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
 
@@ -96,20 +97,14 @@ export async function DELETE(
       },
     });
 
-    // Delete the corresponding PoolTransaction
-    await prisma.poolTransaction.deleteMany({
-      where: {
-        projectRecordId: project.id,
-        type: "IN",
-        amountSAR: amount,
-      },
-    });
+    // Soft-delete the corresponding PoolTransaction
+    await softDeleteMany(
+      "PoolTransaction",
+      { projectRecordId: project.id, type: "IN", amountSAR: amount },
+      session.userId,
+    );
 
-    await prisma.clientPayment.delete({ where: { id } });
-
-    await prisma.activityLog.create({
-      data: { userId: session.userId, action: "DELETE", entityType: "ClientPayment", entityId: id },
-    });
+    await softDeleteRecord("ClientPayment", id, session.userId);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

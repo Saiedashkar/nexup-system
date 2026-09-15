@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentSession, canAccessBusiness, isSuperAdmin, getAccessibleBusinesses } from "@/lib/auth";
+import { getCurrentSession, getAccessibleBusinesses } from "@/lib/auth";
+import { softDeleteMany, softDeleteRecord } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
 
@@ -56,21 +57,27 @@ export async function DELETE() {
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (session.role === "EMPLOYEE") return NextResponse.json({ error: "Access denied" }, { status: 403 });
 
-    // Find all clients with no projects
-    const allClients = await prisma.client.findMany({
-      include: { _count: { select: { projectRecords: true } } },
-    });
-
-    const orphaned = allClients.filter(c => c._count.projectRecords === 0);
+    // Find all clients with no projects AND no subscriptions.
+    // Counts are computed with the soft-delete-aware client so a client whose
+    // rows were only soft-deleted still counts as orphaned.
+    const liveClients = await prisma.client.findMany({ select: { id: true } });
+    const orphaned: { id: string }[] = [];
+    for (const c of liveClients) {
+      const [projectCount, subscriptionCount] = await Promise.all([
+        prisma.projectRecord.count({ where: { clientId: c.id } }),
+        prisma.subscription.count({ where: { clientId: c.id } }),
+      ]);
+      if (projectCount === 0 && subscriptionCount === 0) orphaned.push(c);
+    }
 
     if (orphaned.length === 0) {
       return NextResponse.json({ deleted: 0, message: "No orphaned clients found" });
     }
 
-    // Delete subscriptions and clients
+    // Soft-delete subscriptions and clients (recoverable from the recycle bin)
     for (const c of orphaned) {
-      await prisma.subscription.deleteMany({ where: { clientId: c.id } });
-      await prisma.client.delete({ where: { id: c.id } });
+      await softDeleteMany("Subscription", { clientId: c.id }, session.userId);
+      await softDeleteRecord("Client", c.id, session.userId);
     }
 
     return NextResponse.json({ deleted: orphaned.length, message: `Deleted ${orphaned.length} orphaned client(s)` });

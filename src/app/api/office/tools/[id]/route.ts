@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentSession, isSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { softDeleteMany, softDeleteRecord } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
 
@@ -45,13 +46,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const tool = await prisma.officeTool.findUnique({ where: { id } });
   if (!tool) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Delete payments first
-  await prisma.officeToolPayment.deleteMany({ where: { toolId: id } });
-  await prisma.officeTool.delete({ where: { id } });
-
-  await prisma.activityLog.create({
-    data: { userId: session.userId, action: "DELETE", entityType: "OfficeTool", entityId: id },
-  });
+  // Soft-delete payments first (recoverable together with the tool)
+  await softDeleteMany("OfficeToolPayment", { toolId: id }, session.userId);
+  await softDeleteRecord("OfficeTool", id, session.userId);
 
   return NextResponse.json({ success: true });
 }

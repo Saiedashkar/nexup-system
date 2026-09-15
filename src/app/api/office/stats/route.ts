@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentSession, canAccessBusiness, isSuperAdmin } from "@/lib/auth";
+import { softDeleteRecord } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
 
@@ -11,38 +12,53 @@ export async function GET() {
 
     const superAdmin = isSuperAdmin(session);
 
-    // Filter businesses by what the user can access
-    // Auto-cleanup orphaned clients (clients with no projects)
+    // Auto-hide clients that have neither projects nor subscriptions left.
+    // (Soft delete only — recoverable from the recycle bin.)
     try {
-      const orphanedClients = await prisma.client.findMany({
-        include: { _count: { select: { projectRecords: true } } },
-      });
-      const orphaned = orphanedClients.filter(c => c._count.projectRecords === 0);
-      for (const c of orphaned) {
-        await prisma.subscription.deleteMany({ where: { clientId: c.id } });
-        await prisma.client.delete({ where: { id: c.id } });
+      const liveClients = await prisma.client.findMany({ select: { id: true } });
+      for (const c of liveClients) {
+        const [projectCount, subscriptionCount] = await Promise.all([
+          prisma.projectRecord.count({ where: { clientId: c.id } }),
+          prisma.subscription.count({ where: { clientId: c.id } }),
+        ]);
+        if (projectCount === 0 && subscriptionCount === 0) {
+          await softDeleteRecord("Client", c.id, session.userId);
+        }
       }
     } catch { /* ignore cleanup errors */ }
 
-    const allBusinesses = await prisma.business.findMany({
-      include: {
-        _count: {
-          select: {
-            clients: true,
-            projectRecords: true,
-            poolTransactions: true,
-            expenses: true,
-          },
-        },
-      },
-      orderBy: { name: "asc" },
-    });
+    const allBusinesses = await prisma.business.findMany({ orderBy: { name: "asc" } });
+
+    // Counts must ignore soft-deleted rows, so they are computed with the
+    // soft-delete-aware client instead of relation `_count`.
+    const [clientCounts, projectCounts, poolCounts, expenseCounts] = await Promise.all([
+      prisma.client.groupBy({ by: ["businessId"], _count: { _all: true } }),
+      prisma.projectRecord.groupBy({ by: ["businessId"], _count: { _all: true } }),
+      prisma.poolTransaction.groupBy({ by: ["businessId"], _count: { _all: true } }),
+      prisma.expense.groupBy({ by: ["businessId"], _count: { _all: true } }),
+    ]);
+    const toCountMap = (rows: { businessId: string; _count: { _all: number } }[]) =>
+      new Map(rows.map(r => [r.businessId, r._count._all]));
+    const clientMap = toCountMap(clientCounts);
+    const projectMap = toCountMap(projectCounts);
+    const poolMap = toCountMap(poolCounts);
+    const expenseMap = toCountMap(expenseCounts);
 
     const accessibleSlugs = allBusinesses
       .filter(b => superAdmin || canAccessBusiness(session, b.slug))
       .map(b => b.slug);
 
-    const businesses = allBusinesses.filter(b => accessibleSlugs.includes(b.slug));
+    const businesses = allBusinesses
+      .filter(b => accessibleSlugs.includes(b.slug))
+      .map(b => ({
+        ...b,
+        _count: {
+          clients: clientMap.get(b.id) ?? 0,
+          projectRecords: projectMap.get(b.id) ?? 0,
+          poolTransactions: poolMap.get(b.id) ?? 0,
+          expenses: expenseMap.get(b.id) ?? 0,
+        },
+      }));
 
     // Aggregate stats per-business for accessible businesses
     const allBizIds = businesses.map(b => b.id);
@@ -54,6 +70,7 @@ export async function GET() {
         where: { businessId: { in: allBizIds } },
         _sum: { cost: true },
       }),
+      // (soft-deleted expenses are excluded automatically)
     ]);
 
     // Per-business revenue and balance (pool IN - OUT)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { softDeleteRecord } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
 
@@ -21,7 +22,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const session = await getCurrentSession();
   if (!session || session.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
-  await prisma.officeAllocationSetting.delete({ where: { id } });
-  await prisma.activityLog.create({ data: { userId: session.userId, action: "DELETE", entityType: "OfficeAllocationSetting", entityId: id } });
+  await softDeleteRecord("OfficeAllocationSetting", id, session.userId);
   return NextResponse.json({ success: true });
 }

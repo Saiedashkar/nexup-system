@@ -44,6 +44,7 @@ const icons = {
   clients: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75",
   treasury: "M21 12V7H5a2 2 0 0 1 0-4h14v4 M3 5v14a2 2 0 0 0 2 2h16v-5 M18 12a2 2 0 0 0 0 4h4v-4z",
   logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9",
+  trash: "M3 6h18 M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2 M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6 M10 11v6 M14 11v6",
 };
 
 export function AppShell({
@@ -86,6 +87,7 @@ export function AppShell({
     ...(isSuperAdmin ? [
       { href: "/office/admin/users", label: "إدارة المستخدمين", sub: "User Management", icon: icons.clients, superAdminOnly: true },
       { href: "/office/admin/tools", label: "الادوات", sub: "Tools", icon: icons.treasury, superAdminOnly: true },
+      { href: "/office/admin/recycle-bin", label: "سلة المحذوفات", sub: "Recycle Bin", icon: icons.treasury, superAdminOnly: true },
     ] : []),
   ];
 
@@ -160,6 +162,10 @@ export function AppShell({
               <Link className={`sidebar-link ${activePage === "tools" ? "active" : ""}`} href="/office/admin/tools">
                 <NavIcon d={icons.treasury} />
                 الادوات
+              </Link>
+              <Link className={`sidebar-link ${activePage === "recycle-bin" ? "active" : ""}`} href="/office/admin/recycle-bin">
+                <NavIcon d={icons.trash} />
+                سلة المحذوفات
               </Link>
             </div>
           )}

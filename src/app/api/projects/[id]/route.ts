@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentSession } from "@/lib/auth";
+import { softDeleteMany, softDeleteRecord } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
 
@@ -155,34 +156,19 @@ export async function DELETE(
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
 
-    // Delete related payments first (onDelete: Restrict blocks project deletion)
-    await prisma.clientPayment.deleteMany({
-      where: { projectRecordId: id },
-    });
-
-    await prisma.poolTransaction.deleteMany({
-      where: { projectRecordId: id },
-    });
+    // Soft-delete related rows first (recoverable — nothing is destroyed)
+    await softDeleteMany("ClientPayment", { projectRecordId: id }, session.userId);
+    await softDeleteMany("PoolTransaction", { projectRecordId: id }, session.userId);
 
     const clientId = existing.clientId;
-    await prisma.projectRecord.delete({ where: { id } });
+    await softDeleteRecord("ProjectRecord", id, session.userId);
 
-    // Auto-delete orphaned client (no projects remaining)
+    // Auto-hide the client when it has no projects left (restored together on undo)
     const remainingProjects = await prisma.projectRecord.count({ where: { clientId } });
     if (remainingProjects === 0) {
-      // Clean up any subscriptions first
-      await prisma.subscription.deleteMany({ where: { clientId } });
-      await prisma.client.delete({ where: { id: clientId } });
+      await softDeleteMany("Subscription", { clientId }, session.userId);
+      await softDeleteRecord("Client", clientId, session.userId);
     }
-
-    await prisma.activityLog.create({
-      data: {
-        userId: session.userId,
-        action: "DELETE",
-        entityType: "ProjectRecord",
-        entityId: id,
-      },
-    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

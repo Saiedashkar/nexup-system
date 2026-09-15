@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useUndo } from "@/components/undo-toast";
 
 /* ───── Types ───── */
 type Payment = { id: string; amount: number; date: string; note: string | null };
@@ -198,6 +199,7 @@ function MonthHeader({ label, count, totalRevenue, totalCollected, totalRemainin
    ONE-TIME TAB
    ═══════════════════════════════════════════════════ */
 function OneTimeTab() {
+  const { showUndo } = useUndo();
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -271,7 +273,21 @@ function OneTimeTab() {
     setSubmitting(false);
   };
 
-  const handleDelete = async (id: string) => { try { await fetch(`/api/projects/${id}`, { method: "DELETE" }); setDeleteConfirm(null); fetchProjects(); } catch {} };
+  const handleDelete = async (id: string) => {
+    const project = projects.find(p => p.id === id);
+    try {
+      const r = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+      if (!r.ok) return;
+      setDeleteConfirm(null);
+      fetchProjects();
+      showUndo({
+        model: "ProjectRecord",
+        id,
+        label: project ? `مشروع ${project.projectName} — ${project.client.name}` : "سجل مشروع",
+        onRestored: fetchProjects,
+      });
+    } catch { /* ignore */ }
+  };
 
   const resetForm = () => { setForm({ clientPhone: "", clientName: "", projectName: "", date: new Date().toISOString().split("T")[0], customServiceText: "", totalPrice: "", deposit: "", workStatus: "WAITING", designerName: "", serviceIds: [], notes: "" }); setClientSuggestion(null); setError(""); };
   const toggleMonth = (key: string) => { setCollapsedMonths(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; }); };
@@ -486,6 +502,7 @@ function OneTimeTab() {
    RECURRING (SUBSCRIPTIONS) TAB
    ═══════════════════════════════════════════════════ */
 function RecurringTab() {
+  const { showUndo } = useUndo();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -495,6 +512,11 @@ function RecurringTab() {
   const [payModal, setPayModal] = useState<{ sub: Subscription; invoice: Subscription["invoices"][0] } | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [form, setForm] = useState({ clientPhone: "", clientName: "", services: "", monthlyFee: "", startDate: new Date().toISOString().split("T")[0], billingDay: "1", notes: "" });
+  // ── Edit / delete ──
+  const [editSub, setEditSub] = useState<Subscription | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ clientName: "", clientPhone: "", services: "", monthlyFee: "", startDate: "", billingDay: "1", status: "ACTIVE", notes: "" });
 
   const fetchSubscriptions = useCallback(async () => {
     setLoading(true);
@@ -524,6 +546,75 @@ function RecurringTab() {
         body: JSON.stringify({ invoiceId: payModal.invoice.id, amount: parseFloat(payAmount) }) });
       if (r.ok) { setPayModal(null); setPayAmount(""); fetchSubscriptions(); }
     } catch {}
+  };
+
+  /* ═══ Edit a subscription ═══ */
+  const startEdit = (sub: Subscription) => {
+    let servicesText = "";
+    try {
+      const parsed = JSON.parse(sub.services);
+      servicesText = Array.isArray(parsed) ? parsed.join(", ") : String(sub.services);
+    } catch { servicesText = sub.services || ""; }
+
+    setEditForm({
+      clientName: sub.client.name,
+      clientPhone: sub.client.phone,
+      services: servicesText,
+      monthlyFee: String(sub.monthlyFee),
+      startDate: (sub.startDate || "").split("T")[0],
+      billingDay: String(sub.billingDay),
+      status: sub.status,
+      notes: sub.notes || "",
+    });
+    setError("");
+    setEditSub(sub);
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editSub) return;
+    setSaving(true); setError("");
+    try {
+      const r = await fetch(`/api/rebound/subscriptions/${editSub.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientName: editForm.clientName,
+          clientPhone: editForm.clientPhone,
+          services: editForm.services.split(",").map(s => s.trim()).filter(Boolean),
+          monthlyFee: parseFloat(editForm.monthlyFee),
+          startDate: editForm.startDate,
+          billingDay: parseInt(editForm.billingDay),
+          status: editForm.status,
+          notes: editForm.notes,
+        }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.error || "تعذّر حفظ التعديل");
+      }
+      setEditSub(null);
+      fetchSubscriptions();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذّر حفظ التعديل");
+    }
+    setSaving(false);
+  };
+
+  /* ═══ Safe delete (recoverable) ═══ */
+  const handleDelete = async (sub: Subscription) => {
+    try {
+      const r = await fetch(`/api/rebound/subscriptions/${sub.id}`, { method: "DELETE" });
+      if (!r.ok) return;
+      setDeleteConfirm(null);
+      fetchSubscriptions();
+      showUndo({
+        model: "Subscription",
+        id: sub.id,
+        label: `اشتراك ${sub.client.name} — ${fmt(sub.monthlyFee)} EGP`,
+        onRestored: fetchSubscriptions,
+      });
+    } catch { /* ignore */ }
   };
 
   const totalMRR = subscriptions.filter(s => s.status === "ACTIVE").reduce((sum, s) => sum + s.monthlyFee, 0);
@@ -575,7 +666,7 @@ function RecurringTab() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.06) 0%, transparent 100%)" }}>
-                  {["العميل", "الهاتف", "الباقة", "القيمة الشهرية", "تاريخ البدء", "يوم الفاتورة", "الحالة", "فاتورة الشهر", "الإجراءات"].map((h, i) => (
+                  {["العميل", "الهاتف", "الباقة", "القيمة الشهرية", "تاريخ البدء", "يوم الفاتورة", "الحالة", "فاتورة الشهر", "الفواتير", "الإجراءات"].map((h, i) => (
                     <th key={i} style={{ padding: "8px 10px", textAlign: "right", borderBottom: "2px solid var(--border)", fontSize: 10, fontWeight: 700, color: "var(--text)" }}>{h}</th>
                   ))}
                 </tr>
@@ -623,6 +714,33 @@ function RecurringTab() {
                           {sub.invoices.filter(i => i.status === "PAID").length}/{sub.invoices.length}
                         </span>
                       </td>
+                      <td style={{ padding: "6px 6px", textAlign: "center" }}>
+                        <div style={{ display: "flex", gap: 3, justifyContent: "center", alignItems: "center" }}>
+                          {deleteConfirm === sub.id ? (
+                            <>
+                              <button onClick={() => handleDelete(sub)}
+                                style={{ padding: "3px 7px", borderRadius: 4, border: "none", background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 700, cursor: "pointer" }}>
+                                تأكيد الحذف
+                              </button>
+                              <button onClick={() => setDeleteConfirm(null)}
+                                style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 9, cursor: "pointer" }}>
+                                إلغاء
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button onClick={() => startEdit(sub)} title="تعديل"
+                                style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 11, cursor: "pointer" }}>
+                                ✏️
+                              </button>
+                              <button onClick={() => setDeleteConfirm(sub.id)} title="حذف"
+                                style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.05)", color: "#ef4444", fontSize: 11, cursor: "pointer" }}>
+                                🗑
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -630,6 +748,66 @@ function RecurringTab() {
             </table>
           </div>
         )}
+
+      {/* Edit Subscription Modal */}
+      {editSub && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={e => { if (e.target === e.currentTarget) setEditSub(null); }}>
+          <div style={{ background: "var(--surface)", borderRadius: 14, maxWidth: 520, width: "95%", border: "1px solid var(--border)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", margin: 0 }}>✏️ تعديل الاشتراك</h3>
+              <button onClick={() => setEditSub(null)} style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "var(--surface-hover)", color: "var(--muted)", fontSize: 14, cursor: "pointer" }}>✕</button>
+            </div>
+            <form onSubmit={handleUpdate} style={{ padding: "16px 20px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>اسم العميل *</label>
+                  <input required value={editForm.clientName} onChange={e => setEditForm(f => ({ ...f, clientName: e.target.value }))} style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>رقم الهاتف *</label>
+                  <input required value={editForm.clientPhone} onChange={e => setEditForm(f => ({ ...f, clientPhone: e.target.value }))} dir="ltr" style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3 }} />
+                </div>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>الخدمات (مفصولة بفاصلة)</label>
+                  <input value={editForm.services} onChange={e => setEditForm(f => ({ ...f, services: e.target.value }))} style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>القيمة الشهرية (EGP) *</label>
+                  <input required type="number" min="1" value={editForm.monthlyFee} onChange={e => setEditForm(f => ({ ...f, monthlyFee: e.target.value }))} dir="ltr" style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>تاريخ البدء</label>
+                  <input type="date" value={editForm.startDate} onChange={e => setEditForm(f => ({ ...f, startDate: e.target.value }))} style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>يوم الفاتورة</label>
+                  <input type="number" min="1" max="28" value={editForm.billingDay} onChange={e => setEditForm(f => ({ ...f, billingDay: e.target.value }))} style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>الحالة</label>
+                  <select value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))} style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3 }}>
+                    <option value="ACTIVE">نشط</option>
+                    <option value="PAUSED">متوقف</option>
+                    <option value="CANCELLED">ملغى</option>
+                  </select>
+                </div>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>ملاحظات</label>
+                  <textarea rows={2} value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 3, resize: "vertical" }} />
+                </div>
+              </div>
+              <div style={{ marginTop: 10, fontSize: 10, color: "var(--muted)" }}>
+                أي فاتورة غير مدفوعة لم يُسجَّل عليها أي دفع سيتم تحديث قيمتها تلقائيًا للقيمة الشهرية الجديدة.
+              </div>
+              {error && <div style={{ color: "#ef4444", fontSize: 12, marginTop: 8 }}>{error}</div>}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+                <button type="button" onClick={() => setEditSub(null)} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>إلغاء</button>
+                <button type="submit" disabled={saving} style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: "#3b82f6", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>{saving ? "جاري الحفظ..." : "حفظ التعديل"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Pay Invoice Modal */}
       {payModal && (

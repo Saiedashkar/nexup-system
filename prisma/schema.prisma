@@ -141,6 +141,11 @@ model Client {
   @@unique([businessId, phone])
   @@index([name])
   @@index([businessId])
+
+  // Soft delete (safe delete — never destroy real financial data)
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 model ServiceType {
@@ -184,6 +189,10 @@ model ProjectRecord {
   @@index([clientId])
   @@index([designerId])
   @@index([date])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 model PoolTransaction {
@@ -206,6 +215,10 @@ model PoolTransaction {
   @@index([projectRecordId])
   @@index([type])
   @@index([date])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 model Withdrawal {
@@ -225,6 +238,10 @@ model Withdrawal {
   @@index([businessId])
   @@index([year, month])
   @@index([date])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 model Expense {
@@ -244,6 +261,10 @@ model Expense {
   @@index([businessId])
   @@index([year, month])
   @@index([date])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 model ClientPayment {
@@ -258,6 +279,10 @@ model ClientPayment {
 
   @@index([projectRecordId])
   @@index([date])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 model ActivityLog {
@@ -342,6 +367,10 @@ model PartnerTransaction {
   @@index([businessId])
   @@index([date])
   @@index([type])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 model OfficeExpense {
@@ -358,6 +387,10 @@ model OfficeExpense {
 
   @@index([year, month])
   @@index([date])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 model CapitalContribution {
@@ -375,6 +408,10 @@ model CapitalContribution {
   @@index([partnerId])
   @@index([date])
   @@index([fundFlow])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 model OfficeAllocationSetting {
@@ -386,6 +423,10 @@ model OfficeAllocationSetting {
 
   @@unique([businessId, effectiveDate])
   @@index([businessId])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 model ProfitTransfer {
@@ -399,6 +440,10 @@ model ProfitTransfer {
 
   @@index([businessId])
   @@index([date])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 // ═══════════════════════════════════════════════════════
@@ -416,6 +461,10 @@ model NexupProfitLedger {
 
   @@index([partnerId])
   @@index([date])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 // ═══════════════════════════════════════════════════════
@@ -440,6 +489,10 @@ model Property {
 
   @@index([businessId])
   @@index([status])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 model Deal {
@@ -466,6 +519,10 @@ model Deal {
   @@index([propertyId])
   @@index([date])
   @@index([dealType])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 // ═══════════════════════════════════════════════════════
@@ -491,6 +548,10 @@ model Subscription {
   @@index([clientId])
   @@index([businessId])
   @@index([status])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 model SubscriptionInvoice {
@@ -509,6 +570,10 @@ model SubscriptionInvoice {
   @@index([subscriptionId])
   @@index([month, year])
   @@index([status])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 // ═══════════════════════════════════════════════════════
@@ -547,6 +612,10 @@ model OfficeTool {
   @@index([status])
   @@index([category])
   @@index([nextDueDate])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }
 
 model OfficeToolPayment {
@@ -560,4 +629,8 @@ model OfficeToolPayment {
 
   @@index([toolId])
   @@index([paidDate])
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  @@index([deletedAt])
 }

@@ -19,57 +19,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (body.type) updateData.type = body.type;
   if (body.description !== undefined) updateData.description = body.description || null;
   if (body.date) updateData.date = new Date(body.date);
-
-  const newFundFlow = body.fundFlow as string | undefined;
-
-  // Handle fundFlow transitions
-  if (newFundFlow && newFundFlow !== existing.fundFlow) {
-    if (newFundFlow === "SPENT_ALREADY" && existing.fundFlow === "STILL_IN_TREASURY") {
-      // Transition: STILL_IN_TREASURY → SPENT_ALREADY → Create paired expense
-      const partner = await prisma.partner.findUnique({ where: { id: existing.partnerId }, select: { name: true } });
-      const desc = body.description || existing.description || `مساهمة رأس مال — ${partner?.name || "شريك"}`;
-      const amt = body.amount !== undefined ? parseFloat(body.amount) : existing.amount;
-      const dt = body.date ? new Date(body.date) : existing.date;
-      const expense = await prisma.officeExpense.create({
-        data: {
-          description: desc,
-          cost: amt,
-          category: "VARIABLE",
-          name: partner?.name || "شريك",
-          notes: `مساهمة رأس مال رقم ${id} — مصروف بالفعل (fundFlow: SPENT_ALREADY)`,
-          date: dt,
-          month: dt.getMonth() + 1,
-          year: dt.getFullYear(),
-        },
-      });
-      updateData.fundFlow = "SPENT_ALREADY";
-      updateData.linkedExpenseId = expense.id;
-    } else if (newFundFlow === "STILL_IN_TREASURY" && existing.fundFlow === "SPENT_ALREADY") {
-      // Transition: SPENT_ALREADY → STILL_IN_TREASURY → Delete paired expense
-      if (existing.linkedExpenseId) {
-        await softDeleteRecord("OfficeExpense", existing.linkedExpenseId, session.userId).catch(() => {});
-      }
-      updateData.fundFlow = "STILL_IN_TREASURY";
-      updateData.linkedExpenseId = null;
-    }
+  if (body.fundFlow === "SPENT_ALREADY" || body.fundFlow === "STILL_IN_TREASURY") {
+    updateData.fundFlow = body.fundFlow;
   }
 
   const updated = await prisma.capitalContribution.update({ where: { id }, data: updateData });
 
-  // If SPENT_ALREADY and amount/date/description changed, update the linked expense
-  if (updated.fundFlow === "SPENT_ALREADY" && updated.linkedExpenseId) {
-    const expenseUpdate: Record<string, unknown> = {};
-    if (body.amount !== undefined) expenseUpdate.cost = parseFloat(body.amount);
-    if (body.description !== undefined) expenseUpdate.description = body.description || `مساهمة رأس مال — مصروف بالفعل`;
-    if (body.date) {
-      const dt = new Date(body.date);
-      expenseUpdate.date = dt;
-      expenseUpdate.month = dt.getMonth() + 1;
-      expenseUpdate.year = dt.getFullYear();
+  // Legacy cleanup: if this record still has a paired OfficeExpense from the old
+  // behaviour (capital → auto expense), detach it so it stops double-counting.
+  // The old paired row is soft-deleted and can be restored from the recycle bin.
+  if (updated.linkedExpenseId) {
+    const linked = await prisma.officeExpense.findUnique({ where: { id: updated.linkedExpenseId } }).catch(() => null);
+    if (linked && linked.notes?.includes(updated.id)) {
+      await softDeleteRecord("OfficeExpense", linked.id, session.userId).catch(() => {});
     }
-    if (Object.keys(expenseUpdate).length > 0) {
-      await prisma.officeExpense.update({ where: { id: updated.linkedExpenseId }, data: expenseUpdate }).catch(() => {});
-    }
+    await prisma.capitalContribution.update({ where: { id }, data: { linkedExpenseId: null } });
   }
 
   await prisma.activityLog.create({ data: { userId: session.userId, action: "UPDATE", entityType: "CapitalContribution", entityId: id } });
@@ -84,11 +48,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const existing = await prisma.capitalContribution.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Soft-delete the paired OfficeExpense if SPENT_ALREADY (restored together on undo)
-  if (existing.fundFlow === "SPENT_ALREADY" && existing.linkedExpenseId) {
-    await softDeleteRecord("OfficeExpense", existing.linkedExpenseId, session.userId).catch(() => {});
-  }
-
+  // Soft-delete the contribution (recoverable from the recycle bin).
   await softDeleteRecord("CapitalContribution", id, session.userId);
   return NextResponse.json({ success: true });
 }

@@ -14,6 +14,18 @@ export async function GET() {
   return NextResponse.json(contributions);
 }
 
+/**
+ * Capital contributions are recorded in "رأس المال" ONLY.
+ * They never create OfficeExpense rows and never touch office expense totals:
+ * partner-paid spending (e.g. صيانة سيارة، ستائر، أدوات) is a capital matter,
+ * not an office expense — the two ledgers must stay fully separate.
+ *
+ * fundFlow meaning:
+ *  - STILL_IN_TREASURY: the money physically sits in the office treasury →
+ *    counts toward the treasury balance (cashCapital).
+ *  - SPENT_ALREADY (default): the partner spent the money directly on
+ *    something specific → tracked historically, NOT counted in the treasury.
+ */
 export async function POST(req: NextRequest) {
   const session = await getCurrentSession();
   if (!session || !canAccessOfficeFinance(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -26,47 +38,21 @@ export async function POST(req: NextRequest) {
   const fundFlow: string = body.fundFlow || "SPENT_ALREADY";
   const amount = parseFloat(body.amount);
   const date = new Date(body.date);
-  const description = body.description || null;
 
-  // Create the capital contribution
   const contrib = await prisma.capitalContribution.create({
     data: {
       partnerId: body.partnerId,
       amount,
       type: body.type,
       fundFlow: fundFlow as any,
-      description,
+      description: body.description || null,
       date,
     },
   });
-
-  // If SPENT_ALREADY — auto-create paired OfficeExpense so treasury balance stays net-zero
-  let linkedExpenseId: string | null = null;
-  if (fundFlow === "SPENT_ALREADY") {
-    const partner = await prisma.partner.findUnique({ where: { id: body.partnerId }, select: { name: true } });
-    const expense = await prisma.officeExpense.create({
-      data: {
-        description: description || `مساهمة رأس مال — ${partner?.name || "شريك"}`,
-        cost: amount,
-        category: "VARIABLE",
-        name: partner?.name || "شريك",
-        notes: `مساهمة رأس مال رقم ${contrib.id} — مصروف بالفعل (fundFlow: SPENT_ALREADY)`,
-        date,
-        month: date.getMonth() + 1,
-        year: date.getFullYear(),
-      },
-    });
-    linkedExpenseId = expense.id;
-    // Update the contribution with the linked expense ID
-    await prisma.capitalContribution.update({
-      where: { id: contrib.id },
-      data: { linkedExpenseId: expense.id },
-    });
-  }
 
   await prisma.activityLog.create({
     data: { userId: session.userId, action: "CREATE", entityType: "CapitalContribution", entityId: contrib.id },
   });
 
-  return NextResponse.json({ ...contrib, linkedExpenseId }, { status: 201 });
+  return NextResponse.json(contrib, { status: 201 });
 }

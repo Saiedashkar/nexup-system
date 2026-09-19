@@ -161,9 +161,6 @@ async function restoreChildren(model: SoftDeleteModel, record: LooseRecord): Pro
     case "OfficeTool":
       await reviveMany("OfficeToolPayment", { toolId: record.id });
       break;
-    case "CapitalContribution":
-      if (record.linkedExpenseId) await reviveMany("OfficeExpense", { id: record.linkedExpenseId });
-      break;
     default:
       break;
   }

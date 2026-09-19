@@ -24,7 +24,9 @@ export default function OfficeExpensesPage() {
     setLoading(true);
     const [eRes, sRes] = await Promise.all([fetch("/api/office/office-expenses"), fetch("/api/office/admin-stats")]);
     if (eRes.ok) setExpenses(await eRes.json());
-    if (sRes.ok) { const d = await sRes.json(); setOfficeIncome(d.allTime?.totalCapital || 0); }
+    // Office income = profit transfers from businesses (ربح وصل المكتب) —
+    // capital contributions are NOT office income and must not appear here.
+    if (sRes.ok) { const d = await sRes.json(); setOfficeIncome(d.officeTreasury?.profitTransfers || 0); }
     setLoading(false);
   }, []);
 
@@ -88,7 +90,7 @@ export default function OfficeExpensesPage() {
         {[
           { label: "هذا الشهر", value: `${fmt(totalMonthExpenses)} EGP`, color: "#ef4444", bg: "rgba(239,68,68,0.06)" },
           { label: "إجمالي المصاريف", value: `${fmt(totalAllExpenses)} EGP`, color: "#f59e0b", bg: "rgba(245,158,11,0.06)" },
-          { label: "دخل المكتب", value: `${fmt(officeIncome)} EGP`, color: "#10b981", bg: "rgba(16,185,129,0.06)" },
+          { label: "دخل المكتب (تحويلات الأرباح)", value: `${fmt(officeIncome)} EGP`, color: "#10b981", bg: "rgba(16,185,129,0.06)" },
           { label: "فائض / عجز", value: `${surplus >= 0 ? "+" : ""}${fmt(surplus)} EGP`, color: surplus >= 0 ? "#10b981" : "#ef4444", bg: surplus >= 0 ? "rgba(16,185,129,0.06)" : "rgba(239,68,68,0.06)" },
         ].map(s => (
           <div key={s.label} style={{ padding: "18px 20px", borderRadius: 12, background: s.bg, border: "1px solid var(--border)" }}>

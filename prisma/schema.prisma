@@ -276,6 +276,7 @@ model ClientPayment {
   createdByUserId String?
   createdAt       DateTime        @default(now())
   projectRecord   ProjectRecord   @relation(fields: [projectRecordId], references: [id], onDelete: Restrict)
+  receipts        PaymentReceipt[]
 
   @@index([projectRecordId])
   @@index([date])
@@ -283,6 +284,20 @@ model ClientPayment {
   deletedAt       DateTime?
   deletedByUserId String?
   @@index([deletedAt])
+}
+
+model PaymentReceipt {
+  id               String        @id @default(cuid())
+  clientPaymentId  String
+  imageUrl         String
+  fileName         String?
+  fileSize         Int?
+  mimeType         String?
+  uploadedAt       DateTime      @default(now())
+  uploadedByUserId String?
+  clientPayment    ClientPayment @relation(fields: [clientPaymentId], references: [id], onDelete: Cascade)
+
+  @@index([clientPaymentId])
 }
 
 model ActivityLog {

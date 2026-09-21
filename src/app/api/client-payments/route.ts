@@ -19,6 +19,9 @@ export async function GET(request: NextRequest) {
     const payments = await prisma.clientPayment.findMany({
       where: { projectRecordId },
       orderBy: { date: "asc" },
+      include: {
+        receipts: { select: { id: true, imageUrl: true, fileName: true, mimeType: true, uploadedAt: true } },
+      },
     });
 
     return NextResponse.json(payments);

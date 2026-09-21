@@ -66,6 +66,17 @@ export async function PATCH(
             note: `Payment — ${existing.client.name} — ${existing.projectName}`,
           },
         });
+        // Mirror the difference as a ClientPayment row so a transfer receipt
+        // can be attached to it (receipts attach to ClientPayment records).
+        await prisma.clientPayment.create({
+          data: {
+            projectRecordId: id,
+            amount: depositDiff,
+            date: new Date(),
+            note: "دفعة",
+            createdByUserId: session.userId,
+          },
+        });
       }
     }
 
@@ -86,6 +97,16 @@ export async function PATCH(
             type: "IN",
             date: new Date(),
             note: `Full payment — ${existing.client.name} — ${existing.projectName}`,
+          },
+        });
+        // Mirror as a ClientPayment row so a transfer receipt can be attached.
+        await prisma.clientPayment.create({
+          data: {
+            projectRecordId: id,
+            amount: remaining,
+            date: new Date(),
+            note: "تحصيل كامل المتبقي",
+            createdByUserId: session.userId,
           },
         });
       }

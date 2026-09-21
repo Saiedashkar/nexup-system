@@ -40,7 +40,13 @@ export async function GET(request: NextRequest) {
       client: { select: { id: true, name: true, phone: true, tier: true } },
       designer: { select: { id: true, name: true } },
       services: { select: { id: true, name: true } },
-      payments: { select: { id: true, amount: true, date: true, note: true }, orderBy: { date: "asc" as const } },
+      payments: {
+        select: {
+          id: true, amount: true, date: true, note: true,
+          receipts: { select: { id: true, imageUrl: true, fileName: true, mimeType: true, uploadedAt: true } },
+        },
+        orderBy: { date: "asc" as const },
+      },
     },
     orderBy: { date: "desc" },
   });
@@ -145,10 +151,12 @@ export async function POST(request: NextRequest) {
         client: { select: { id: true, name: true, phone: true, tier: true } },
         designer: { select: { id: true, name: true } },
         services: { select: { id: true, name: true } },
+        payments: { orderBy: { date: "asc" as const } },
       },
     });
 
     // AUTO: Create IN transaction when deposit > 0
+    let depositPaymentId: string | null = null;
     if (dep > 0) {
       await prisma.poolTransaction.create({
         data: {
@@ -160,6 +168,20 @@ export async function POST(request: NextRequest) {
           note: `Deposit — ${clientName} — ${projectName}`,
         },
       });
+
+      // Record the deposit as a proper ClientPayment row so a transfer receipt
+      // can be attached to it like any other payment. Amount fields are kept
+      // identical to before (deposit/remaining/paymentStatus set above).
+      const depositPayment = await prisma.clientPayment.create({
+        data: {
+          projectRecordId: project.id,
+          amount: dep,
+          date: new Date(date),
+          note: "عربون",
+          createdByUserId: session.userId,
+        },
+      });
+      depositPaymentId = depositPayment.id;
     }
 
     // Log activity
@@ -172,7 +194,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(project, { status: 201 });
+    // Surface the auto-created deposit payment so the client can attach a
+    // transfer receipt to it right after creating the record.
+    const projectWithPayments = depositPaymentId
+      ? { ...project, payments: [{ id: depositPaymentId, amount: dep, date: project.date, note: "عربون", receipts: [] }] }
+      : project;
+
+    return NextResponse.json(projectWithPayments, { status: 201 });
   } catch (error) {
     console.error("Failed to create NEXUP project:", error);
     return NextResponse.json({ error: "Failed to create record" }, { status: 500 });

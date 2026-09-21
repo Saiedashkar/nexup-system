@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 
 /* ───── Types ───── */
-type Payment = { id: string; amount: number; date: string; note: string | null };
+type Payment = { id: string; amount: number; date: string; note: string | null; receipts?: Receipt[] };
+type Receipt = { id: string; imageUrl: string; fileName: string | null; mimeType: string | null; uploadedAt: string };
 type ClientInfo = { id: string; name: string; phone: string; tier: string; projectCount: number; totalPaid: number; isRepeatClient: boolean };
 type Project = { id: string; projectName: string; date: string; customServiceText: string | null; totalPrice: number; deposit: number; remaining: number; workStatus: string; paymentStatus: string; notes: string | null; createdAt: string; client: ClientInfo; designer: { id: string; name: string } | null; designerName: string | null; services: { id: string; name: string }[]; payments?: Payment[] };
 type Service = { id: string; name: string; isCustom: boolean };
@@ -33,6 +34,150 @@ function fmt(n: number | undefined | null) { return (n ?? 0).toLocaleString("en-
 function fmtDate(d: string) { return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); }
 function monthKey(d: string) { const dt = new Date(d); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`; }
 function monthLabel(d: string) { return new Date(d).toLocaleDateString("en-US", { month: "long", year: "numeric" }); }
+
+/* ═══ Receipt Upload & Display ═══ */
+const ACCEPTED_RECEIPT_TYPES = "image/jpeg,image/png,image/webp,application/pdf";
+
+async function uploadReceiptFile(file: File, clientPaymentId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("clientPaymentId", clientPaymentId);
+    const r = await fetch("/api/payment-receipts", { method: "POST", body: fd });
+    if (r.ok) return { ok: true };
+    const d = await r.json().catch(() => ({}));
+    return { ok: false, error: d.error || "فشل رفع الإيصال" };
+  } catch {
+    return { ok: false, error: "فشل رفع الإيصال" };
+  }
+}
+
+function ReceiptThumb({ receipt, onOpen, onDelete }: { receipt: Receipt; onOpen: () => void; onDelete: () => void }) {
+  const isPdf = receipt.mimeType === "application/pdf";
+  return (
+    <div style={{ position: "relative", width: 42, height: 42, borderRadius: 6, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface-hover)", flexShrink: 0 }}>
+      <button onClick={onOpen} title="عرض الإيصال" style={{ width: "100%", height: "100%", padding: 0, border: "none", background: "transparent", cursor: "zoom-in", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {isPdf
+          ? <span style={{ fontSize: 15 }}>📄</span>
+          : <img src={receipt.imageUrl} alt="إيصال" style={{ width: "100%", height: "100%", objectFit: "cover" }} loading="lazy" />}
+      </button>
+      <button onClick={(e) => { e.stopPropagation(); onDelete(); }} title="حذف الإيصال"
+        style={{ position: "absolute", top: 0, left: 0, width: 14, height: 14, borderRadius: "0 0 4px 0", border: "none", background: "rgba(239,68,68,0.85)", color: "#fff", fontSize: 8, lineHeight: "14px", textAlign: "center", cursor: "pointer", padding: 0 }}>✕</button>
+    </div>
+  );
+}
+
+function ReceiptLightbox({ receipt, onClose }: { receipt: Receipt; onClose: () => void }) {
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [onClose]);
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: 24 }}>
+      <div onClick={e => e.stopPropagation()} style={{ maxWidth: "90vw", maxHeight: "90vh", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#fff" }}>
+          <span style={{ fontSize: 12, color: "#cbd5e1" }}>{receipt.fileName || "إيصال التحويل"}</span>
+          <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 6, border: "none", background: "rgba(255,255,255,0.12)", color: "#fff", fontSize: 14, cursor: "pointer" }}>✕</button>
+        </div>
+        {receipt.mimeType === "application/pdf"
+          ? <iframe src={receipt.imageUrl} title="receipt" style={{ width: "min(85vw, 800px)", height: "80vh", borderRadius: 8, border: "none", background: "#fff" }} />
+          : <img src={receipt.imageUrl} alt="إيصال" style={{ maxWidth: "85vw", maxHeight: "80vh", borderRadius: 8, objectFit: "contain" }} />}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Drop zone + thumbnails for one payment's receipts.
+ * mode="attached"  → payment already saved (uploads go straight to the API)
+ * mode="pending"   → payment not yet saved (file held in memory, uploaded after save)
+ */
+function ReceiptDropZone({ paymentId, receipts, onUploaded, onDeleted, pendingFile, onPendingFile, compact }: {
+  paymentId?: string;
+  receipts?: Receipt[];
+  onUploaded?: (r: Receipt) => void;
+  onDeleted?: (id: string) => void;
+  pendingFile?: File | null;
+  onPendingFile?: (f: File | null) => void;
+  compact?: boolean;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [lightbox, setLightbox] = useState<Receipt | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFiles = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    setError("");
+    if (!paymentId) { onPendingFile?.(file); return; }
+    setBusy(true);
+    // Upload via temp form; response gives the created receipt.
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("clientPaymentId", paymentId);
+    try {
+      const r = await fetch("/api/payment-receipts", { method: "POST", body: fd });
+      if (r.ok) { const rec: Receipt = await r.json(); onUploaded?.(rec); }
+      else { const d = await r.json().catch(() => ({})); setError(d.error || "فشل رفع الإيصال"); }
+    } catch { setError("فشل رفع الإيصال"); }
+    setBusy(false);
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const pendingPreviewUrl = pendingFile && pendingFile.type !== "application/pdf" ? URL.createObjectURL(pendingFile) : null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        {(receipts && receipts.length > 0) && receipts.map(rec => (
+          confirmDeleteId === rec.id ? (
+            <div key={rec.id} style={{ display: "flex", gap: 3, alignItems: "center", fontSize: 9 }}>
+              <span style={{ color: "#ef4444", fontWeight: 600 }}>حذف؟</span>
+              <button onClick={() => { onDeleted?.(rec.id); setConfirmDeleteId(null); }} style={{ padding: "2px 6px", borderRadius: 3, border: "none", background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 600, cursor: "pointer" }}>نعم</button>
+              <button onClick={() => setConfirmDeleteId(null)} style={{ padding: "2px 6px", borderRadius: 3, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 9, cursor: "pointer" }}>لا</button>
+            </div>
+          ) : (
+            <ReceiptThumb key={rec.id} receipt={rec} onOpen={() => setLightbox(rec)}
+              onDelete={() => setConfirmDeleteId(rec.id)} />
+          )
+        ))}
+        {pendingFile && (
+          <div style={{ position: "relative", width: 42, height: 42, borderRadius: 6, overflow: "hidden", border: "1px dashed #0d9488", background: "var(--surface-hover)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {pendingFile.type === "application/pdf"
+              ? <span style={{ fontSize: 15 }}>📄</span>
+              : <img src={pendingPreviewUrl || ""} alt="إيصال" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+            <button onClick={() => onPendingFile?.(null)} title="إزالة"
+              style={{ position: "absolute", top: 0, left: 0, width: 14, height: 14, borderRadius: "0 0 4px 0", border: "none", background: "rgba(239,68,68,0.85)", color: "#fff", fontSize: 8, lineHeight: "14px", textAlign: "center", cursor: "pointer", padding: 0 }}>✕</button>
+          </div>
+        )}
+        <div
+          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={e => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
+          onClick={() => inputRef.current?.click()}
+          style={{
+            display: "flex", alignItems: "center", gap: 4, cursor: "pointer",
+            padding: compact ? "3px 8px" : "6px 10px",
+            borderRadius: 6, border: dragOver ? "1.5px dashed #0d9488" : "1px dashed var(--border)",
+            background: dragOver ? "rgba(13,148,136,0.08)" : "transparent",
+            fontSize: 10, color: "var(--muted)", whiteSpace: "nowrap", transition: "all 0.15s",
+          }}>
+          <span>📎</span>
+          <span>إيصال التحويل</span>
+          {busy && <span style={{ color: "#0d9488" }}>...جاري الرفع</span>}
+        </div>
+        <input ref={inputRef} type="file" accept={ACCEPTED_RECEIPT_TYPES} style={{ display: "none" }}
+          onChange={e => handleFiles(e.target.files)} />
+      </div>
+      {error && <div style={{ fontSize: 9, color: "#ef4444" }}>{error}</div>}
+      {lightbox && <ReceiptLightbox receipt={lightbox} onClose={() => setLightbox(null)} />}
+    </div>
+  );
+}
 
 /* ═══ Inline Editable Text ═══ */
 function InlineText({ value, onSave, style, placeholder }: { value: string; onSave: (v: string) => void; style?: React.CSSProperties; placeholder?: string }) {
@@ -197,9 +342,18 @@ function PaymentDetailsModal({ project, onClose, onAddPayment, onDeletePayment }
   const [addAmount, setAddAmount] = useState("");
   const [addNote, setAddNote] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const payments = project.payments || [];
+  const [localPayments, setLocalPayments] = useState<Payment[]>(project.payments || []);
+  const payments = localPayments;
   const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0);
   const remaining = Number(project.totalPrice) - totalPaid;
+
+  const attachReceipt = (paymentId: string, rec: Receipt) => {
+    setLocalPayments(prev => prev.map(p => p.id === paymentId ? { ...p, receipts: [...(p.receipts || []), rec] } : p));
+  };
+  const removeReceipt = async (paymentId: string, receiptId: string) => {
+    try { await fetch(`/api/payment-receipts/${receiptId}`, { method: "DELETE" }); } catch {}
+    setLocalPayments(prev => prev.map(p => p.id === paymentId ? { ...p, receipts: (p.receipts || []).filter(r => r.id !== receiptId) } : p));
+  };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -226,40 +380,32 @@ function PaymentDetailsModal({ project, onClose, onAddPayment, onDeletePayment }
           ))}
         </div>
 
-        {/* Payment list */}
-        <div style={{ padding: "0 20px 12px", maxHeight: 260, overflow: "auto" }}>
+        {/* Payment list — chronological receipt collector */}
+        <div style={{ padding: "0 20px 12px", maxHeight: 320, overflow: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
           {payments.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 20, color: "var(--muted)", fontSize: 12 }}>No payments yet.</div>
+            <div style={{ textAlign: "center", padding: 20, color: "var(--muted)", fontSize: 12 }}>لا توجد دفعات بعد.</div>
           ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-              <thead>
-                <tr style={{ color: "var(--muted)", fontSize: 9, fontWeight: 600, textTransform: "uppercase" }}>
-                  <th style={{ textAlign: "left", padding: "4px 6px" }}>Date</th>
-                  <th style={{ textAlign: "left", padding: "4px 6px" }}>Amount (SAR)</th>
-                  <th style={{ textAlign: "left", padding: "4px 6px" }}>Note</th>
-                  <th style={{ textAlign: "center", padding: "4px 6px", width: 50 }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {payments.map((p, i) => (
-                  <tr key={p.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                    <td style={{ padding: "5px 6px", color: "var(--text-secondary)" }}>{fmtDate(p.date)}</td>
-                    <td style={{ padding: "5px 6px", fontWeight: 700, color: "#10b981" }}>{fmt(Number(p.amount))}</td>
-                    <td style={{ padding: "5px 6px", color: "var(--muted)" }}>{p.note || "—"}</td>
-                    <td style={{ padding: "5px 6px", textAlign: "center" }}>
-                      {confirmDelete === p.id ? (
-                        <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
-                          <button onClick={() => { onDeletePayment(p.id); setConfirmDelete(null); }} style={{ padding: "2px 6px", borderRadius: 3, border: "none", background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 600, cursor: "pointer" }}>Yes</button>
-                          <button onClick={() => setConfirmDelete(null)} style={{ padding: "2px 6px", borderRadius: 3, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 9, cursor: "pointer" }}>No</button>
-                        </div>
-                      ) : (
-                        <button onClick={() => setConfirmDelete(p.id)} style={{ padding: "2px 5px", borderRadius: 3, border: "1px solid rgba(239,68,68,0.2)", background: "transparent", color: "#ef4444", fontSize: 10, cursor: "pointer" }}>🗑</button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            payments.map(p => (
+              <div key={p.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", background: "var(--surface-hover)", display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 10, color: "var(--text-secondary)", minWidth: 74 }}>{fmtDate(p.date)}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#10b981", direction: "ltr" }}>{fmt(Number(p.amount))} SAR</span>
+                  {p.note && <span style={{ fontSize: 9, color: "var(--muted)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.note}</span>}
+                  <span style={{ flex: 1 }} />
+                  {confirmDelete === p.id ? (
+                    <div style={{ display: "flex", gap: 2 }}>
+                      <button onClick={() => { onDeletePayment(p.id); setConfirmDelete(null); setLocalPayments(prev => prev.filter(x => x.id !== p.id)); }} style={{ padding: "2px 6px", borderRadius: 3, border: "none", background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 600, cursor: "pointer" }}>تأكيد الحذف</button>
+                      <button onClick={() => setConfirmDelete(null)} style={{ padding: "2px 6px", borderRadius: 3, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 9, cursor: "pointer" }}>لا</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setConfirmDelete(p.id)} style={{ padding: "2px 5px", borderRadius: 3, border: "1px solid rgba(239,68,68,0.2)", background: "transparent", color: "#ef4444", fontSize: 10, cursor: "pointer" }}>🗑</button>
+                  )}
+                </div>
+                <ReceiptDropZone paymentId={p.id} receipts={p.receipts || []}
+                  onUploaded={rec => attachReceipt(p.id, rec)}
+                  onDeleted={rid => removeReceipt(p.id, rid)} compact />
+              </div>
+            ))
           )}
         </div>
 
@@ -289,7 +435,7 @@ function PaymentDetailsModal({ project, onClose, onAddPayment, onDeletePayment }
 }
 
 /* ═══ Edit Modal ═══ */
-function EditModal({ project, users, services, onClose, onSave }: { project: Project; users: User[]; services: Service[]; onClose: () => void; onSave: (data: Record<string, unknown>) => void }) {
+function EditModal({ project, users, services, onClose, onSave, onPaymentsChanged }: { project: Project; users: User[]; services: Service[]; onClose: () => void; onSave: (data: Record<string, unknown>) => void; onPaymentsChanged?: () => void }) {
   const [form, setForm] = useState({
     projectName: project.projectName,
     date: project.date.split("T")[0],
@@ -300,11 +446,45 @@ function EditModal({ project, users, services, onClose, onSave }: { project: Pro
     notes: project.notes || "",
   });
   const remaining = form.totalPrice && form.deposit ? Math.max(0, parseFloat(form.totalPrice) - parseFloat(form.deposit || "0")) : 0;
+  const [localPayments, setLocalPayments] = useState<Payment[]>(project.payments || []);
+  const [payAmount, setPayAmount] = useState("");
+  const [payNote, setPayNote] = useState("");
+  const [confirmDeletePayment, setConfirmDeletePayment] = useState<string | null>(null);
+  const totalPaid = localPayments.reduce((s, p) => s + Number(p.amount), 0);
+  const payRemaining = Math.max(0, Number(project.totalPrice) - totalPaid);
+
+  const attachReceipt = (paymentId: string, rec: Receipt) => {
+    setLocalPayments(prev => prev.map(p => p.id === paymentId ? { ...p, receipts: [...(p.receipts || []), rec] } : p));
+  };
+  const removeReceipt = async (paymentId: string, receiptId: string) => {
+    try { await fetch(`/api/payment-receipts/${receiptId}`, { method: "DELETE" }); } catch {}
+    setLocalPayments(prev => prev.map(p => p.id === paymentId ? { ...p, receipts: (p.receipts || []).filter(r => r.id !== receiptId) } : p));
+  };
+  const addPayment = async (amount: number, note: string) => {
+    try {
+      const r = await fetch("/api/client-payments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectRecordId: project.id, amount, note: note || undefined }) });
+      if (r.ok) {
+        const created: Payment = await r.json();
+        setLocalPayments(prev => [...prev, { ...created, receipts: [] }]);
+        setForm(f => ({ ...f, deposit: String(Number(f.deposit || "0") + amount) }));
+        setPayAmount(""); setPayNote("");
+        onPaymentsChanged?.();
+      }
+    } catch {}
+  };
+  const deletePayment = async (paymentId: string) => {
+    const target = localPayments.find(p => p.id === paymentId);
+    try { await fetch(`/api/client-payments/${paymentId}`, { method: "DELETE" }); } catch {}
+    setLocalPayments(prev => prev.filter(p => p.id !== paymentId));
+    if (target) setForm(f => ({ ...f, deposit: String(Math.max(0, Number(f.deposit || "0") - Number(target.amount))) }));
+    setConfirmDeletePayment(null);
+    onPaymentsChanged?.();
+  };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: "var(--surface)", borderRadius: 14, maxWidth: 520, width: "95%", border: "1px solid var(--border)" }}>
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ background: "var(--surface)", borderRadius: 14, maxWidth: 560, width: "95%", maxHeight: "92vh", overflow: "auto", border: "1px solid var(--border)" }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "var(--surface)", zIndex: 5 }}>
           <div>
             <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", margin: 0 }}>Edit Record</h3>
             <p style={{ fontSize: 11, color: "var(--muted)", margin: "2px 0 0" }}>{project.client.name} — {project.projectName}</p>
@@ -336,6 +516,57 @@ function EditModal({ project, users, services, onClose, onSave }: { project: Pro
             <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 8 }}>
               <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Remaining</label>
               <span style={{ fontWeight: 700, fontSize: 12, color: remaining > 0 ? "#ef4444" : "#10b981" }}>{fmt(remaining)} SAR</span>
+            </div>
+            {/* ─── Payment history with transfer receipts ─── */}
+            <div style={{ gridColumn: "1 / -1", borderTop: "1px solid var(--border)", paddingTop: 12, marginTop: 4 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                💰 سجل الدفعات وإيصالات التحويل
+                <span style={{ fontSize: 9, fontWeight: 600, color: "var(--muted)" }}>({fmt(totalPaid)} / {fmt(Number(project.totalPrice))} SAR)</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+                {localPayments.length === 0 ? (
+                  <div style={{ fontSize: 11, color: "var(--muted)", padding: "6px 0" }}>لا توجد دفعات مسجلة بعد.</div>
+                ) : localPayments.map(p => (
+                  <div key={p.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "7px 10px", background: "var(--surface-hover)", display: "flex", flexDirection: "column", gap: 5 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 10, color: "var(--text-secondary)", minWidth: 74 }}>{fmtDate(p.date)}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#10b981", direction: "ltr" }}>{fmt(Number(p.amount))} SAR</span>
+                      {p.note && <span style={{ fontSize: 9, color: "var(--muted)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.note}</span>}
+                      <span style={{ flex: 1 }} />
+                      {confirmDeletePayment === p.id ? (
+                        <>
+                          <button onClick={() => deletePayment(p.id)} style={{ padding: "2px 6px", borderRadius: 3, border: "none", background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 600, cursor: "pointer" }}>تأكيد الحذف</button>
+                          <button onClick={() => setConfirmDeletePayment(null)} style={{ padding: "2px 6px", borderRadius: 3, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 9, cursor: "pointer" }}>لا</button>
+                        </>
+                      ) : (
+                        <button onClick={() => setConfirmDeletePayment(p.id)} style={{ padding: "2px 5px", borderRadius: 3, border: "1px solid rgba(239,68,68,0.2)", background: "transparent", color: "#ef4444", fontSize: 10, cursor: "pointer" }}>🗑</button>
+                      )}
+                    </div>
+                    <ReceiptDropZone paymentId={p.id} receipts={p.receipts || []}
+                      onUploaded={rec => attachReceipt(p.id, rec)}
+                      onDeleted={rid => removeReceipt(p.id, rid)} compact />
+                  </div>
+                ))}
+              </div>
+              {payRemaining > 0 && (
+                <div style={{ display: "flex", gap: 6, alignItems: "flex-end", flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 90 }}>
+                    <label style={{ fontSize: 9, fontWeight: 600, color: "var(--muted)" }}>Amount (≤ {fmt(payRemaining)})</label>
+                    <input type="number" min="1" max={payRemaining} value={payAmount} onChange={e => setPayAmount(e.target.value)} placeholder="0"
+                      style={{ width: "100%", padding: "6px 8px", borderRadius: 5, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 2 }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 90 }}>
+                    <label style={{ fontSize: 9, fontWeight: 600, color: "var(--muted)" }}>Note</label>
+                    <input value={payNote} onChange={e => setPayNote(e.target.value)} placeholder="Optional"
+                      style={{ width: "100%", padding: "6px 8px", borderRadius: 5, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, outline: "none", marginTop: 2 }} />
+                  </div>
+                  <button type="button" onClick={() => { const a = parseFloat(payAmount); if (a > 0) addPayment(Math.min(a, payRemaining), payNote); }}
+                    style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "#0d9488", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>إضافة دفعة</button>
+                  <button type="button" onClick={() => addPayment(payRemaining, "تحصيل كامل المتبقي")}
+                    style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #0d9488", background: "transparent", color: "#0d9488", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>تحصيل الكل</button>
+                </div>
+              )}
+              <p style={{ fontSize: 9, color: "var(--muted)", margin: "6px 0 0" }}>📎 أرفق إيصال التحويل بكل دفعة — اسحب الصورة أو اضغط للاختيار (JPG, PNG, WEBP, PDF).</p>
             </div>
             <div>
               <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)" }}>Work Status</label>
@@ -628,6 +859,7 @@ export default function NexupClientsPage() {
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
   const [form, setForm] = useState({ clientPhone: "", clientName: "", projectName: "", date: new Date().toISOString().split("T")[0], customServiceText: "", totalPrice: "", deposit: "", workStatus: "WAITING", designerId: "", designerName: "", serviceIds: [] as string[], notes: "" });
   const [clientSuggestion, setClientSuggestion] = useState<ClientInfo | null>(null);
+  const [createReceiptFile, setCreateReceiptFile] = useState<File | null>(null);
   const [paymentModal, setPaymentModal] = useState<Project | null>(null);
   const [editModal, setEditModal] = useState<Project | null>(null);
 
@@ -641,7 +873,7 @@ export default function NexupClientsPage() {
     setLoading(false);
   }, [search, wsFilter, psFilter]);
 
-  const fetchMeta = async () => { try { const [s, u] = await Promise.all([fetch("/api/services?businessSlug=nexup"), fetch("/api/users")]); if (s.ok) setServices(await s.json()); if (u.ok) setUsers(await s.json()); } catch {} };
+  const fetchMeta = async () => { try { const [s, u] = await Promise.all([fetch("/api/services?businessSlug=nexup"), fetch("/api/users")]); if (s.ok) setServices(await s.json()); if (u.ok) setUsers(await u.json()); } catch {} };
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
   useEffect(() => { fetchMeta(); }, []);
 
@@ -694,6 +926,13 @@ export default function NexupClientsPage() {
       const r = await fetch("/api/nexup/projects", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ clientId: clientSuggestion?.id, clientPhone: form.clientPhone, clientName: form.clientName, projectName: form.projectName, date: form.date, customServiceText: form.customServiceText || undefined, totalPrice: parseFloat(form.totalPrice), deposit: parseFloat(form.deposit || "0"), workStatus: form.workStatus, designerId: form.designerId || undefined, designerName: form.designerName || undefined, serviceIds: form.serviceIds, notes: form.notes || undefined }) });
       if (!r.ok) { const d = await r.json(); throw new Error(d.error || "Failed"); }
+      // Upload the pending deposit receipt (if any) to the auto-created deposit payment.
+      const created = await r.json();
+      if (createReceiptFile && created?.id && created?.payments?.length > 0) {
+        const depositPayment = created.payments[created.payments.length - 1];
+        const up = await uploadReceiptFile(createReceiptFile, depositPayment.id);
+        if (!up.ok && up.error) setError(`تم حفظ السجل لكن فشل رفع الإيصال: ${up.error}`);
+      }
       setShowForm(false); resetForm(); fetchProjects();
     } catch (err) { setError(err instanceof Error ? err.message : "Error"); }
     setSubmitting(false);
@@ -707,7 +946,7 @@ export default function NexupClientsPage() {
     setEditModal(null);
   };
 
-  const resetForm = () => { setForm({ clientPhone: "", clientName: "", projectName: "", date: new Date().toISOString().split("T")[0], customServiceText: "", totalPrice: "", deposit: "", workStatus: "WAITING", designerId: "", designerName: "", serviceIds: [], notes: "" }); setClientSuggestion(null); setError(""); };
+  const resetForm = () => { setForm({ clientPhone: "", clientName: "", projectName: "", date: new Date().toISOString().split("T")[0], customServiceText: "", totalPrice: "", deposit: "", workStatus: "WAITING", designerId: "", designerName: "", serviceIds: [], notes: "" }); setClientSuggestion(null); setCreateReceiptFile(null); setError(""); };
 
   const toggleMonth = (key: string) => { setCollapsedMonths(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; }); };
 
@@ -781,12 +1020,15 @@ export default function NexupClientsPage() {
               <MonthHeader label={group.label} count={group.items.length} totalRevenue={gRevenue} totalCollected={gCollected} totalRemaining={gRemaining} paidCount={gPaid} collapsed={collapsed} onToggle={() => toggleMonth(key)} />
               {!collapsed && (
                 <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderTop: "none", borderRadius: "0 0 6px 6px" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 1100 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 1100, tableLayout: "fixed" }}>
+                    <colgroup>
+                      {[85, 100, 110, 130, 100, 70, 70, 130, 95, 100, 62, 110, 62].map((w, i) => <col key={i} style={{ width: w }} />)}
+                    </colgroup>
                     <thead>
                       <tr style={{ background: "linear-gradient(135deg, rgba(13,148,136,0.06) 0%, transparent 100%)" }}>
-                        {[{ l: "Date", ar: "التاريخ", w: 85 }, { l: "Phone", ar: "الهاتف", w: 100 }, { l: "Client", ar: "العميل", w: 100 }, { l: "Project", ar: "المشروع", w: 120 }, { l: "Services", ar: "الخدمات", w: 90 }, { l: "Price", ar: "السعر", w: 70 }, { l: "Deposit", ar: "العربون", w: 65 }, { l: "Remaining", ar: "المتبقي", w: 130 }, { l: "Designer", ar: "المصمم", w: 90 }, { l: "Work", ar: "الحالة", w: 95 }, { l: "Status", ar: "الدفع", w: 60 }, { l: "Notes", ar: "ملاحظات", w: 100 }, { l: "", ar: "", w: 60 }].map((c, i) => (
-                          <th key={i} style={{ padding: "7px 8px", width: c.w, textAlign: "left", borderBottom: "2px solid var(--border)" }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text)", letterSpacing: "0.02em" }}>{c.l}</div>
+                        {[{ l: "Date", ar: "التاريخ" }, { l: "Phone", ar: "الهاتف" }, { l: "Client", ar: "العميل" }, { l: "Project", ar: "المشروع" }, { l: "Services", ar: "الخدمات" }, { l: "Price", ar: "السعر" }, { l: "Deposit", ar: "العربون" }, { l: "Remaining", ar: "المتبقي" }, { l: "Designer", ar: "المصمم" }, { l: "Work", ar: "الحالة" }, { l: "Status", ar: "الدفع" }, { l: "Notes", ar: "ملاحظات" }, { l: "Actions", ar: "إجراءات" }].map((c, i) => (
+                          <th key={i} style={{ padding: "7px 8px", textAlign: "left", borderBottom: "2px solid var(--border)", borderLeft: i < 12 ? "1px solid var(--border)" : "none", verticalAlign: "middle" }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text)", letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.l}</div>
                             {c.ar && <div style={{ fontSize: 8, fontWeight: 500, color: "var(--muted)", marginTop: 1 }}>{c.ar}</div>}
                           </th>
                         ))}
@@ -808,42 +1050,42 @@ export default function NexupClientsPage() {
                             onMouseEnter={e => { if (!isDone) e.currentTarget.style.background = "var(--surface-hover)"; }}
                             onMouseLeave={e => { if (!isDone) e.currentTarget.style.background = "var(--surface)"; }}
                           >
-                            <td style={{ padding: "5px 8px", fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap" }}>{fmtDate(p.date)}</td>
-                            <td style={{ padding: "5px 8px", fontSize: 11, color: "var(--text-secondary)", direction: "ltr" }}>{p.client.phone}</td>
-                            <td style={{ padding: "5px 8px" }}>
+                            <td style={{ padding: "5px 8px", fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap", verticalAlign: "middle", borderLeft: "1px solid var(--border)" }}>{fmtDate(p.date)}</td>
+                            <td style={{ padding: "5px 8px", fontSize: 11, color: "var(--text-secondary)", direction: "ltr", verticalAlign: "middle", borderLeft: "1px solid var(--border)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.client.phone}</td>
+                            <td style={{ padding: "5px 8px", verticalAlign: "middle", borderLeft: "1px solid var(--border)" }}>
                               <div style={{ fontWeight: 600, fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
-                                {p.client.name}
-                                {p.client.isRepeatClient && <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 3, background: "rgba(139,92,246,0.1)", color: "#8b5cf6", fontWeight: 700 }}>×{p.client.projectCount}</span>}
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.client.name}</span>
+                                {p.client.isRepeatClient && <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 3, background: "rgba(139,92,246,0.1)", color: "#8b5cf6", fontWeight: 700, flexShrink: 0 }}>×{p.client.projectCount}</span>}
                               </div>
                               <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 3, background: tier.bg, color: tier.c, fontWeight: 700 }}>{tier.l}</span>
                             </td>
-                            <td style={{ padding: "5px 8px" }}><InlineText value={p.projectName} onSave={v => patchProject(p.id, { projectName: v })} style={{ fontWeight: 600, fontSize: 12 }} /></td>
-                            <td style={{ padding: "5px 8px" }}>
+                            <td style={{ padding: "5px 8px", verticalAlign: "middle", borderLeft: "1px solid var(--border)" }}><InlineText value={p.projectName} onSave={v => patchProject(p.id, { projectName: v })} style={{ fontWeight: 600, fontSize: 12 }} /></td>
+                            <td style={{ padding: "5px 8px", verticalAlign: "middle", borderLeft: "1px solid var(--border)" }}>
                               <div style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
                                 {p.services.map(s => <span key={s.id} style={{ padding: "1px 5px", borderRadius: 3, fontSize: 9, fontWeight: 600, background: "rgba(13,148,136,0.08)", color: "#0d9488" }}>{s.name}</span>)}
                                 {p.services.length === 0 && <span style={{ fontSize: 9, color: "var(--muted)" }}>{p.customServiceText || "—"}</span>}
                               </div>
                             </td>
-                            <td style={{ padding: "5px 8px", fontWeight: 700, direction: "ltr", textAlign: "left", fontSize: 12 }}>{fmt(Number(p.totalPrice))}</td>
-                            <td style={{ padding: "5px 8px", direction: "ltr", textAlign: "left", color: "var(--text-secondary)", fontSize: 12 }}>{fmt(Number(p.deposit))}</td>
-                            <td style={{ padding: "5px 8px", direction: "ltr", textAlign: "left" }}>
+                            <td style={{ padding: "5px 8px", fontWeight: 700, direction: "ltr", textAlign: "left", fontSize: 12, verticalAlign: "middle", borderLeft: "1px solid var(--border)" }}>{fmt(Number(p.totalPrice))}</td>
+                            <td style={{ padding: "5px 8px", direction: "ltr", textAlign: "left", color: "var(--text-secondary)", fontSize: 12, verticalAlign: "middle", borderLeft: "1px solid var(--border)" }}>{fmt(Number(p.deposit))}</td>
+                            <td style={{ padding: "5px 8px", direction: "ltr", textAlign: "left", verticalAlign: "middle", borderLeft: "1px solid var(--border)" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                 <PayButton remaining={Number(p.remaining)} projectId={p.id} onPay={handlePayPartial} />
                                 {(p.payments && p.payments.length > 0) && (
-                                  <button onClick={() => setPaymentModal(p)} style={{ padding: "2px 5px", borderRadius: 3, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 9, cursor: "pointer" }} title="View payment history">📄 {p.payments.length}</button>
+                                  <button onClick={() => setPaymentModal(p)} style={{ padding: "2px 5px", borderRadius: 3, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 9, cursor: "pointer" }} title="View payment history & receipts">📄 {p.payments.length}</button>
                                 )}
                               </div>
                             </td>
-                            <td style={{ padding: "5px 8px" }}>
+                            <td style={{ padding: "5px 8px", verticalAlign: "middle", borderLeft: "1px solid var(--border)" }}>
                               <DesignerInput designerId={p.designer?.id || null} designerName={p.designerName} users={users}
                                 onSave={(id, name) => patchProject(p.id, { designerId: id, designerName: name })} />
                             </td>
-                            <td style={{ padding: "5px 8px" }}><WSToggle status={p.workStatus} onToggle={next => patchProject(p.id, { workStatus: next })} /></td>
-                            <td style={{ padding: "5px 8px" }}>
+                            <td style={{ padding: "5px 8px", verticalAlign: "middle", borderLeft: "1px solid var(--border)" }}><WSToggle status={p.workStatus} onToggle={next => patchProject(p.id, { workStatus: next })} /></td>
+                            <td style={{ padding: "5px 8px", verticalAlign: "middle", borderLeft: "1px solid var(--border)" }}>
                               <span style={{ padding: "2px 6px", borderRadius: 4, background: ps.bg, color: ps.c, fontSize: 10, fontWeight: 600 }}>{ps.l}</span>
                             </td>
-                            <td style={{ padding: "5px 8px" }}><InlineText value={p.notes || ""} onSave={v => patchProject(p.id, { notes: v || null })} placeholder="note..." style={{ fontSize: 10, color: "var(--muted)" }} /></td>
-                            <td style={{ padding: "5px 4px", textAlign: "center" }}>
+                            <td style={{ padding: "5px 8px", verticalAlign: "middle", borderLeft: "1px solid var(--border)" }}><InlineText value={p.notes || ""} onSave={v => patchProject(p.id, { notes: v || null })} placeholder="note..." style={{ fontSize: 10, color: "var(--muted)" }} /></td>
+                            <td style={{ padding: "5px 4px", textAlign: "center", verticalAlign: "middle" }}>
                               <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
                                 <button onClick={() => setEditModal(p)} style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 11, cursor: "pointer" }} title="Edit">✏️</button>
                                 {deleteConfirm === p.id ? (
@@ -892,7 +1134,7 @@ export default function NexupClientsPage() {
 
       {/* Edit Modal */}
       {editModal && (
-        <EditModal project={editModal} users={users} services={services} onClose={() => setEditModal(null)} onSave={handleEditSave} />
+        <EditModal project={editModal} users={users} services={services} onClose={() => setEditModal(null)} onSave={handleEditSave} onPaymentsChanged={fetchProjects} />
       )}
 
       {/* Create Form Modal */}
@@ -957,6 +1199,12 @@ export default function NexupClientsPage() {
                       <label style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)", whiteSpace: "nowrap" }}>Remaining</label>
                       <div style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-hover)", fontWeight: 700, fontSize: 12, direction: "ltr", textAlign: "right", color: remaining > 0 ? "#ef4444" : "#10b981" }}>{fmt(remaining)} SAR</div>
                     </div>
+                    {parseFloat(form.deposit || "0") > 0 && (
+                      <div style={{ gridColumn: "1 / -1" }}>
+                        <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>إيصال التحويل 📎 (اختياري — يُرفع مع العربون)</label>
+                        <ReceiptDropZone pendingFile={createReceiptFile} onPendingFile={setCreateReceiptFile} />
+                      </div>
+                    )}
                   </div>
                 </div>
 

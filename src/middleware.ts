@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 
-const publicPaths = new Set(["/login", "/api/auth/login", "/api/auth/logout"]);
+const publicPaths = new Set(["/login", "/api/auth/login", "/api/auth/logout", "/mcp"]);
 
 // Business-specific route prefixes
 const businessRoutes: Record<string, string[]> = {

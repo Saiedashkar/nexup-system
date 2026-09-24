@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { McpPrincipal } from "./auth";
-import { isToolAllowed } from "./auth";
+import { isToolAllowed, writeToolsEnabled } from "./auth";
 import { getBusinessScopeFilter } from "./scope";
 import {
   listClients,
@@ -46,6 +46,10 @@ import { McpActionError, mcpFailure, toolError } from "./errors";
    delete path anywhere in the MCP surface, and no financial write:
    create_project always stores deposit 0 / remaining = totalPrice /
    paymentStatus UNPAID, and update_project cannot touch money columns.
+
+   Action tools are registered only while MCP_WRITE_TOOLS_ENABLED is
+   truthy (fail-closed remote kill switch — see auth.ts), so the same
+   build can run read-only or read+write purely from configuration.
    ═══════════════════════════════════════════════════════════════ */
 
 export function buildMcpServer(principal: McpPrincipal): McpServer {
@@ -187,83 +191,92 @@ export function buildMcpServer(principal: McpPrincipal): McpServer {
     },
   );
 
-  /* ─── Action tools (Phase 2A — create / update only) ──────── */
+  /* ─── Action tools (Phase 2A — create / update only) ────────
 
-  server.registerTool(
-    "create_client",
-    {
-      description:
-        "Create ONE client inside an explicitly named business (nexup | rebound | abomazen). Rejects a phone that already belongs to a live client in that business, and never touches any other business. Creates a client only — no project, payment, subscription or treasury row is written. Optional tier defaults to NORMAL.",
-      inputSchema: CreateClientInput,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
-    },
-    async (args, extra) => {
-      if (!isToolAllowed(principal, "create_client")) return deny("create_client");
-      return run("create_client", CreateClientInput, args, (parsed) => createClientAction(parsed, principal));
-    },
-  );
+     Registered only while the write kill switch is on
+     (MCP_WRITE_TOOLS_ENABLED, fail-closed). With the flag off the four
+     tools are absent from tools/list, the principal no longer carries
+     them in allowedTools, and the route-level authorization check
+     rejects any stale client that still tries to call one — so flipping
+     the env var turns writes off at every layer, without a code change. */
 
-  server.registerTool(
-    "update_client",
-    {
-      description:
-        "Update an existing client's name, phone and/or tier. Requires clientId; the client must belong to a business this MCP profile may act on. Any other field is rejected, nothing is deleted, and the client can never be moved to another business. A phone already used by another live client in the same business is refused.",
-      inputSchema: UpdateClientInput,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
+  if (writeToolsEnabled()) {
+    server.registerTool(
+      "create_client",
+      {
+        description:
+          "Create ONE client inside an explicitly named business (nexup | rebound | abomazen). Rejects a phone that already belongs to a live client in that business, and never touches any other business. Creates a client only — no project, payment, subscription or treasury row is written. Optional tier defaults to NORMAL.",
+        inputSchema: CreateClientInput,
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
       },
-    },
-    async (args, extra) => {
-      if (!isToolAllowed(principal, "update_client")) return deny("update_client");
-      return run("update_client", UpdateClientInput, args, (parsed) => updateClientAction(parsed, principal));
-    },
-  );
+      async (args, extra) => {
+        if (!isToolAllowed(principal, "create_client")) return deny("create_client");
+        return run("create_client", CreateClientInput, args, (parsed) => createClientAction(parsed, principal));
+      },
+    );
 
-  server.registerTool(
-    "create_project",
-    {
-      description:
-        "Create a project record for an EXISTING client that belongs to the explicitly named business. Only projectName, date, totalPrice, customServiceText, workStatus, designerName and notes are accepted. The record is always created unpaid: deposit 0, remaining = totalPrice, paymentStatus UNPAID — no deposit, payment or treasury transaction is ever created by MCP. Payments must be recorded in the web app.",
-      inputSchema: CreateProjectInput,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
+    server.registerTool(
+      "update_client",
+      {
+        description:
+          "Update an existing client's name, phone and/or tier. Requires clientId; the client must belong to a business this MCP profile may act on. Any other field is rejected, nothing is deleted, and the client can never be moved to another business. A phone already used by another live client in the same business is refused.",
+        inputSchema: UpdateClientInput,
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
       },
-    },
-    async (args, extra) => {
-      if (!isToolAllowed(principal, "create_project")) return deny("create_project");
-      return run("create_project", CreateProjectInput, args, (parsed) => createProjectAction(parsed, principal));
-    },
-  );
+      async (args, extra) => {
+        if (!isToolAllowed(principal, "update_client")) return deny("update_client");
+        return run("update_client", UpdateClientInput, args, (parsed) => updateClientAction(parsed, principal));
+      },
+    );
 
-  server.registerTool(
-    "update_project",
-    {
-      description:
-        "Update the non-financial fields of a project record (projectName, workStatus, designerName, notes). Requires projectId. Amounts, deposit, remaining, paymentStatus, the client and the business are out of scope and are rejected if sent — this tool can never change money or delete a record.",
-      inputSchema: UpdateProjectInput,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
+    server.registerTool(
+      "create_project",
+      {
+        description:
+          "Create a project record for an EXISTING client that belongs to the explicitly named business. Only projectName, date, totalPrice, customServiceText, workStatus, designerName and notes are accepted. The record is always created unpaid: deposit 0, remaining = totalPrice, paymentStatus UNPAID — no deposit, payment or treasury transaction is ever created by MCP. Payments must be recorded in the web app.",
+        inputSchema: CreateProjectInput,
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
       },
-    },
-    async (args, extra) => {
-      if (!isToolAllowed(principal, "update_project")) return deny("update_project");
-      return run("update_project", UpdateProjectInput, args, (parsed) => updateProjectAction(parsed, principal));
-    },
-  );
+      async (args, extra) => {
+        if (!isToolAllowed(principal, "create_project")) return deny("create_project");
+        return run("create_project", CreateProjectInput, args, (parsed) => createProjectAction(parsed, principal));
+      },
+    );
+
+    server.registerTool(
+      "update_project",
+      {
+        description:
+          "Update the non-financial fields of a project record (projectName, workStatus, designerName, notes). Requires projectId. Amounts, deposit, remaining, paymentStatus, the client and the business are out of scope and are rejected if sent — this tool can never change money or delete a record.",
+        inputSchema: UpdateProjectInput,
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async (args, extra) => {
+        if (!isToolAllowed(principal, "update_project")) return deny("update_project");
+        return run("update_project", UpdateProjectInput, args, (parsed) => updateProjectAction(parsed, principal));
+      },
+    );
+  }
 
   return server;
 }

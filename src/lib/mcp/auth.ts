@@ -10,6 +10,8 @@ import { createHash, timingSafeEqual } from "crypto";
    tools — never delete, never financial writes — and the principal
    shape stays the single place where that scope is decided.
    Auth itself is unchanged from Phase 1 (fail-closed bearer check).
+   The Phase 2A write tools carry a remote kill switch
+   (MCP_WRITE_TOOLS_ENABLED, fail-closed — see writeToolsEnabled).
    ═══════════════════════════════════════════════════════════════ */
 
 /** Stable business slugs (mirrors the seeded Business table). */
@@ -57,14 +59,41 @@ export const ALL_TOOL_NAMES = [...READ_TOOL_NAMES, ...ACTION_TOOL_NAMES] as cons
 export type McpToolName = (typeof ALL_TOOL_NAMES)[number];
 export type McpActionToolName = (typeof ACTION_TOOL_NAMES)[number];
 
-/** Shared-token principal: every business, every tool in ALL_TOOL_NAMES. */
+/**
+ * Remote kill switch for the Phase 2A write tools.
+ *
+ * Fail-closed by design: the create_* / update_* tools are available only
+ * when `MCP_WRITE_TOOLS_ENABLED` is explicitly truthy (`true`, `1` or
+ * `yes`, case-insensitive). Unset, empty, `false` or any other value
+ * keeps the whole MCP surface read-only — a freshly rolled-back or
+ * misconfigured environment can therefore never write by accident, and
+ * turning writes off never requires a code change.
+ *
+ * Read per request, exactly like MCP_ACCESS_TOKEN, so flipping the value
+ * and restarting the process changes the surface with no new build
+ * artifact. On serverless hosts (Vercel) an env change still needs a
+ * redeploy before the running instance picks it up.
+ */
+export const MCP_WRITE_TOOLS_ENV = "MCP_WRITE_TOOLS_ENABLED";
+
+export function writeToolsEnabled(): boolean {
+  const raw = process.env[MCP_WRITE_TOOLS_ENV]?.trim().toLowerCase();
+  return raw === "true" || raw === "1" || raw === "yes";
+}
+
+/**
+ * Shared-token principal: every business, and every tool in
+ * ALL_TOOL_NAMES — minus the action tools when the write kill switch is
+ * off, so the switch is enforced at the single authorization point.
+ */
 export function buildSuperPrincipal(): McpPrincipal {
+  const writes = writeToolsEnabled();
   return {
     id: "mcp-shared-token",
     displayName: "MCP Shared Token",
-    role: "MCP_OPERATOR",
+    role: writes ? "MCP_OPERATOR" : "MCP_READONLY",
     allowedBusinesses: new Set<BusinessSlug>(BUSINESS_SLUGS),
-    allowedTools: new Set<string>(ALL_TOOL_NAMES),
+    allowedTools: new Set<string>(writes ? ALL_TOOL_NAMES : READ_TOOL_NAMES),
   };
 }
 

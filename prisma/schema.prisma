@@ -314,6 +314,33 @@ model ActivityLog {
   @@index([timestamp])
 }
 
+// Audit trail for MCP (Hermes) writes. Deliberately separate from
+// ActivityLog, which requires a real human User FK: MCP acts as a
+// machine principal, so no human row is faked and the ActivityLog
+// foreign key is left exactly as-is. Intentionally has NO foreign keys
+// at all — the trail is append-only history that must survive, and it
+// must never introduce a new RESTRICT constraint that could block a
+// user/business operation. Every row names exactly one business.
+model McpAuditLog {
+  id           String   @id @default(cuid())
+  source       String   @default("MCP/Hermes")
+  actor        String // MCP principal id (never a human User id)
+  actorName    String // MCP principal display name
+  tool         String // create_client | update_client | create_project | update_project
+  action       String // CREATE | UPDATE
+  entityType   String // Client | ProjectRecord
+  entityId     String
+  businessId   String
+  businessSlug String
+  metadata     Json? // non-secret change details only
+  createdAt    DateTime @default(now())
+
+  @@index([businessId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([tool])
+}
+
 // ═══════════════════════════════════════════════════════
 // Office Administration Layer (SUPER_ADMIN only)
 // ═══════════════════════════════════════════════════════

@@ -21,34 +21,51 @@ import {
   GetProjectInput,
   GetBusinessSummaryInput,
   GetBrandContextInput,
+  CreateClientInput,
+  UpdateClientInput,
+  CreateProjectInput,
+  UpdateProjectInput,
 } from "./schemas";
+import {
+  createClientAction,
+  updateClientAction,
+  createProjectAction,
+  updateProjectAction,
+} from "./actions";
+import { McpActionError, mcpFailure, toolError } from "./errors";
 
 /* ═══════════════════════════════════════════════════════════════
-   MCP server (Phase 1 — READ-ONLY)
+   MCP server (Phase 1 reads + Phase 2A create/update actions)
 
    One McpServer per request (stateless). Every tool:
-   • is read-only (findMany/findFirst/aggregate only — enforced
-     by the fact queries.ts contains no other Prisma calls),
    • authorizes through isToolAllowed/isBusinessAllowed centrally,
    • projects an explicit field allow-list (no raw row dumps).
+
+   Read tools (queries.ts) only ever findMany/findFirst/aggregate.
+   Action tools (actions.ts) can create and update only — there is no
+   delete path anywhere in the MCP surface, and no financial write:
+   create_project always stores deposit 0 / remaining = totalPrice /
+   paymentStatus UNPAID, and update_project cannot touch money columns.
    ═══════════════════════════════════════════════════════════════ */
 
 export function buildMcpServer(principal: McpPrincipal): McpServer {
   const server = new McpServer(
-    { name: "nexup-mcp", version: "1.0.0" },
+    { name: "nexup-mcp", version: "1.1.0" },
     {
       capabilities: { tools: {} },
       instructions:
-        "Read-only access to the NEXUP / REBOUND / ABOMAZEN business data. " +
-        "Clients and projects are scoped per business; amounts are stored " +
-        "in the business currency (SAR for NEXUP, EGP for the others).",
+        "Access to the NEXUP / REBOUND / ABOMAZEN business data. Clients and " +
+        "projects are scoped per business; amounts are stored in the business " +
+        "currency (SAR for NEXUP, EGP for the others). The create_* and update_* " +
+        "tools are limited to admin fields: they never delete anything, never " +
+        "move a record to another business, and never record money — new " +
+        "projects are always created unpaid with zero deposit, and payment " +
+        "status/amounts can only be changed in the web app.",
     },
   );
 
-  const deny = (tool: string) => ({
-    isError: true as const,
-    content: [{ type: "text" as const, text: `Access denied: '${tool}' is not allowed for this MCP profile.` }],
-  });
+  const deny = (tool: string) =>
+    toolError(`[forbidden] Access denied: '${tool}' is not allowed for this MCP profile.`);
 
   const scope = getBusinessScopeFilter(principal);
 
@@ -64,8 +81,7 @@ export function buildMcpServer(principal: McpPrincipal): McpServer {
     },
     async (args, extra) => {
       if (!isToolAllowed(principal, "search_clients")) return deny("search_clients");
-      const { parsed } = await serverComplete(extra, SearchClientsInput, args);
-      return ok(await searchClients(parsed, scope, principal));
+      return run("search_clients", SearchClientsInput, args, (parsed) => searchClients(parsed, scope, principal));
     },
   );
 
@@ -79,8 +95,7 @@ export function buildMcpServer(principal: McpPrincipal): McpServer {
     },
     async (args, extra) => {
       if (!isToolAllowed(principal, "get_client")) return deny("get_client");
-      const { parsed } = await serverComplete(extra, GetClientInput, args);
-      return ok(await getClient(parsed, scope, principal));
+      return run("get_client", GetClientInput, args, (parsed) => getClient(parsed, scope, principal));
     },
   );
 
@@ -94,8 +109,7 @@ export function buildMcpServer(principal: McpPrincipal): McpServer {
     },
     async (args, extra) => {
       if (!isToolAllowed(principal, "get_clients")) return deny("get_clients");
-      const { parsed } = await serverComplete(extra, GetClientsInput, args);
-      return ok(await listClients(parsed, scope, principal));
+      return run("get_clients", GetClientsInput, args, (parsed) => listClients(parsed, scope, principal));
     },
   );
 
@@ -111,8 +125,7 @@ export function buildMcpServer(principal: McpPrincipal): McpServer {
     },
     async (args, extra) => {
       if (!isToolAllowed(principal, "get_projects")) return deny("get_projects");
-      const { parsed } = await serverComplete(extra, GetProjectsInput, args);
-      return ok(await listProjects(parsed, scope, principal));
+      return run("get_projects", GetProjectsInput, args, (parsed) => listProjects(parsed, scope, principal));
     },
   );
 
@@ -126,8 +139,7 @@ export function buildMcpServer(principal: McpPrincipal): McpServer {
     },
     async (args, extra) => {
       if (!isToolAllowed(principal, "get_project")) return deny("get_project");
-      const { parsed } = await serverComplete(extra, GetProjectInput, args);
-      return ok(await getProject(parsed, scope, principal));
+      return run("get_project", GetProjectInput, args, (parsed) => getProject(parsed, scope, principal));
     },
   );
 
@@ -141,9 +153,9 @@ export function buildMcpServer(principal: McpPrincipal): McpServer {
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
-    async (_args, extra) => {
+    async (args) => {
       if (!isToolAllowed(principal, "get_businesses")) return deny("get_businesses");
-      return ok(await listBusinesses(principal));
+      return run("get_businesses", z.object({}), args, () => listBusinesses(principal));
     },
   );
 
@@ -157,8 +169,7 @@ export function buildMcpServer(principal: McpPrincipal): McpServer {
     },
     async (args, extra) => {
       if (!isToolAllowed(principal, "get_business_summary")) return deny("get_business_summary");
-      const { parsed } = await serverComplete(extra, GetBusinessSummaryInput, args);
-      return ok(await getBusinessSummary(parsed, scope, principal));
+      return run("get_business_summary", GetBusinessSummaryInput, args, (parsed) => getBusinessSummary(parsed, scope, principal));
     },
   );
 
@@ -172,8 +183,85 @@ export function buildMcpServer(principal: McpPrincipal): McpServer {
     },
     async (args, extra) => {
       if (!isToolAllowed(principal, "get_brand_context")) return deny("get_brand_context");
-      const { parsed } = await serverComplete(extra, GetBrandContextInput, args);
-      return ok(await getBrandContext(parsed, scope, principal));
+      return run("get_brand_context", GetBrandContextInput, args, (parsed) => getBrandContext(parsed, scope, principal));
+    },
+  );
+
+  /* ─── Action tools (Phase 2A — create / update only) ──────── */
+
+  server.registerTool(
+    "create_client",
+    {
+      description:
+        "Create ONE client inside an explicitly named business (nexup | rebound | abomazen). Rejects a phone that already belongs to a live client in that business, and never touches any other business. Creates a client only — no project, payment, subscription or treasury row is written. Optional tier defaults to NORMAL.",
+      inputSchema: CreateClientInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (args, extra) => {
+      if (!isToolAllowed(principal, "create_client")) return deny("create_client");
+      return run("create_client", CreateClientInput, args, (parsed) => createClientAction(parsed, principal));
+    },
+  );
+
+  server.registerTool(
+    "update_client",
+    {
+      description:
+        "Update an existing client's name, phone and/or tier. Requires clientId; the client must belong to a business this MCP profile may act on. Any other field is rejected, nothing is deleted, and the client can never be moved to another business. A phone already used by another live client in the same business is refused.",
+      inputSchema: UpdateClientInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (args, extra) => {
+      if (!isToolAllowed(principal, "update_client")) return deny("update_client");
+      return run("update_client", UpdateClientInput, args, (parsed) => updateClientAction(parsed, principal));
+    },
+  );
+
+  server.registerTool(
+    "create_project",
+    {
+      description:
+        "Create a project record for an EXISTING client that belongs to the explicitly named business. Only projectName, date, totalPrice, customServiceText, workStatus, designerName and notes are accepted. The record is always created unpaid: deposit 0, remaining = totalPrice, paymentStatus UNPAID — no deposit, payment or treasury transaction is ever created by MCP. Payments must be recorded in the web app.",
+      inputSchema: CreateProjectInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (args, extra) => {
+      if (!isToolAllowed(principal, "create_project")) return deny("create_project");
+      return run("create_project", CreateProjectInput, args, (parsed) => createProjectAction(parsed, principal));
+    },
+  );
+
+  server.registerTool(
+    "update_project",
+    {
+      description:
+        "Update the non-financial fields of a project record (projectName, workStatus, designerName, notes). Requires projectId. Amounts, deposit, remaining, paymentStatus, the client and the business are out of scope and are rejected if sent — this tool can never change money or delete a record.",
+      inputSchema: UpdateProjectInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (args, extra) => {
+      if (!isToolAllowed(principal, "update_project")) return deny("update_project");
+      return run("update_project", UpdateProjectInput, args, (parsed) => updateProjectAction(parsed, principal));
     },
   );
 
@@ -190,12 +278,35 @@ function ok(data: unknown) {
 }
 
 /**
+ * Run one tool call: validate the arguments, execute it, and turn every
+ * failure into a clean coded message.
+ *
+ * Expected failures (not found, scope denial, duplicate phone, bad
+ * date…) pass through as `[code] message`. Anything unexpected is
+ * logged server-side with secrets redacted and reported to the client
+ * as a generic `[internal_error]` plus a reference — raw Prisma or
+ * driver text never crosses the MCP boundary.
+ */
+async function run<T extends z.ZodType, R>(
+  toolName: string,
+  schema: T,
+  args: unknown,
+  action: (parsed: z.infer<T>) => Promise<R>,
+) {
+  try {
+    const { parsed } = await serverComplete(schema, args);
+    return ok(await action(parsed));
+  } catch (err) {
+    return mcpFailure(err, `tool ${toolName}`);
+  }
+}
+
+/**
  * Re-validate args against the zod schema server-side.
  * registerTool already validates inputSchema, but this keeps the
  * handler independent of registration order and future SDK changes.
  */
 async function serverComplete<T extends z.ZodType>(
-  _extra: unknown,
   schema: T,
   args: unknown,
 ): Promise<{ parsed: z.infer<T> }> {
@@ -204,7 +315,7 @@ async function serverComplete<T extends z.ZodType>(
     const issues = result.error.issues
       .map((i) => `${i.path.join(".") || "root"}: ${i.message}`)
       .join("; ");
-    throw new Error(`Invalid input — ${issues}`);
+    throw new McpActionError("invalid_input", `Invalid input — ${issues}`);
   }
   return { parsed: result.data };
 }

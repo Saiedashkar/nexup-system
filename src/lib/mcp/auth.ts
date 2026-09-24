@@ -1,13 +1,15 @@
 import { createHash, timingSafeEqual } from "crypto";
 
 /* ═══════════════════════════════════════════════════════════════
-   MCP authentication (Phase 1 — READ-ONLY)
+   MCP authentication (Phase 1 read tools + Phase 2A action tools)
 
    A single shared bearer token (MCP_ACCESS_TOKEN) authenticates
-   remote AI agents. Phase 1 grants it a SUPER_ADMIN-equivalent
-   *read-only* principal; the McpPrincipal shape below is the only
-   thing Phase 2 will extend (one principal per AI employee profile,
-   scoped allowedBusinesses / allowedTools). No write path exists.
+   remote AI agents. It grants a SUPER_ADMIN-equivalent principal
+   scoped by the two allow-lists below: allowedBusinesses and
+   allowedTools. Phase 2A adds four narrowly-scoped create/update
+   tools — never delete, never financial writes — and the principal
+   shape stays the single place where that scope is decided.
+   Auth itself is unchanged from Phase 1 (fail-closed bearer check).
    ═══════════════════════════════════════════════════════════════ */
 
 /** Stable business slugs (mirrors the seeded Business table). */
@@ -23,13 +25,13 @@ export type BusinessSlug = (typeof BUSINESS_SLUGS)[number];
 export type McpPrincipal = {
   id: string;
   displayName: string;
-  role: "MCP_READONLY";
+  role: "MCP_READONLY" | "MCP_OPERATOR";
   allowedBusinesses: ReadonlySet<BusinessSlug>;
   allowedTools: ReadonlySet<string>;
 };
 
-/** Every tool the MCP surface exposes (read-only forever in Phase 1). */
-export const ALL_TOOL_NAMES = [
+/** Phase 1 tools — read-only projections, unchanged. */
+export const READ_TOOL_NAMES = [
   "search_clients",
   "get_client",
   "get_clients",
@@ -39,14 +41,28 @@ export const ALL_TOOL_NAMES = [
   "get_business_summary",
   "get_brand_context",
 ] as const;
-export type McpToolName = (typeof ALL_TOOL_NAMES)[number];
 
-/** Phase-1 super principal: every business, every (read-only) tool. */
+/**
+ * Phase 2A tools — strictly add/update, never delete, never financial
+ * writes (no deposit / paymentStatus / ClientPayment / PoolTransaction).
+ */
+export const ACTION_TOOL_NAMES = [
+  "create_client",
+  "update_client",
+  "create_project",
+  "update_project",
+] as const;
+
+export const ALL_TOOL_NAMES = [...READ_TOOL_NAMES, ...ACTION_TOOL_NAMES] as const;
+export type McpToolName = (typeof ALL_TOOL_NAMES)[number];
+export type McpActionToolName = (typeof ACTION_TOOL_NAMES)[number];
+
+/** Shared-token principal: every business, every tool in ALL_TOOL_NAMES. */
 export function buildSuperPrincipal(): McpPrincipal {
   return {
     id: "mcp-shared-token",
     displayName: "MCP Shared Token",
-    role: "MCP_READONLY",
+    role: "MCP_OPERATOR",
     allowedBusinesses: new Set<BusinessSlug>(BUSINESS_SLUGS),
     allowedTools: new Set<string>(ALL_TOOL_NAMES),
   };

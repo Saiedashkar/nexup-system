@@ -5,7 +5,7 @@ import { buildMcpServer } from "@/lib/mcp/server";
 import type { McpPrincipal } from "@/lib/mcp/auth";
 
 /* ═══════════════════════════════════════════════════════════════
-   POST /mcp — remote MCP endpoint (Phase 1, READ-ONLY).
+   POST /mcp — remote MCP endpoint (Phase 1 reads + Phase 2A actions).
 
    • Transport: official SDK WebStandardStreamableHTTPServerTransport
      in stateless JSON mode (`enableJsonResponse: true`,
@@ -13,8 +13,9 @@ import type { McpPrincipal } from "@/lib/mcp/auth";
      request, no shared mutable state between serverless invocations.
    • Auth: `Authorization: Bearer <MCP_ACCESS_TOKEN>`, checked BEFORE
      any body parsing. Fail-closed when the token env var is absent.
-   • Tools: the eight read-only tools registered in lib/mcp/server.
-     No write capability exists in this surface.
+   • Tools: the eight read-only tools plus the four Phase 2A
+     create/update tools registered in lib/mcp/server. The action
+     tools cannot delete anything and cannot write financial fields.
    ═══════════════════════════════════════════════════════════════ */
 
 const MAX_BODY_BYTES = 64 * 1024;

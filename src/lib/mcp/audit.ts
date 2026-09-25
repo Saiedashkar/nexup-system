@@ -23,14 +23,19 @@ import type { McpActionToolName, McpPrincipal } from "./auth";
 /** Human-facing source label — every MCP write is attributable to this. */
 export const MCP_AUDIT_SOURCE = "MCP/Hermes";
 
-export type McpAuditAction = "CREATE" | "UPDATE";
-export type McpAuditEntityType = "Client" | "ProjectRecord";
+/**
+ * v1 lifecycle rows: PREPARE is written when a pending action is created;
+ * CREATE/UPDATE describe executed business changes. DELETE becomes
+ * writable when a Red delete action is introduced.
+ */
+export type McpAuditAction = "CREATE" | "UPDATE" | "PREPARE";
+export type McpAuditEntityType = "Client" | "ProjectRecord" | "McpPendingAction";
 
 export type McpAuditInput = {
   /** Acting MCP principal — machine identity, never a human User id. */
   principal: McpPrincipal;
-  /** Exact tool that performed the write. */
-  tool: McpActionToolName;
+  /** Exact tool that performed the write or created the pending action. */
+  tool: string;
   action: McpAuditAction;
   entityType: McpAuditEntityType;
   entityId: string;

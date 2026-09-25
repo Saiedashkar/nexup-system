@@ -18,7 +18,20 @@ import { randomUUID } from "crypto";
      real error is logged server-side with secrets redacted.
    ═══════════════════════════════════════════════════════════════ */
 
-export type ActionErrorCode = "invalid_input" | "not_found" | "forbidden" | "conflict";
+/**
+ * Expected action failures. The confirmation_* codes belong to the
+ * Phase 2B pending-action lifecycle and are always fail-closed: a
+ * confirmation that is not exactly valid, unexpired, unconsumed and
+ * precondition-clean can never execute anything.
+ */
+export type ActionErrorCode =
+  | "invalid_input"
+  | "not_found"
+  | "forbidden"
+  | "conflict"
+  | "confirmation_invalid"
+  | "confirmation_expired"
+  | "confirmation_used";
 
 /** Any expected action failure — surfaced to the agent as an MCP tool error. */
 export class McpActionError extends Error {

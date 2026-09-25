@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from "crypto";
+import { RED_PREPARE_TOOL_NAMES, RED_CONFIRM_TOOL_NAMES } from "./classification";
 
 /* ═══════════════════════════════════════════════════════════════
    MCP authentication (Phase 1 read tools + Phase 2A action tools)
@@ -60,6 +61,14 @@ export type McpToolName = (typeof ALL_TOOL_NAMES)[number];
 export type McpActionToolName = (typeof ACTION_TOOL_NAMES)[number];
 
 /**
+ * Phase 2B Red tools — prepared/confirmed through the pending-action
+ * core. v1 registers NONE (the registry in classification.ts is empty);
+ * this constant simply concatenates whatever the registry declares so
+ * principal construction and registration stay in lockstep.
+ */
+export const RED_TOOL_NAMES = [...RED_PREPARE_TOOL_NAMES, ...RED_CONFIRM_TOOL_NAMES] as const;
+
+/**
  * Remote kill switch for the Phase 2A write tools.
  *
  * Fail-closed by design: the create_* / update_* tools are available only
@@ -82,18 +91,40 @@ export function writeToolsEnabled(): boolean {
 }
 
 /**
+ * Remote kill switch for the Phase 2B Red (confirmation-gated) actions.
+ *
+ * Fail-closed exactly like the write switch, and layered on top of it:
+ * Red prepare and confirm tools register only when BOTH
+ * MCP_WRITE_TOOLS_ENABLED and MCP_RED_ACTIONS_ENABLED are explicitly
+ * truthy (`true`, `1` or `yes`, case-insensitive). Unset, empty or any
+ * other value keeps the Red surface absent from tools/list and rejected
+ * at the route-level authorization check. Staged rollout: writes off →
+ * writes on (Yellow) → Red on, each reversible by env change alone.
+ */
+export const MCP_RED_ACTIONS_ENV = "MCP_RED_ACTIONS_ENABLED";
+
+export function redActionsEnabled(): boolean {
+  const raw = process.env[MCP_RED_ACTIONS_ENV]?.trim().toLowerCase();
+  return writeToolsEnabled() && (raw === "true" || raw === "1" || raw === "yes");
+}
+
+/**
  * Shared-token principal: every business, and every tool in
  * ALL_TOOL_NAMES — minus the action tools when the write kill switch is
  * off, so the switch is enforced at the single authorization point.
  */
 export function buildSuperPrincipal(): McpPrincipal {
   const writes = writeToolsEnabled();
+  const red = redActionsEnabled();
   return {
     id: "mcp-shared-token",
     displayName: "MCP Shared Token",
     role: writes ? "MCP_OPERATOR" : "MCP_READONLY",
     allowedBusinesses: new Set<BusinessSlug>(BUSINESS_SLUGS),
-    allowedTools: new Set<string>(writes ? ALL_TOOL_NAMES : READ_TOOL_NAMES),
+    allowedTools: new Set<string>([
+      ...(writes ? ALL_TOOL_NAMES : READ_TOOL_NAMES),
+      ...(red ? RED_TOOL_NAMES : []),
+    ]),
   };
 }
 

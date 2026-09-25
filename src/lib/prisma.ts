@@ -9,7 +9,11 @@ import { SOFT_DELETE_MODEL_SET } from "./soft-delete-models";
 
 function createRawClient() {
   const url = process.env.DATABASE_URL || "";
-  const pool = new (require("pg").Pool)({ connectionString: url, ssl: { rejectUnauthorized: false } });
+  // TLS is required against Supabase (self-signed chain accepted via the
+  // adapter's relaxed check). DATABASE_SSL_DISABLE=1 opts out explicitly —
+  // used by the isolated-DB test harness and local dev servers without TLS.
+  const ssl = process.env.DATABASE_SSL_DISABLE === "1" ? false : { rejectUnauthorized: false };
+  const pool = new (require("pg").Pool)({ connectionString: url, ssl });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 }

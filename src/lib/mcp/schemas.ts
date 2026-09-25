@@ -175,6 +175,19 @@ export type CreateProjectInput = z.infer<typeof CreateProjectInput>;
  * `paymentStatus`, `payRemaining`, `clientId` and `businessId` are
  * not part of this schema and are rejected if sent.
  */
+/* ─── Phase 2B — confirmation gate (generic) ─────────────────── */
+
+/**
+ * Every confirm_* tool takes exactly this — arguments are never re-sent;
+ * execution uses the server-side snapshot taken at prepare time.
+ * Token: 256-bit base64url from prepare (43 chars); matched via SHA-256.
+ */
+export const ConfirmActionInput = z.strictObject({
+  confirmationId: z.string().regex(/^[a-z0-9]{20,40}$/i, "Invalid confirmation id format"),
+  token: z.string().min(32).max(128),
+});
+export type ConfirmActionInput = z.infer<typeof ConfirmActionInput>;
+
 export const UpdateProjectInput = z.strictObject({
   projectId: cuidSchema.describe("Project record id (cuid)"),
   projectName: z.string().trim().min(1).max(160).optional().describe("New project name"),

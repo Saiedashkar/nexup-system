@@ -314,6 +314,81 @@ model ActivityLog {
   @@index([timestamp])
 }
 
+// ═════════════════════════════════════════════════════
+// Phase 2B — pending confirmation for sensitive ("Red") MCP actions
+// ═════════════════════════════════════════════════════
+
+// Two-step confirmation gate for high-impact MCP actions. prepare_*
+// persists a server-side intent snapshot (args + computed preview +
+// precondition fingerprint) and hands the caller a one-time token;
+// confirm_* consumes the row and executes the business mutation in a
+// SINGLE database transaction. v1 requires the same MCP principal for
+// prepare and confirm, and confirmation happens at the conversational
+// layer — the token proves same-agent continuation, NOT human
+// approval. A trusted approval channel (dashboard, Telegram, …) can
+// later add a real APPROVED state without redesign: the approval
+// columns below are pre-declared and unused in v1.
+// Like McpAuditLog, this table deliberately has NO foreign keys so it
+// can never add a RESTRICT constraint that blocks a business
+// operation.
+model McpPendingAction {
+  id          String   @id @default(cuid())
+
+  // Actor that prepared the intent (confirm must match in v1).
+  actor       String
+  actorName   String
+
+  // What will happen (from the classification registry).
+  tool        String
+  actionType  String
+  entityType  String
+  entityId    String?
+
+  // Scope binding — checked again at confirm.
+  businessId  String
+  businessSlug String
+
+  // Validated, canonical, non-secret arguments (executed as-is).
+  argsSnapshot Json
+
+  // Human-readable effect summary + computed numbers for the summary.
+  preview     Json
+
+  // Preconditions re-checked inside the confirm transaction
+  // (e.g. { "ProjectRecord:cmug…": { "updatedAt": …, "remaining": … } }).
+  preconditionFingerprint Json?
+
+  // Integrity/diagnostics: SHA-256 of the canonical args JSON.
+  requestHash String
+
+  // One-time token — only its SHA-256 is ever stored. Plaintext is
+  // returned exactly once in the prepare response, never logged,
+  // audited or persisted.
+  confirmTokenHash String
+  attempts    Int      @default(0)
+
+  status      String   @default("PENDING") // PENDING | EXECUTED | EXPIRED | FAILED (| APPROVED future)
+
+  expiresAt   DateTime
+  confirmedAt DateTime?
+  executedAt  DateTime?
+  resultAuditLogId String?
+
+  // Future trusted-approval channel (NOT used in v1, additive now so
+  // the later migration touches nothing existing).
+  approvalChannel String?
+  approvedAt      DateTime?
+  approvedBy      String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, expiresAt])
+  @@index([actor])
+  @@index([businessId])
+  @@index([entityType, entityId])
+}
+
 // Audit trail for MCP (Hermes) writes. Deliberately separate from
 // ActivityLog, which requires a real human User FK: MCP acts as a
 // machine principal, so no human row is faked and the ActivityLog

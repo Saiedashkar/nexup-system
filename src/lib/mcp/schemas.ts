@@ -188,6 +188,26 @@ export const ConfirmActionInput = z.strictObject({
 });
 export type ConfirmActionInput = z.infer<typeof ConfirmActionInput>;
 
+/* ─── prepare_create_client_payment (Red action) ──────────── */
+
+/**
+ * SAR client payment, staged through the pending-action core.
+ * Same closed-schema rules as the Phase 2A tools: `amount` must be a
+ * finite positive SAR value with at most 2 decimals (the shared
+ * amountSchema excludes NaN and ±Infinity via min/max), `date` is
+ * optional (defaults to now) and `note` is optional free text.
+ * The remaining-balance/overpayment check happens in the handler
+ * against the live ProjectRecord — it cannot be a schema rule.
+ */
+export const CreateClientPaymentInput = z.strictObject({
+  business: businessSlugSchema.describe("Explicit business slug — the project's client must belong to it"),
+  projectId: cuidSchema.describe("Project record id (cuid) the payment is attached to"),
+  amount: amountSchema.describe("Payment amount in SAR, greater than 0, max 2 decimals — must not exceed the project's remaining balance"),
+  date: dateSchema.optional().describe("Payment date, ISO 8601 (defaults to now)"),
+  note: clearableTextSchema(500).describe("Optional free-text note stored on the payment"),
+});
+export type CreateClientPaymentInput = z.infer<typeof CreateClientPaymentInput>;
+
 export const UpdateProjectInput = z.strictObject({
   projectId: cuidSchema.describe("Project record id (cuid)"),
   projectName: z.string().trim().min(1).max(160).optional().describe("New project name"),

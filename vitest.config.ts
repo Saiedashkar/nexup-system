@@ -12,6 +12,9 @@ export default defineConfig({
     setupFiles: ["tests/mcp-env.setup.ts"],
     hookTimeout: 240_000,
     testTimeout: 120_000,
+    // Each test file owns the throwaway database lifecycle (create →
+    // seed → drop), so files must not run concurrently against it.
+    fileParallelism: false,
     // No globalSetup: the suite owns its throwaway database lifecycle.
   },
 });

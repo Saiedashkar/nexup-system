@@ -7,11 +7,12 @@
 // prepare → human-readable summary → one-time confirmation token →
 // confirm → atomic execution + audit).
 //
-// v1 contains NO Red business actions. Financial writes, payments,
-// expenses, withdrawals, deletes and subscription mutations will be
-// added here — each as one entry in RED_ACTIONS — only after the
-// pending-action core has been proven. Adding an entry is the ONLY
-// change needed to wire a new Red action into registration.
+// The pending-action core (pending.ts) must be proven before more
+// entries land. Adding an entry here is the ONLY change needed to wire
+// a new Red action into registration: the prepare/confirm tool names
+// propagate to the principal (auth.ts) and registration (server.ts)
+// automatically, always behind MCP_WRITE_TOOLS_ENABLED AND
+// MCP_RED_ACTIONS_ENABLED.
 // ═══════════════════════════════════════════════════════════════
 
 /**
@@ -29,19 +30,29 @@ export type RedActionDefinition = {
 };
 
 /**
- * v1 registry — intentionally empty of business actions.
- * The create_client_payment Red action lands here in a later,
- * separately approved step.
+ * The Red registry. create_client_payment is the FIRST business
+ * action here: recording money moves the pool, so it is never
+ * executed directly — prepare stages a validated intent with a
+ * human-readable preview, and only a later confirm_create_client_payment
+ * (same principal, one-time token, re-checked preconditions) executes
+ * it atomically. Tool implementations live in redActions.ts; the
+ * registry entry alone controls registration and principal scope.
  */
-export const RED_ACTIONS: readonly RedActionDefinition[] = [];
+export const RED_ACTIONS: readonly RedActionDefinition[] = [
+  {
+    prepareTool: "prepare_create_client_payment",
+    confirmTool: "confirm_create_client_payment",
+    actionName: "create_client_payment",
+  },
+];
 
-/** All prepare_* tool names (v1: none). */
+/** All prepare_* tool names. */
 export const RED_PREPARE_TOOL_NAMES: readonly string[] = RED_ACTIONS.map((a) => a.prepareTool);
 
-/** All confirm_* tool names (v1: none). */
+/** All confirm_* tool names. */
 export const RED_CONFIRM_TOOL_NAMES: readonly string[] = RED_ACTIONS.map((a) => a.confirmTool);
 
-/** Every tool a Red action contributes to tools/list (v1: none). */
+/** Every tool a Red action contributes to tools/list. */
 export const RED_TOOL_NAMES: readonly string[] = [...RED_PREPARE_TOOL_NAMES, ...RED_CONFIRM_TOOL_NAMES];
 
 /** Is this tool name part of the Red (confirmation-gated) surface? */

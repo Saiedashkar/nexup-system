@@ -29,7 +29,7 @@ export const MCP_AUDIT_SOURCE = "MCP/Hermes";
  * writable when a Red delete action is introduced.
  */
 export type McpAuditAction = "CREATE" | "UPDATE" | "PREPARE";
-export type McpAuditEntityType = "Client" | "ProjectRecord" | "McpPendingAction";
+export type McpAuditEntityType = "Client" | "ProjectRecord" | "ClientPayment" | "McpPendingAction";
 
 export type McpAuditInput = {
   /** Acting MCP principal — machine identity, never a human User id. */

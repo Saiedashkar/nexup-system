@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentSession } from "@/lib/auth";
+import {
+  recordClientPaymentWithRetry,
+  PaymentValidationError,
+  PaymentConflictError,
+} from "@/lib/payments/recordClientPayment";
 
 export const runtime = "nodejs";
 
@@ -50,80 +55,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Amount must be positive" }, { status: 400 });
     }
 
-    // Get the project record
-    const project = await prisma.projectRecord.findUnique({
-      where: { id: projectRecordId },
-      include: { client: true },
-    });
-    if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
-
-    // Don't allow overpayment
-    const currentRemaining = parseFloat(String(project.remaining));
-    if (amountNum > currentRemaining) {
-      return NextResponse.json({ error: `Amount exceeds remaining (${currentRemaining})` }, { status: 400 });
-    }
-
-    // Create the payment record
-    const payment = await prisma.clientPayment.create({
-      data: {
-        projectRecordId,
+    // Shared atomic payment primitive: read → validate → CAS balance
+    // swap → ClientPayment → PoolTransaction IN → tier → ActivityLog,
+    // all in ONE transaction, retried from a fresh read ONLY on the
+    // dedicated CAS conflict (max 3 attempts). A concurrent web or MCP
+    // payment that commits first makes our attempt abort instead of
+    // overwriting it — the proven web↔MCP lost-update race is closed
+    // at the database level, in both directions.
+    let recorded;
+    try {
+      recorded = await recordClientPaymentWithRetry({
+        projectRecordId: String(projectRecordId),
         amount: amountNum,
-        date: date ? new Date(date) : new Date(),
-        note: note || null,
+        date: date ? new Date(String(date)) : undefined,
+        note: note ? String(note) : null,
         createdByUserId: session.userId,
-      },
+        activityLogUserId: session.userId,
+      });
+    } catch (err) {
+      if (err instanceof PaymentValidationError) {
+        if (err.code === "PAYMENT_NOT_FOUND") {
+          return NextResponse.json({ error: "Project not found" }, { status: 404 });
+        }
+        return NextResponse.json({ error: err.message }, { status: 400 });
+      }
+      if (err instanceof PaymentConflictError) {
+        // Retry exhaustion — answer a safe conflict, never stale writes.
+        return NextResponse.json(
+          { error: "The project balance changed too many times while recording this payment. Please retry." },
+          { status: 409 },
+        );
+      }
+      throw err;
+    }
+
+    // Preserve the original API response shape: the created ClientPayment.
+    const payment = await prisma.clientPayment.findUniqueOrThrow({
+      where: { id: recorded.paymentId },
     });
-
-    // Update project: deposit += amount, remaining -= amount
-    const newDeposit = parseFloat(String(project.deposit)) + amountNum;
-    const newRemaining = Math.max(0, parseFloat(String(project.totalPrice)) - newDeposit);
-    const newPaymentStatus = newRemaining <= 0 ? "FULL" : newDeposit > 0 ? "PARTIAL" : "UNPAID";
-
-    await prisma.projectRecord.update({
-      where: { id: projectRecordId },
-      data: {
-        deposit: newDeposit,
-        remaining: newRemaining,
-        paymentStatus: newPaymentStatus as "FULL" | "PARTIAL" | "UNPAID",
-      },
-    });
-
-    // Auto-create PoolTransaction IN
-    await prisma.poolTransaction.create({
-      data: {
-        businessId: project.businessId,
-        projectRecordId,
-        amountSAR: amountNum,
-        type: "IN",
-        date: date ? new Date(date) : new Date(),
-        note: `Payment: ${project.client.name} — ${project.projectName}${note ? ` (${note})` : ""}`,
-      },
-    });
-
-    // Recalculate client tier
-    const projectCount = await prisma.projectRecord.count({ where: { clientId: project.clientId } });
-    const totalPaidAgg = await prisma.projectRecord.aggregate({
-      where: { clientId: project.clientId, paymentStatus: "FULL" },
-      _sum: { totalPrice: true },
-    });
-    const totalRevenue = Number(totalPaidAgg._sum.totalPrice ?? 0);
-    let tier: "VIP" | "LOYAL" | "NORMAL" | "DELINQUENT" = "NORMAL";
-    if (totalRevenue > 1000 || projectCount >= 3) tier = "VIP";
-    else if (totalRevenue > 500 || projectCount >= 2) tier = "LOYAL";
-    await prisma.client.update({ where: { id: project.clientId }, data: { tier } });
-
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId: session.userId,
-        action: "CREATE",
-        entityType: "ClientPayment",
-        entityId: payment.id,
-      },
-    });
-
     return NextResponse.json(payment, { status: 201 });
   } catch (error) {
     console.error("Failed to create payment:", error);

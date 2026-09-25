@@ -32,7 +32,14 @@ import {
   createProjectAction,
   updateProjectAction,
 } from "./actions";
+import {
+  prepareCreateClientPayment,
+  confirmCreateClientPayment,
+} from "./redActions";
 import { McpActionError, mcpFailure, toolError } from "./errors";
+import { ConfirmActionInput, CreateClientPaymentInput } from "./schemas";
+import { RED_ACTIONS } from "./classification";
+import { redActionsEnabled } from "./auth";
 
 /* ═══════════════════════════════════════════════════════════════
    MCP server (Phase 1 reads + Phase 2A create/update actions)
@@ -276,6 +283,67 @@ export function buildMcpServer(principal: McpPrincipal): McpServer {
         return run("update_project", UpdateProjectInput, args, (parsed) => updateProjectAction(parsed, principal));
       },
     );
+  }
+
+  /* ─── Red tools (Phase 2B — confirmation-gated actions) ─────
+
+     Registered only while BOTH kill switches are on
+     (MCP_WRITE_TOOLS_ENABLED AND MCP_RED_ACTIONS_ENABLED, fail-closed
+     and layered — see auth.ts). Each entry in the classification
+     registry contributes exactly one prepare_* tool and one confirm_*
+     tool; execution always goes through the shared pending-action
+     core. With either flag off the tools are absent from tools/list,
+     the principal does not carry them, and the route-level check
+     rejects any stale call — no code change needed to disable. */
+
+  if (redActionsEnabled()) {
+    for (const red of RED_ACTIONS) {
+      if (red.prepareTool === "prepare_create_client_payment") {
+        server.registerTool(
+          red.prepareTool,
+          {
+            description:
+              "STAGE (do not execute) a client payment in SAR against an existing project. Validates the business scope, the project and its client, the amount (finite, positive, max 2 decimals) and the remaining balance — overpayment is rejected. Performs NO business mutation: it stores a server-side snapshot and returns a human-readable preview plus a one-time confirmation token valid for 10 minutes. Execute only via confirm_create_client_payment with that token.",
+            inputSchema: CreateClientPaymentInput,
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: false,
+              openWorldHint: false,
+            },
+          },
+          async (args, extra) => {
+            if (!isToolAllowed(principal, "prepare_create_client_payment")) return deny("prepare_create_client_payment");
+            return run("prepare_create_client_payment", CreateClientPaymentInput, args, (parsed) =>
+              prepareCreateClientPayment(parsed, principal),
+            );
+          },
+        );
+      }
+
+      if (red.confirmTool === "confirm_create_client_payment") {
+        server.registerTool(
+          red.confirmTool,
+          {
+            description:
+              "EXECUTE a previously staged client payment. Takes ONLY the confirmation id and the one-time token from prepare_create_client_payment — financial values are never re-sent; execution uses the server-side snapshot. One transaction re-checks preconditions (project money fields unchanged), creates the ClientPayment, updates deposit/remaining/paymentStatus, records the SAR PoolTransaction IN, recomputes the client tier, writes the business audit row and marks the action EXECUTED. Fails closed on wrong token, expiry, replay, concurrent confirmation or changed preconditions.",
+            inputSchema: ConfirmActionInput,
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: false,
+              openWorldHint: false,
+            },
+          },
+          async (args, extra) => {
+            if (!isToolAllowed(principal, "confirm_create_client_payment")) return deny("confirm_create_client_payment");
+            return run("confirm_create_client_payment", ConfirmActionInput, args, (parsed) =>
+              confirmCreateClientPayment(parsed, principal),
+            );
+          },
+        );
+      }
+    }
   }
 
   return server;

@@ -46,6 +46,8 @@ export async function POST(req: NextRequest) {
       type: body.type,
       fundFlow: fundFlow as any,
       description: body.description || null,
+      reference: body.reference || null,
+      currency: "EGP",
       date,
     },
   });

@@ -1,3 +1,4 @@
+import { CapitalSpendType } from "@prisma/client";
 import { prisma } from "./prisma";
 import { softDeleteRecord } from "./soft-delete";
 
@@ -176,19 +177,58 @@ export async function createCapitalContribution(input: {
 export async function createCapitalSpend(input: {
   amount: number;
   date: Date;
-  category: string;
+  category?: string;
   description: string;
   notes?: string | null;
   reference?: string | null;
   contributionId?: string | null;
+  spendType?: string;
+  recipientPartnerId?: string | null;
+  recipientName?: string | null;
   userId: string;
 }) {
   const amountP = toPiasters(input.amount);
   if (!input.description?.trim()) {
     throw new CapitalValidationError("MISSING_DESCRIPTION", "أدخل وصف الصرف");
   }
-  if (!input.category?.trim()) {
-    throw new CapitalValidationError("MISSING_CATEGORY", "أدخل تصنيف الصرف");
+
+  // Classification: EXPENSE (default), PERSON_WITHDRAWAL, CUSTODY.
+  // All three reduce Available Capital identically — the type is ledger
+  // bookkeeping context, never a bridge into profit/partner accounting.
+  const spendType = input.spendType ?? CapitalSpendType.EXPENSE;
+  if (!Object.values(CapitalSpendType).includes(spendType as CapitalSpendType)) {
+    throw new CapitalValidationError("INVALID_SPEND_TYPE", "نوع حركة رأس المال غير صالح");
+  }
+  // Category is required for EXPENSE; withdrawals/custody receive a
+  // sensible default when omitted (the UI hides the category field for
+  // them — the recipient is the classification there).
+  let category = input.category?.trim();
+  if (!category) {
+    if (spendType === CapitalSpendType.PERSON_WITHDRAWAL) category = "سحب رأس مال";
+    else if (spendType === CapitalSpendType.CUSTODY) category = "عهدة";
+    else throw new CapitalValidationError("MISSING_CATEGORY", "أدخل تصنيف الصرف");
+  }
+  const wantsRecipient = spendType === CapitalSpendType.PERSON_WITHDRAWAL || spendType === CapitalSpendType.CUSTODY;
+  let recipientPartnerId: string | null = null;
+  let recipientName: string | null = null;
+  if (wantsRecipient) {
+    if (input.recipientPartnerId) {
+      const rp = await prisma.partner.findUnique({ where: { id: input.recipientPartnerId } });
+      if (!rp) throw new CapitalValidationError("RECIPIENT_NOT_FOUND", "الشخص المستلم غير موجود");
+      recipientPartnerId = rp.id;
+      recipientName = input.recipientName?.trim() || rp.name; // snapshot at entry time
+    } else if (input.recipientName?.trim()) {
+      recipientName = input.recipientName.trim(); // unregistered person — structured column, never the description
+    } else {
+      throw new CapitalValidationError(
+        "RECIPIENT_REQUIRED",
+        spendType === CapitalSpendType.PERSON_WITHDRAWAL
+          ? "حدد الشخص المستلم لسحب رأس المال"
+          : "حدد مستلم العهدة",
+      );
+    }
+  } else if (input.recipientPartnerId || input.recipientName?.trim()) {
+    throw new CapitalValidationError("RECIPIENT_NOT_ALLOWED", "المستلم مخصص للسحب الشخصي أو العهدة فقط");
   }
 
   return prisma.$transaction(async tx => {
@@ -229,11 +269,14 @@ export async function createCapitalSpend(input: {
       data: {
         amount: toEGP(amountP),
         date: input.date,
-        category: input.category.trim(),
+        category,
         description: input.description.trim(),
         notes: input.notes || null,
         reference: input.reference || null,
         contributionId: input.contributionId || null,
+        spendType: spendType as CapitalSpendType,
+        recipientPartnerId,
+        recipientName,
       },
     });
 
@@ -421,6 +464,9 @@ export type LedgerEntry = {
   recurring: boolean;
   fundFlow: string | null;
   contributionType: "CASH" | "ASSET" | null;
+  spendType: CapitalSpendType | null;
+  recipientPartnerId: string | null;
+  recipientName: string | null;
 };
 
 export async function getCapitalLedger(): Promise<{
@@ -433,7 +479,10 @@ export async function getCapitalLedger(): Promise<{
       include: { partner: { select: { name: true } } },
     }),
     prisma.capitalSpend.findMany({
-      include: { contribution: { include: { partner: { select: { name: true } } } } },
+      include: {
+        contribution: { include: { partner: { select: { name: true } } } },
+        recipientPartner: { select: { name: true } },
+      },
     }),
   ]);
 
@@ -453,6 +502,9 @@ export async function getCapitalLedger(): Promise<{
     recurring: false,
     fundFlow: c.fundFlow,
     contributionType: c.type,
+    spendType: null,
+    recipientPartnerId: null,
+    recipientName: null,
   }));
 
   const outflow: LedgerEntry[] = spends.map(s => ({
@@ -471,6 +523,10 @@ export async function getCapitalLedger(): Promise<{
     recurring: !!s.fixedExpenseId,
     fundFlow: null,
     contributionType: null,
+    spendType: s.spendType,
+    recipientPartnerId: s.recipientPartnerId,
+    // Readable snapshot: stays correct even if the partner is renamed later.
+    recipientName: s.recipientName ?? s.recipientPartner?.name ?? null,
   }));
 
   const entries = [...inflow, ...outflow].sort(
@@ -485,6 +541,54 @@ export async function getCapitalLedger(): Promise<{
   }
 
   return { entries: entries.reverse(), summary: await getCapitalSummary() };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Per-person capital withdrawal report — سحوبات رأس المال حسب الشخص
+
+   Derived from ledger records only (never stored totals). Counts ONLY
+   active (non-deleted) PERSON_WITHDRAWAL CapitalSpend rows — normal
+   capital expenses, custody, profit withdrawals, ProfitTransfer and
+   PartnerTransaction records are deliberately excluded.
+   ═══════════════════════════════════════════════════════════════ */
+
+export type PersonWithdrawalTotal = {
+  recipientPartnerId: string | null;
+  name: string;
+  total: number;
+  count: number;
+  lastDate: string | null;
+};
+
+export async function getCapitalWithdrawalsByPerson(): Promise<PersonWithdrawalTotal[]> {
+  const withdrawals = await prisma.capitalSpend.findMany({
+    where: { spendType: "PERSON_WITHDRAWAL" },
+    include: { recipientPartner: { select: { name: true } } },
+    orderBy: { date: "desc" },
+  });
+
+  const byPerson = new Map<string, PersonWithdrawalTotal>();
+  for (const w of withdrawals) {
+    const name = w.recipientName || w.recipientPartner?.name || "غير محدد";
+    const key = w.recipientPartnerId ?? `name:${name}`;
+    const acc = byPerson.get(key);
+    const amountP = Math.round(w.amount * 100);
+    if (acc) {
+      acc.total = Math.round((acc.total * 100 + amountP)) / 100;
+      acc.count += 1;
+      if (!acc.lastDate || new Date(w.date) > new Date(acc.lastDate)) acc.lastDate = w.date.toISOString();
+    } else {
+      byPerson.set(key, {
+        recipientPartnerId: w.recipientPartnerId,
+        name,
+        total: Math.round(amountP) / 100,
+        count: 1,
+        lastDate: w.date.toISOString(),
+      });
+    }
+  }
+
+  return [...byPerson.values()].sort((a, b) => b.total - a.total);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -607,6 +711,9 @@ export async function updateCapitalSpend(input: {
   notes?: string | null;
   reference?: string | null;
   contributionId?: string | null;
+  spendType?: string;
+  recipientPartnerId?: string | null;
+  recipientName?: string | null;
 }) {
   const existing = await prisma.capitalSpend.findUnique({ where: { id: input.id } });
   if (!existing) throw new CapitalValidationError("SPEND_NOT_FOUND", "حركة الصرف غير موجودة");
@@ -640,8 +747,16 @@ export async function updateCapitalSpend(input: {
     data.date = input.date;
   }
   if (input.category !== undefined) {
-    if (!input.category.trim()) throw new CapitalValidationError("MISSING_CATEGORY", "أدخل تصنيف الصرف");
-    data.category = input.category.trim();
+    if (!input.category.trim()) {
+      // Empty category is only fatal for EXPENSE rows; non-EXPENSE rows
+      // keep their stored classification category.
+      const effectiveTypeForCategory = (input.spendType ?? existing.spendType) as CapitalSpendType;
+      if (effectiveTypeForCategory === CapitalSpendType.EXPENSE) {
+        throw new CapitalValidationError("MISSING_CATEGORY", "أدخل تصنيف الصرف");
+      }
+    } else {
+      data.category = input.category.trim();
+    }
   }
   if (input.description !== undefined) {
     if (!input.description.trim()) throw new CapitalValidationError("MISSING_DESCRIPTION", "أدخل وصف الصرف");
@@ -655,6 +770,52 @@ export async function updateCapitalSpend(input: {
       if (!contrib) throw new CapitalValidationError("CONTRIBUTION_NOT_FOUND", "مساهمة التمويل غير موجودة");
     }
     data.contributionId = input.contributionId || null;
+  }
+
+  // Classification edits: a recipient-bearing type requires a person;
+  // switching to EXPENSE clears the recipient. All types reduce Available
+  // Capital identically, so no balance guard is affected here.
+  if (input.spendType !== undefined) {
+    if (!Object.values(CapitalSpendType).includes(input.spendType as CapitalSpendType)) {
+      throw new CapitalValidationError("INVALID_SPEND_TYPE", "نوع حركة رأس المال غير صالح");
+    }
+    if (existing.fixedExpenseId && input.spendType !== existing.spendType) {
+      throw new CapitalValidationError(
+        "RECURRING_LINKED",
+        "لا يمكن تغيير نوع حركة مرتبطة بمصروف ثابت متكرر",
+      );
+    }
+    data.spendType = input.spendType;
+  }
+  const effectiveType = (input.spendType ?? existing.spendType) as CapitalSpendType;
+  const wantsRecipient = effectiveType === CapitalSpendType.PERSON_WITHDRAWAL || effectiveType === CapitalSpendType.CUSTODY;
+  if (input.recipientPartnerId !== undefined || input.recipientName !== undefined || input.spendType !== undefined) {
+    if (wantsRecipient) {
+      const pid = input.recipientPartnerId !== undefined ? input.recipientPartnerId || null : existing.recipientPartnerId;
+      const pname = input.recipientName !== undefined ? input.recipientName?.trim() || null : existing.recipientName;
+      if (pid) {
+        const rp = await prisma.partner.findUnique({ where: { id: pid } });
+        if (!rp) throw new CapitalValidationError("RECIPIENT_NOT_FOUND", "الشخص المستلم غير موجود");
+        data.recipientPartnerId = rp.id;
+        // Keep/refresh the readable snapshot at entry time.
+        data.recipientName = pname ?? rp.name;
+      } else if (pname) {
+        data.recipientPartnerId = null;
+        data.recipientName = pname;
+      } else {
+        throw new CapitalValidationError(
+          "RECIPIENT_REQUIRED",
+          effectiveType === CapitalSpendType.PERSON_WITHDRAWAL
+            ? "حدد الشخص المستلم لسحب رأس المال"
+            : "حدد مستلم العهدة",
+        );
+      }
+    } else if (input.recipientPartnerId || input.recipientName?.trim()) {
+      throw new CapitalValidationError("RECIPIENT_NOT_ALLOWED", "المستلم مخصص للسحب الشخصي أو العهدة فقط");
+    } else {
+      data.recipientPartnerId = null;
+      data.recipientName = null;
+    }
   }
 
   if (Object.keys(data).length === 0) return existing;

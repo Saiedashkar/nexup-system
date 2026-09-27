@@ -29,6 +29,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       notes: body.notes,
       reference: body.reference,
       contributionId: body.contributionId,
+      spendType: body.spendType,
+      recipientPartnerId: body.recipientPartnerId,
+      recipientName: body.recipientName,
     });
     return NextResponse.json(updated);
   } catch (e) {

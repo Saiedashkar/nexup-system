@@ -18,6 +18,9 @@ type LedgerEntry = {
   recurring: boolean;
   fundFlow?: string | null;
   contributionType?: "CASH" | "ASSET" | null;
+  spendType?: "EXPENSE" | "PERSON_WITHDRAWAL" | "CUSTODY" | null;
+  recipientPartnerId?: string | null;
+  recipientName?: string | null;
 };
 type Summary = {
   totalReceived: number;
@@ -29,6 +32,23 @@ type Summary = {
 };
 type Partner = { id: string; name: string };
 type ContributionOpt = { id: string; amount: number; date: string; type: string; partner: { name: string } };
+type SpendType = "EXPENSE" | "PERSON_WITHDRAWAL" | "CUSTODY";
+type PersonWithdrawalTotal = {
+  recipientPartnerId: string | null;
+  name: string;
+  total: number;
+  count: number;
+  lastDate: string | null;
+};
+
+// Movement-type badge for CAPITAL_SPEND rows — withdrawal (orange) and
+// custody (blue) are visually distinct from a normal capital expense.
+const spendBadge = (t: SpendType | null | undefined) =>
+  t === "PERSON_WITHDRAWAL"
+    ? { text: "− سحب من رأس المال", color: "#f59e0b", bg: "rgba(245,158,11,0.1)" }
+    : t === "CUSTODY"
+      ? { text: "− عهدة", color: "#3b82f6", bg: "rgba(59,130,246,0.1)" }
+      : { text: "− مصروف رأس مال", color: "#ef4444", bg: "rgba(239,68,68,0.1)" };
 
 const fmt = (n: number) =>
   n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -83,6 +103,7 @@ export default function CapitalPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [contributions, setContributions] = useState<ContributionOpt[]>([]);
+  const [withdrawalsByPerson, setWithdrawalsByPerson] = useState<PersonWithdrawalTotal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInForm, setShowInForm] = useState(false);
   const [showSpendForm, setShowSpendForm] = useState(false);
@@ -95,13 +116,14 @@ export default function CapitalPage() {
   });
   const [spendForm, setSpendForm] = useState({
     amount: "", category: "", description: "", notes: "", reference: "", contributionId: "",
+    spendType: "EXPENSE", recipientPartnerId: "", recipientName: "",
     date: new Date().toISOString().split("T")[0],
   });
   const [recurringForm, setRecurringForm] = useState({ amount: "", name: "" });
   const [editIn, setEditIn] = useState<LedgerEntry | null>(null);
   const [editInForm, setEditInForm] = useState({ partnerId: "", amount: "", type: "CASH", fundFlow: "SPENT_ALREADY", description: "", reference: "", date: "" });
   const [editSpend, setEditSpend] = useState<LedgerEntry | null>(null);
-  const [editSpendForm, setEditSpendForm] = useState({ amount: "", date: "", category: "", description: "", notes: "", reference: "", contributionId: "" });
+  const [editSpendForm, setEditSpendForm] = useState({ amount: "", date: "", category: "", description: "", notes: "", reference: "", contributionId: "", spendType: "EXPENSE", recipientPartnerId: "", recipientName: "" });
   const [confirmDeleteId, setConfirmDeleteId] = useState<{ id: string; kind: "in" | "spend"; force: boolean } | null>(null);
   const [dialogError, setDialogError] = useState<string | null>(null);
 
@@ -112,7 +134,11 @@ export default function CapitalPage() {
       fetch("/api/office/partners"),
       fetch("/api/office/capital-contributions"),
     ]);
-    if (lRes.ok) { const d = await lRes.json(); setEntries(d.entries || []); setSummary(d.summary || null); }
+    if (lRes.ok) {
+      const d = await lRes.json();
+      setEntries(d.entries || []); setSummary(d.summary || null);
+      setWithdrawalsByPerson(d.withdrawalsByPerson || []);
+    }
     if (pRes.ok) setPartners(await pRes.json());
     if (cRes.ok) {
       // Only CASH contributions are spendable money — attribution targets.
@@ -142,12 +168,19 @@ export default function CapitalPage() {
   const submitSpend = async () => {
     setError(null);
     if (!spendForm.amount || !spendForm.description || !spendForm.category) return;
+    const wantsRecipient = spendForm.spendType === "PERSON_WITHDRAWAL" || spendForm.spendType === "CUSTODY";
+    if (wantsRecipient && !spendForm.recipientPartnerId && !spendForm.recipientName.trim()) {
+      setError(spendForm.spendType === "PERSON_WITHDRAWAL" ? "حدد الشخص المستلم لسحب رأس المال" : "حدد مستلم العهدة");
+      return;
+    }
     const res = await fetch("/api/office/capital-spends", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...spendForm,
         amount: parseFloat(spendForm.amount),
         contributionId: spendForm.contributionId || null,
+        recipientPartnerId: wantsRecipient ? spendForm.recipientPartnerId || null : null,
+        recipientName: wantsRecipient ? spendForm.recipientName.trim() || null : null,
       }),
     });
     if (!res.ok) {
@@ -155,7 +188,7 @@ export default function CapitalPage() {
       setError(j.message || j.error || "فشل الحفظ");
       return;
     }
-    setSpendForm(f => ({ ...f, amount: "", description: "", notes: "", reference: "" }));
+    setSpendForm(f => ({ ...f, amount: "", description: "", notes: "", reference: "", recipientPartnerId: "", recipientName: "" }));
     setShowSpendForm(false); fetchData();
   };
 
@@ -212,15 +245,27 @@ export default function CapitalPage() {
       amount: String(e.amount), date: e.date.split("T")[0], category: e.category || "",
       description: e.description, notes: e.notes || "", reference: e.reference || "",
       contributionId: e.contributionId || "",
+      spendType: e.spendType || "EXPENSE",
+      recipientPartnerId: e.recipientPartnerId || "",
+      recipientName: e.recipientName || "",
     });
   };
 
   const submitEditSpend = async () => {
     if (!editSpend) return;
     setDialogError(null);
+    const wantsRecipient = editSpendForm.spendType === "PERSON_WITHDRAWAL" || editSpendForm.spendType === "CUSTODY";
     const res = await fetch(`/api/office/capital-spends/${editSpend.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...editSpendForm, amount: parseFloat(editSpendForm.amount), contributionId: editSpendForm.contributionId || null }),
+      body: JSON.stringify({
+        ...editSpendForm,
+        amount: parseFloat(editSpendForm.amount),
+        contributionId: editSpendForm.contributionId || null,
+        // Explicit nulls when the type is EXPENSE clear the stored recipient.
+        spendType: editSpendForm.spendType,
+        recipientPartnerId: wantsRecipient ? editSpendForm.recipientPartnerId || null : null,
+        recipientName: wantsRecipient ? editSpendForm.recipientName.trim() || null : null,
+      }),
     });
     if (!res.ok) { const j = await res.json().catch(() => ({})); setDialogError(j.message || j.error || "فشل التعديل"); return; }
     setEditSpend(null); fetchData();
@@ -334,21 +379,48 @@ export default function CapitalPage() {
         <div style={{ padding: 20, borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)", marginBottom: 16 }}>
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>صرف من رأس المال — CAPITAL SPEND</div>
           <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 12 }}>يُخصم من رأس المال المتاح مباشرة — لا يُسجَّل كمصروف مكتب ولا يمس خزينة التشغيل.</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: 12, marginBottom: 12 }}>
             <div><label style={labelStyle}>المبلغ (EGP) *</label><input type="number" value={spendForm.amount} onChange={e => setSpendForm(f => ({ ...f, amount: e.target.value }))} style={inputStyle} /></div>
             <div><label style={labelStyle}>التاريخ *</label><input type="date" value={spendForm.date} onChange={e => setSpendForm(f => ({ ...f, date: e.target.value }))} style={inputStyle} /></div>
-            <div><label style={labelStyle}>التصنيف *</label><input value={spendForm.category} onChange={e => setSpendForm(f => ({ ...f, category: e.target.value }))} placeholder="مثال: تجهيزات، اشتراكات" style={inputStyle} /></div>
+            <div><label style={labelStyle}>نوع الصرف *</label>
+              <select value={spendForm.spendType} onChange={e => setSpendForm(f => ({ ...f, spendType: e.target.value }))} style={inputStyle}>
+                <option value="EXPENSE">مصروف</option>
+                <option value="PERSON_WITHDRAWAL">سحب شخص من رأس المال</option>
+                <option value="CUSTODY">عهدة</option>
+              </select>
+            </div>
+          </div>
+          {spendForm.spendType === "PERSON_WITHDRAWAL" && (
+            <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.25)", fontSize: 11, color: "#f59e0b", marginBottom: 12 }}>
+              سحب شخصي من صندوق رأس المال — لا يمس أرباح الشريك ولا التحويلات ولا خزينة التشغيل، ويُخصم من رأس المال المتاح فقط.
+            </div>
+          )}
+          {spendForm.spendType !== "EXPENSE" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div><label style={labelStyle}>{spendForm.spendType === "CUSTODY" ? "مستلم العهدة" : "الشخص المستلم"} *</label>
+                <select value={spendForm.recipientPartnerId} onChange={e => setSpendForm(f => ({ ...f, recipientPartnerId: e.target.value }))} style={inputStyle}>
+                  <option value="">— اختر شخصًا مسجلًا —</option>
+                  {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div><label style={labelStyle}>أو اسم يدوي (إن لم يكن مسجلًا)</label><input value={spendForm.recipientName} onChange={e => setSpendForm(f => ({ ...f, recipientName: e.target.value }))} placeholder="مثال: عادل" style={inputStyle} /></div>
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
+            {spendForm.spendType === "EXPENSE" && (
+              <div><label style={labelStyle}>التصنيف *</label><input value={spendForm.category} onChange={e => setSpendForm(f => ({ ...f, category: e.target.value }))} placeholder="مثال: تجهيزات، اشتراكات" style={inputStyle} /></div>
+            )}
             <div><label style={labelStyle}>مرتبط بمساهمة (اختياري)</label>
               <select value={spendForm.contributionId} onChange={e => setSpendForm(f => ({ ...f, contributionId: e.target.value }))} style={inputStyle}>
                 <option value="">من الصندوق العام</option>
                 {contributions.map(c => <option key={c.id} value={c.id}>{c.partner.name} — {fmt(c.amount)} EGP ({toEN(c.date)})</option>)}
               </select>
             </div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
-            <div><label style={labelStyle}>الوصف / التفاصيل *</label><input value={spendForm.description} onChange={e => setSpendForm(f => ({ ...f, description: e.target.value }))} placeholder="مثال: تجهيزات تأسيس المكتب" style={inputStyle} /></div>
-            <div><label style={labelStyle}>ملاحظات</label><input value={spendForm.notes} onChange={e => setSpendForm(f => ({ ...f, notes: e.target.value }))} style={inputStyle} /></div>
             <div><label style={labelStyle}>مرجع (اختياري)</label><input value={spendForm.reference} onChange={e => setSpendForm(f => ({ ...f, reference: e.target.value }))} style={inputStyle} /></div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div><label style={labelStyle}>{spendForm.spendType === "EXPENSE" ? "الوصف / التفاصيل *" : "البيان / السبب *"}</label><input value={spendForm.description} onChange={e => setSpendForm(f => ({ ...f, description: e.target.value }))} placeholder={spendForm.spendType === "EXPENSE" ? "مثال: تجهيزات تأسيس المكتب" : "مثال: سحب نقدي شخصي"} style={inputStyle} /></div>
+            <div><label style={labelStyle}>ملاحظات</label><input value={spendForm.notes} onChange={e => setSpendForm(f => ({ ...f, notes: e.target.value }))} style={inputStyle} /></div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={submitSpend} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>حفظ الصرف</button>
@@ -432,21 +504,43 @@ export default function CapitalPage() {
             )}
           </div>
           {dialogError && <div style={dialogErrorStyle}>{dialogError}</div>}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: 12, marginBottom: 12 }}>
             <div><label style={labelStyle}>المبلغ (EGP) *</label><input type="number" value={editSpendForm.amount} onChange={e => setEditSpendForm(f => ({ ...f, amount: e.target.value }))} style={inputStyle} /></div>
             <div><label style={labelStyle}>التاريخ *</label><input type="date" value={editSpendForm.date} onChange={e => setEditSpendForm(f => ({ ...f, date: e.target.value }))} style={inputStyle} /></div>
-            <div><label style={labelStyle}>التصنيف *</label><input value={editSpendForm.category} onChange={e => setEditSpendForm(f => ({ ...f, category: e.target.value }))} style={inputStyle} /></div>
+            <div><label style={labelStyle}>نوع الصرف *</label>
+              <select value={editSpendForm.spendType} onChange={e => setEditSpendForm(f => ({ ...f, spendType: e.target.value }))} style={inputStyle}>
+                <option value="EXPENSE">مصروف</option>
+                <option value="PERSON_WITHDRAWAL">سحب شخص من رأس المال</option>
+                <option value="CUSTODY">عهدة</option>
+              </select>
+            </div>
+          </div>
+          {editSpendForm.spendType !== "EXPENSE" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div><label style={labelStyle}>{editSpendForm.spendType === "CUSTODY" ? "مستلم العهدة" : "الشخص المستلم"} *</label>
+                <select value={editSpendForm.recipientPartnerId} onChange={e => setEditSpendForm(f => ({ ...f, recipientPartnerId: e.target.value }))} style={inputStyle}>
+                  <option value="">— اختر شخصًا مسجلًا —</option>
+                  {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div><label style={labelStyle}>أو اسم يدوي (إن لم يكن مسجلًا)</label><input value={editSpendForm.recipientName} onChange={e => setEditSpendForm(f => ({ ...f, recipientName: e.target.value }))} placeholder="مثال: عادل" style={inputStyle} /></div>
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
+            {editSpendForm.spendType === "EXPENSE" && (
+              <div><label style={labelStyle}>التصنيف *</label><input value={editSpendForm.category} onChange={e => setEditSpendForm(f => ({ ...f, category: e.target.value }))} style={inputStyle} /></div>
+            )}
             <div><label style={labelStyle}>مرتبط بمساهمة (اختياري)</label>
               <select value={editSpendForm.contributionId} onChange={e => setEditSpendForm(f => ({ ...f, contributionId: e.target.value }))} style={inputStyle}>
                 <option value="">من الصندوق العام</option>
                 {contributions.map(c => <option key={c.id} value={c.id}>{c.partner.name} — {fmt(c.amount)} EGP ({toEN(c.date)})</option>)}
               </select>
             </div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
-            <div><label style={labelStyle}>الوصف / التفاصيل *</label><input value={editSpendForm.description} onChange={e => setEditSpendForm(f => ({ ...f, description: e.target.value }))} style={inputStyle} /></div>
-            <div><label style={labelStyle}>ملاحظات</label><input value={editSpendForm.notes} onChange={e => setEditSpendForm(f => ({ ...f, notes: e.target.value }))} style={inputStyle} /></div>
             <div><label style={labelStyle}>مرجع (اختياري)</label><input value={editSpendForm.reference} onChange={e => setEditSpendForm(f => ({ ...f, reference: e.target.value }))} style={inputStyle} /></div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div><label style={labelStyle}>{editSpendForm.spendType === "EXPENSE" ? "الوصف / التفاصيل *" : "البيان / السبب *"}</label><input value={editSpendForm.description} onChange={e => setEditSpendForm(f => ({ ...f, description: e.target.value }))} style={inputStyle} /></div>
+            <div><label style={labelStyle}>ملاحظات</label><input value={editSpendForm.notes} onChange={e => setEditSpendForm(f => ({ ...f, notes: e.target.value }))} style={inputStyle} /></div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={submitEditSpend} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>حفظ التعديل</button>
@@ -489,19 +583,42 @@ export default function CapitalPage() {
         ))}
       </div>
 
+      {/* سحوبات رأس المال حسب الشخص — compact derived report (PERSON_WITHDRAWAL only) */}
+      {withdrawalsByPerson.length > 0 && (
+        <div style={{ padding: "12px 16px", borderRadius: 12, background: "rgba(245,158,11,0.04)", border: "1px solid rgba(245,158,11,0.25)", marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#f59e0b" }}>سحوبات رأس المال حسب الشخص</div>
+            <div style={{ fontSize: 10, color: "var(--muted)" }}>سحوبات شخصية من رأس المال فقط — بدون المصروفات ولا العُهد ولا مسحوبات الأرباح</div>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+            {withdrawalsByPerson.map(w => (
+              <span key={w.recipientPartnerId ?? w.name} style={{
+                display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 8,
+                background: "var(--bg)", border: "1px solid var(--border)", fontSize: 12,
+              }}>
+                <b style={{ color: "var(--text)" }}>{w.name}</b>
+                <span style={{ direction: "ltr", fontWeight: 700, color: "#f59e0b" }}>{fmt(w.total)} EGP</span>
+                <span style={{ fontSize: 10, color: "var(--muted)" }}>({w.count} حركة)</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Ledger */}
       <div style={{ borderRadius: 12, border: "1px solid var(--border)", overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "100px 110px 1fr 1fr 110px 110px 90px", padding: "10px 16px", background: "var(--surface)", borderBottom: "2px solid var(--border)", fontSize: 11, fontWeight: 600, color: "var(--muted)" }}>
           <div>التاريخ</div><div>النوع</div><div>البيان / المصدر</div><div>التفاصيل</div><div style={{ textAlign: "right" }}>المبلغ</div><div style={{ textAlign: "right" }}>الرصيد بعدها</div><div>إجراءات</div>
         </div>
         {loading ? <div style={{ textAlign: "center", padding: 32, color: "var(--muted)" }}>جاري التحميل...</div> :
-          visible.length === 0 ? <div style={{ textAlign: "center", padding: 48, color: "var(--muted)" }}>لا توجد حركات بعد.</div> :
-          visible.map(e => (
-            <div key={`${e.type}-${e.id}`} style={{ display: "grid", gridTemplateColumns: "100px 110px 1fr 1fr 110px 110px 90px", padding: "10px 16px", borderBottom: "1px solid var(--border)", fontSize: 13, alignItems: "center", borderRight: `3px solid ${isSpend(e.type) ? "#ef4444" : "#10b981"}` }}>
+          visible.length === 0 ? <div style={{ textAlign: "center", padding: 48, color: "var(--muted)" }}>لا توجد حركات بعد.</div> :          visible.map(e => {
+            const badge = spendBadge(e.spendType);
+            return (
+              <div key={`${e.type}-${e.id}`} style={{ display: "grid", gridTemplateColumns: "100px 110px 1fr 1fr 110px 110px 90px", padding: "10px 16px", borderBottom: "1px solid var(--border)", fontSize: 13, alignItems: "center", borderRight: `3px solid ${isSpend(e.type) ? badge.color : "#10b981"}` }}>
               <div style={{ fontSize: 12, color: "var(--muted)" }}>{toEN(e.date)}</div>
               <div>
-                <span style={{ padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 700, background: isSpend(e.type) ? "rgba(239,68,68,0.1)" : "rgba(16,185,129,0.1)", color: isSpend(e.type) ? "#ef4444" : "#10b981" }}>
-                  {isSpend(e.type) ? "− صرف" : "+ دخل رأس مال"}
+                <span style={{ padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 700, background: badge.bg, color: badge.color }}>
+                  {isSpend(e.type) ? badge.text : "+ دخل رأس مال"}
                 </span>
               </div>
               <div>
@@ -509,6 +626,9 @@ export default function CapitalPage() {
                 {e.funder && <div style={{ fontSize: 11, color: "var(--muted)" }}>الممول: {e.funder}</div>}
               </div>
               <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                {e.recipientName && (
+                  <span style={{ fontWeight: 600, color: badge.color, marginLeft: 4 }}>المستلم: {e.recipientName}</span>
+                )}
                 {e.category ? `التصنيف: ${e.category}` : ""}
                 {e.reference ? ` · مرجع: ${e.reference}` : ""}
                 {e.recurring ? " · 🔁 متكرر" : ""}
@@ -521,11 +641,11 @@ export default function CapitalPage() {
                     {e.fundFlow === "SPENT_ALREADY" ? "✅ مصروف بالفعل" : "💰 متاح في الخزينة"}
                   </span>
                 )}
-                {isSpend(e.type) && !e.recurring && (
+                {isSpend(e.type) && !e.recurring && (e.spendType ?? "EXPENSE") === "EXPENSE" && (
                   <button onClick={() => setConvertTarget(e)} style={{ marginRight: 6, padding: "1px 8px", borderRadius: 6, border: "1px solid rgba(245,158,11,0.4)", background: "rgba(245,158,11,0.06)", color: "#f59e0b", fontSize: 10, cursor: "pointer" }}>＋ تحويل لمصروف ثابت</button>
                 )}
               </div>
-              <div style={{ textAlign: "right", fontWeight: 700, direction: "ltr", color: isSpend(e.type) ? "#ef4444" : "#10b981" }}>
+              <div style={{ textAlign: "right", fontWeight: 700, direction: "ltr", color: isSpend(e.type) ? badge.color : "#10b981" }}>
                 {isSpend(e.type) ? "−" : "+"}{fmt(e.amount)} EGP
               </div>
               <div style={{ textAlign: "right", fontWeight: 700, direction: "ltr", color: e.balanceAfter < 0 ? "#ef4444" : "var(--text)" }}>{fmt(e.balanceAfter)}</div>
@@ -538,11 +658,11 @@ export default function CapitalPage() {
                 <button
                   onClick={() => requestDelete(e)}
                   title="حذف"
-                  style={{ padding: "2px 7px", borderRadius: 5, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.05)", color: "#ef4444", fontSize: 11, cursor: "pointer", lineHeight: 1.4 }}
-                >🗑</button>
+                  style={{ padding: "2px 7px", borderRadius: 5, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.05)", color: "#ef4444", fontSize: 11, cursor: "pointer", lineHeight: 1.4 }}                  >🗑</button>
               </div>
             </div>
-          ))}
+          );
+          })}
       </div>
     </div>
   );

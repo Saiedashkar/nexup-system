@@ -31,6 +31,9 @@ export async function POST(req: NextRequest) {
       notes: body.notes || null,
       reference: body.reference || null,
       contributionId: body.contributionId || null,
+      spendType: body.spendType,
+      recipientPartnerId: body.recipientPartnerId || null,
+      recipientName: body.recipientName || null,
       userId: session.userId,
     });
     return NextResponse.json(spend, { status: 201 });

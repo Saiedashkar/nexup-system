@@ -99,7 +99,9 @@ export async function getCapitalSummary(): Promise<CapitalSummary> {
     prisma.capitalSpend.aggregate({ _sum: { amount: true } }),
     prisma.capitalContribution.count(),
     prisma.capitalSpend.count(),
-    prisma.partner.count({ where: { capitalContributions: { some: {} } } }),
+    // Distinct active funders: nested relation filters bypass the
+    // soft-delete client extension, so exclude deleted rows explicitly.
+    prisma.partner.count({ where: { capitalContributions: { some: { deletedAt: null } } } }),
   ]);
 
   // Stored amounts are already in EGP units (write paths convert

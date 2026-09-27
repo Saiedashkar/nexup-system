@@ -1,15 +1,16 @@
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { execSync } from "node:child_process";
 import path from "node:path";
-import {
-  createCapitalContribution,
+import { createCapitalContribution,
   createCapitalSpend,
+  createFixedExpense,
   convertSpendToFixedExpense,
   generateDueFixedExpenses,
   getCapitalLedger,
   getCapitalSummary,
 } from "@/lib/capital";
-import { prisma } from "@/lib/prisma";
+import { prisma, prismaRaw } from "@/lib/prisma";
+import { softDeleteRecord } from "@/lib/soft-delete";
 
 /* Throwaway database lifecycle (local cluster on :5434):
    ensure db → reset schema → prisma migrate deploy → run → drop.
@@ -229,5 +230,110 @@ describe("Capital ledger — acceptance scenario", () => {
     await expect(
       createCapitalSpend({ amount: 1, date: new Date("garbage"), category: "c", description: "d", userId }),
     ).rejects.toBeTruthy();
+  });
+});
+
+describe("Capital soft-delete isolation (Issue 2)", () => {
+  let partnerId: string;
+  let userId: string;
+
+  beforeAll(async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: "capital-sd-test@example.local", name: "SD Test Admin",
+        role: "SUPER_ADMIN", passwordHash: "x",
+      },
+    });
+    const partner = await prisma.partner.create({ data: { name: "مموّل-TEST-SD" } });
+    userId = user.id;
+    partnerId = partner.id;
+  });
+
+  it("11. soft-deleted contributions vanish from summary/ledger/counts but keep their row", async () => {
+    const before = await getCapitalSummary();
+
+    const keep = await createCapitalContribution({
+      partnerId, amount: 12000, type: "CASH",
+      date: new Date("2026-09-01"), description: "مساهمة تبقى", userId,
+    });
+    const drop = await createCapitalContribution({
+      partnerId, amount: 3000, type: "CASH",
+      date: new Date("2026-09-02"), description: "مساهمة تُحذف", userId,
+    });
+
+    let s = await getCapitalSummary();
+    expect(s.totalReceived).toBe(before.totalReceived + 15000);
+    expect(s.contributionCount).toBe(before.contributionCount + 2);
+    expect(s.funderCount).toBe(before.funderCount + 1);
+
+    await softDeleteRecord("CapitalContribution", drop.id, userId);
+
+    s = await getCapitalSummary();
+    expect(s.totalReceived).toBe(before.totalReceived + 12000);
+    expect(s.contributionCount).toBe(before.contributionCount + 1);
+    expect(s.funderCount).toBe(before.funderCount + 1); // keep-contribution still active
+
+    const { entries } = await getCapitalLedger();
+    expect(entries.filter(e => e.type === "CAPITAL_IN" && e.id === drop.id)).toHaveLength(0);
+    expect(entries.filter(e => e.type === "CAPITAL_IN" && e.id === keep.id)).toHaveLength(1);
+
+    // No hard delete: the historical row survives with its deletedAt stamp.
+    const raw = await prismaRaw.capitalContribution.findUnique({ where: { id: drop.id } });
+    expect(raw?.deletedAt).toBeTruthy();
+
+    // Deleting the funder's last active contribution removes them from funderCount.
+    await softDeleteRecord("CapitalContribution", keep.id, userId);
+    s = await getCapitalSummary();
+    expect(s.funderCount).toBe(before.funderCount);
+  });
+
+  it("12. soft-deleted spends restore available capital and leave the ledger", async () => {
+    const before = await getCapitalSummary();
+
+    await createCapitalContribution({
+      partnerId, amount: 1000, type: "CASH",
+      date: new Date("2026-09-03"), userId,
+    });
+    const spend = await createCapitalSpend({
+      amount: 400, date: new Date("2026-09-04"),
+      category: "اختبار", description: "صرف سيُحذف", userId,
+    });
+
+    let s = await getCapitalSummary();
+    expect(s.available).toBe(before.available + 600);
+
+    await softDeleteRecord("CapitalSpend", spend.id, userId);
+
+    s = await getCapitalSummary();
+    expect(s.totalSpent).toBe(before.totalSpent);
+    expect(s.spendCount).toBe(before.spendCount);
+    expect(s.available).toBe(before.available + 1000);
+
+    const { entries } = await getCapitalLedger();
+    expect(entries.filter(e => e.type === "CAPITAL_SPEND" && e.id === spend.id)).toHaveLength(0);
+
+    const raw = await prismaRaw.capitalSpend.findUnique({ where: { id: spend.id } });
+    expect(raw?.deletedAt).toBeTruthy();
+  });
+
+  it("13. soft-deleted FixedExpense stops generating occurrences", async () => {
+    const def = await createFixedExpense({
+      name: "اشتراك-TEST-SD", amount: 100,
+      startDate: new Date("2026-09-01"), userId,
+    });
+
+    await generateDueFixedExpenses(new Date("2026-09-30"));
+    const rowsBefore = (await prisma.officeExpense.findMany()).filter(e => e.fixedExpenseId === def.id);
+    expect(rowsBefore.length).toBeGreaterThanOrEqual(1);
+
+    await softDeleteRecord("FixedExpense", def.id, userId);
+
+    // Rerun: the deleted definition must be excluded → no new occurrences.
+    await generateDueFixedExpenses(new Date("2026-10-31"));
+    const rowsAfter = (await prisma.officeExpense.findMany()).filter(e => e.fixedExpenseId === def.id);
+    expect(rowsAfter.length).toBe(rowsBefore.length);
+
+    // The extended client hides soft-deleted definitions from normal reads.
+    expect(await prisma.fixedExpense.findUnique({ where: { id: def.id } })).toBeNull();
   });
 });

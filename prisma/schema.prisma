@@ -349,7 +349,17 @@ model Partner {
   ownerships          BusinessOwnership[]
   transactions        PartnerTransaction[]
   capitalContributions CapitalContribution[]
+  capitalWithdrawals  CapitalSpend[] @relation("CapitalWithdrawals")
   nexupProfitDistributions NexupProfitLedger[]
+}
+
+/// Classification of a CapitalSpend movement. All types reduce the
+/// Available Capital balance the same way — the type is bookkeeping
+/// context, not a different accounting pool.
+enum CapitalSpendType {
+  EXPENSE
+  PERSON_WITHDRAWAL
+  CUSTODY
 }
 
 model BusinessOwnership {
@@ -447,6 +457,19 @@ model CapitalSpend {
   description     String
   notes           String?
   reference       String?
+  // Classification: EXPENSE (default — all historical rows),
+  // PERSON_WITHDRAWAL (a person took money from the capital fund),
+  // CUSTODY (money held on behalf of a person — tracking only).
+  // All three reduce Available Capital identically.
+  spendType       CapitalSpendType @default(EXPENSE)
+  // PERSON_WITHDRAWAL / CUSTODY recipient. Optional link to the Partner
+  // entity for per-person reporting — deliberately NOT the profit
+  // accounting system (no PartnerTransaction / ProfitTransfer involved).
+  // recipientName keeps a readable snapshot so historical rows stay
+  // understandable even if the partner's display name changes later.
+  recipientPartnerId String?
+  recipientPartner Partner? @relation("CapitalWithdrawals", fields: [recipientPartnerId], references: [id], onDelete: SetNull)
+  recipientName   String?
   contributionId  String?  // optional attribution to a specific funding entry
   contribution    CapitalContribution? @relation(fields: [contributionId], references: [id], onDelete: SetNull)
   fixedExpenseId  String?  @unique // set when converted to a recurring Fixed Expense
@@ -456,6 +479,8 @@ model CapitalSpend {
 
   @@index([date])
   @@index([contributionId])
+  @@index([spendType])
+  @@index([recipientPartnerId])
 
   deletedAt       DateTime?
   deletedByUserId String?

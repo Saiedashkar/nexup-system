@@ -2,15 +2,18 @@
    settlement (authorized by Saeed).
 
    Guarantees:
-   - Reads REAL data from DATABASE_URL (real Supabase) via the app's own
+   - Reads REAL data from the real Supabase database via the app's own
      Prisma client (soft-delete-aware, exactly what the service uses).
+     Connections go through the IPv4 pooler (the direct db.* host is
+     IPv6-only and unreachable from this machine); DATABASE_URL is only
+     re-hosted internally, credentials are never printed.
    - Aborts BEFORE inserting unless: no prior settlement exists,
      active CASH contributions sum to exactly 74,260 EGP, and active
      capital spends sum to exactly 0 EGP.
    - Creates exactly ONE CapitalSpend through the REAL service function
      (createCapitalSpend) so the movement is a genuine ledger record.
-   - Verifies after insert: 74,260 / 74,260 / 0 and that treasury inputs,
-     revenue, profit, pool, office expenses and contributions are untouched.
+   - Verifies after insert: 74,260 / 74,260 / 0 and that pool, revenue,
+     profit, office expenses and contributions are untouched.
    - Never updates or deletes any other record. No migrations.
 
    Run: npx tsx scripts/capital-historical-settlement.ts
@@ -19,59 +22,12 @@
 
 import "dotenv/config";
 
-import { prismaRaw } from "../src/lib/prisma";
-import { createCapitalSpend, getCapitalSummary, toPiasters, toEGP } from "../src/lib/capital";
-
 const EXPECTED = 74260;
+const PROJECT_REF = "hoahuemoxjwivbuvxlkt";
+const POOLER_HOST = "aws-1-eu-west-1.pooler.supabase.com";
+
 const toP = (v: number | null | undefined) => Math.round((v ?? 0) * 100);
-const egp = (p: number) => toEGP(p).toLocaleString("en-US", { maximumFractionDigits: 2 });
-
-/* Isolation snapshot: row COUNTS on every ledger the settlement must never
-   touch (pool, business expenses, revenue/payments, profit, office expenses,
-   partner transactions) plus numeric sums where the columns are plain
-   numbers (OfficeExpense.cost, ProfitTransfer.amount). Office treasury is
-   derived from these same tables, so counts+sums here prove it unchanged. */
-async function snapshot() {
-  const [
-    poolCount, expenseCount, clientPaymentCount, paymentReceiptCount,
-    profitCount, profitSum, officeExpenseCount, officeExpenseSum,
-    contributionRowCount, capitalSpendCount, fixedExpenseCount,
-    userCount, partnerCount, partnerTxCount,
-  ] = await Promise.all([
-    prismaRaw.poolTransaction.count(),
-    prismaRaw.expense.count(),
-    prismaRaw.clientPayment.count(),
-    prismaRaw.paymentReceipt.count(),
-    prismaRaw.profitTransfer.count(),
-    prismaRaw.profitTransfer.aggregate({ _sum: { amount: true } }),
-    prismaRaw.officeExpense.count(),
-    prismaRaw.officeExpense.aggregate({ _sum: { cost: true } }),
-    prismaRaw.capitalContribution.count(),
-    prismaRaw.capitalSpend.count(),
-    prismaRaw.fixedExpense.count(),
-    prismaRaw.user.count(),
-    prismaRaw.partner.count(),
-    prismaRaw.partnerTransaction.count(),
-  ]);
-  return {
-    poolCount,
-    expenseCount,
-    clientPaymentCount,
-    paymentReceiptCount,
-    profitCount,
-    profitSumP: toP(profitSum._sum.amount ?? null),
-    officeExpenseCount,
-    officeExpenseSumP: toP(officeExpenseSum._sum.cost ?? null),
-    contributionRowCount,
-    capitalSpendCount,
-    fixedExpenseCount,
-    userCount,
-    partnerCount,
-    partnerTxCount,
-  };
-}
-
-type Snap = Awaited<ReturnType<typeof snapshot>>;
+const egp = (p: number) => (Math.round(p) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 });
 
 class Abort extends Error {}
 
@@ -81,24 +37,67 @@ function abort(msg: string): never {
   process.exit(2);
 }
 
-const diff = (before: Snap, after: Snap) => {
-  const out: string[] = [];
-  for (const k of Object.keys(before) as (keyof Snap)[]) {
-    if (before[k] !== after[k]) out.push(`${k}: ${before[k]} → ${after[k]}`);
-  }
-  return out;
-};
-
 async function main() {
+  const verifyOnly = process.argv.includes("--verify"); // read-only re-check mode
   console.log("═".repeat(64));
   console.log(" Historical Capital settlement — guarded one-shot");
   console.log("═".repeat(64));
 
-  const dbUrl = process.env.DATABASE_URL || "";
-  const host = (() => { try { return new URL(dbUrl).host; } catch { return "??"; } })();
-  const isSupabase = /supabase\.(co|com)$/i.test(host);
-  console.log(`DB host: ${host}${isSupabase ? "  (Supabase ✓)" : "  (⚠ NOT Supabase — aborting)"}`);
-  if (!isSupabase) abort("DATABASE_URL does not point at Supabase — refusing to run outside real data.");
+  /* ── Resolve the reachable pooler URL from .env (never printed) ── */
+  const rawUrl = process.env.DATABASE_URL || "";
+  let u: URL;
+  try { u = new URL(rawUrl); } catch { abort("DATABASE_URL is not a valid URL."); }
+  if (!u.hostname.includes(PROJECT_REF)) {
+    abort(`DATABASE_URL does not reference the expected Supabase project (${PROJECT_REF}).`);
+  }
+  const poolerUrl =
+    `postgresql://postgres.${PROJECT_REF}:${encodeURIComponent(u.password)}` +
+    `@${POOLER_HOST}:6543/postgres?pgbouncer=true&connection_limit=1`;
+  process.env.DATABASE_URL = poolerUrl;
+  console.log(`DB: Supabase project ${PROJECT_REF} via pooler (transaction mode, connection_limit=1)`);
+
+  /* The Prisma client reads DATABASE_URL at module init — import it only
+     after the URL rewrite above. */
+  const { prismaRaw } = await import("../src/lib/prisma");
+  const capital = await import("../src/lib/capital");
+
+  type Snap = Record<string, number>;
+  async function snapshot(): Promise<Snap> {
+    const [
+      poolCount, expenseCount, clientPaymentCount, paymentReceiptCount,
+      profitCount, profitSum, officeExpenseCount, officeExpenseSum,
+      contributionRowCount, capitalSpendCount, fixedExpenseCount,
+      userCount, partnerCount, partnerTxCount,
+    ] = await Promise.all([
+      prismaRaw.poolTransaction.count(),
+      prismaRaw.expense.count(),
+      prismaRaw.clientPayment.count(),
+      prismaRaw.paymentReceipt.count(),
+      prismaRaw.profitTransfer.count(),
+      prismaRaw.profitTransfer.aggregate({ _sum: { amount: true } }),
+      prismaRaw.officeExpense.count(),
+      prismaRaw.officeExpense.aggregate({ _sum: { cost: true } }),
+      prismaRaw.capitalContribution.count(),
+      prismaRaw.capitalSpend.count(),
+      prismaRaw.fixedExpense.count(),
+      prismaRaw.user.count(),
+      prismaRaw.partner.count(),
+      prismaRaw.partnerTransaction.count(),
+    ]);
+    return {
+      poolCount, expenseCount, clientPaymentCount, paymentReceiptCount,
+      profitCount, profitSumP: toP(profitSum._sum.amount ?? null),
+      officeExpenseCount, officeExpenseSumP: toP(officeExpenseSum._sum.cost ?? null),
+      contributionRowCount, capitalSpendCount, fixedExpenseCount,
+      userCount, partnerCount, partnerTxCount,
+    };
+  }
+
+  const diff = (before: Snap, after: Snap) => {
+    const out: string[] = [];
+    for (const k of Object.keys(before)) if (before[k] !== after[k]) out.push(`${k}: ${before[k]} → ${after[k]}`);
+    return out;
+  };
 
   const before = await snapshot();
 
@@ -113,7 +112,7 @@ async function main() {
       ],
     },
   });
-  if (dup) abort(`a historical settlement already exists (id ${dup.id}, ${egp(toP(dup.amount))} EGP, deletedAt=${dup.deletedAt}) — refusing to create a duplicate.`);
+  if (dup && !verifyOnly) abort(`a historical settlement already exists (id ${dup.id}, ${egp(toP(dup.amount))} EGP, deletedAt=${dup.deletedAt}) — refusing to create a duplicate.`);
 
   const contributions = await prismaRaw.capitalContribution.findMany({
     where: { deletedAt: null, type: "CASH" },
@@ -131,13 +130,24 @@ async function main() {
   }
   console.log(`active capital spends: ${spends.length} row(s), total ${egp(spentP)} EGP`);
 
+  if (verifyOnly) {
+    console.log(dup
+      ? `settlement: EXISTS  id=${dup.id}  amount=${egp(toP(dup.amount))} EGP  deletedAt=${dup.deletedAt}`
+      : "settlement: none found (no تسوية افتتاحية / تسوية رصيد رأس المال السابق row)");
+    const s = await capital.getCapitalSummary();
+    console.log(`summary: received=${s.totalReceived} spent=${s.totalSpent} available=${s.available}`);
+    console.log(`raw rows: capitalContribution=${before.contributionRowCount} capitalSpend=${before.capitalSpendCount}`);
+    await prismaRaw.$disconnect();
+    process.exit(0);
+  }
+
   if (receivedP !== toP(EXPECTED)) {
     abort(`CASH contribution total is ${egp(receivedP)} EGP, expected exactly ${EXPECTED} EGP. Assumptions no longer match — stopping per instructions.`);
   }
   if (spentP !== 0) {
     abort(`capital spends total is ${egp(spentP)} EGP, expected exactly 0 EGP. Assumptions no longer match — stopping per instructions.`);
   }
-  toPiasters(EXPECTED); // sanity: exact-piaster representability (always true here)
+  capital.toPiasters(EXPECTED); // sanity: exact-piaster representability
 
   /* ── Insert the settlement through the real service ────────── */
   console.log("\n─ Inserting settlement (createCapitalSpend) ─");
@@ -151,7 +161,7 @@ async function main() {
 
   let settlementId = "";
   try {
-    const settlement = await createCapitalSpend({
+    const settlement = await capital.createCapitalSpend({
       amount: EXPECTED,
       date: new Date("2026-09-01T00:00:00.000Z"),
       category: "تسوية افتتاحية",
@@ -170,10 +180,10 @@ async function main() {
   /* ── Post-verification ─────────────────────────────────────── */
   console.log("\n─ Post-settlement verification (real service + raw counts) ─");
 
-  // One beat for pgbouncer pooling before the verification reads.
+  // One beat for the pooler before verification reads.
   await new Promise(r => setTimeout(r, 1500));
 
-  const summary = await getCapitalSummary();
+  const summary = await capital.getCapitalSummary();
   console.log(`service summary: received=${summary.totalReceived} spent=${summary.totalSpent} available=${summary.available}`);
 
   const receivedOk = toP(summary.totalReceived) === toP(EXPECTED);
@@ -194,7 +204,10 @@ async function main() {
   }
 
   const after = await snapshot();
-  const changes = diff(before, after);
+  const changes = diff(before, after).filter(c => !c.startsWith("capitalSpendCount:"));
+  if (after.capitalSpendCount !== before.capitalSpendCount + 1) {
+    changes.push(`capitalSpendCount: ${before.capitalSpendCount} → ${after.capitalSpendCount} (expected exactly +1 for the settlement)`);
+  }
   if (changes.length > 0) {
     console.error("❌ isolation violated — unrelated tables changed:");
     for (const c of changes) console.error(`   ${c}`);
@@ -202,8 +215,7 @@ async function main() {
     process.exit(3);
   }
 
-  const { getCapitalLedger } = await import("../src/lib/capital");
-  const { entries } = await getCapitalLedger();
+  const { entries } = await capital.getCapitalLedger();
   const chrono = [...entries].reverse();
   const last = chrono[chrono.length - 1];
   console.log(`ledger rows: ${entries.length} (IN ${entries.filter(e => e.type === "CAPITAL_IN").length}, SPEND ${entries.filter(e => e.type === "CAPITAL_SPEND").length}); final running balance: ${last ? last.balanceAfter : 0}`);
@@ -219,6 +231,6 @@ async function main() {
 }
 
 main().catch(e => {
-  console.error("❌ ABORT (unexpected):", e);
+  console.error("❌ ABORT (unexpected):", e instanceof Error ? e.message : e);
   process.exit(2);
 });

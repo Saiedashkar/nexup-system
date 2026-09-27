@@ -17,6 +17,8 @@ export const SOFT_DELETE_MODELS = [
   "PartnerTransaction",
   "OfficeExpense",
   "CapitalContribution",
+  "CapitalSpend",
+  "FixedExpense",
   "OfficeAllocationSetting",
   "ProfitTransfer",
   "NexupProfitLedger",

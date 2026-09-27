@@ -7,7 +7,11 @@ export const runtime = "nodejs";
 export async function GET() {
   const session = await getCurrentSession();
   if (!session || !canAccessOfficeFinance(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Active records only — soft-deleted contributions must never reappear
+  // in the UI after deletion (the client extension also filters this;
+  // explicit here for defense in depth).
   const contributions = await prisma.capitalContribution.findMany({
+    where: { deletedAt: null },
     include: { partner: true },
     orderBy: { date: "desc" },
   });
@@ -46,6 +50,8 @@ export async function POST(req: NextRequest) {
       type: body.type,
       fundFlow: fundFlow as any,
       description: body.description || null,
+      reference: body.reference || null,
+      currency: "EGP",
       date,
     },
   });

@@ -15,8 +15,11 @@ export function LoginForm() {
       // Store role and business info for AppShell
       sessionStorage.setItem("nexup-role", data.user.role);
       sessionStorage.setItem("nexup-business", data.user.businessId || "");
-      // All users go to /office — the page filters by permissions
-      window.location.assign("/office");
+      // Same-origin navigation only: honor ?next= when it is a relative path
+      // (never a protocol-relative "//host" or absolute URL), else /office.
+      const next = new URLSearchParams(window.location.search).get("next");
+      const target = next && next.startsWith("/") && !next.startsWith("//") ? next : "/office";
+      window.location.assign(target);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Login failed."); } finally { setLoading(false); }
   }
   return <form onSubmit={submit}>

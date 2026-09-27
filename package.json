@@ -7,6 +7,7 @@
     "build": "prisma generate && next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed"
@@ -14,6 +15,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1136.0",
     "@prisma/adapter-pg": "^7.9.1",
+    "vitest": "^3.2.4",
     "@prisma/client": "7.9.1",
     "bcryptjs": "3.0.3",
     "dotenv": "17.2.3",

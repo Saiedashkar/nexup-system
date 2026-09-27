@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentSession } from "@/lib/auth";
+import { getCurrentSession, canAccessOfficeFinance } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { softDeleteRecord } from "@/lib/soft-delete";
 import {
@@ -16,8 +16,10 @@ export const runtime = "nodejs";
  * other fields (funder/date/description/reference/fundFlow) are free edits.
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // Centralized Office Finance policy — same gate as every other capital
+  // mutation endpoint (SUPER_ADMIN or canAccessOfficeFinanceFull flag).
   const session = await getCurrentSession();
-  if (!session || session.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!session || !canAccessOfficeFinance(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
   const body = await req.json();
 
@@ -61,8 +63,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
  * from that pool) — historical balances are never corrupted.
  */
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // Centralized Office Finance policy — same gate as every other capital
+  // mutation endpoint (SUPER_ADMIN or canAccessOfficeFinanceFull flag).
   const session = await getCurrentSession();
-  if (!session || session.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!session || !canAccessOfficeFinance(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
 
   try {

@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { softDeleteRecord } from "./soft-delete";
 
 /* ═══════════════════════════════════════════════════════════════
    Capital Fund ledger — office-level funding pool.
@@ -409,6 +410,7 @@ export type LedgerEntry = {
   type: "CAPITAL_IN" | "CAPITAL_SPEND";
   date: string;
   funder: string | null;
+  partnerId: string | null;
   contributionId: string | null;
   description: string;
   category: string | null;
@@ -417,6 +419,8 @@ export type LedgerEntry = {
   notes: string | null;
   reference: string | null;
   recurring: boolean;
+  fundFlow: string | null;
+  contributionType: "CASH" | "ASSET" | null;
 };
 
 export async function getCapitalLedger(): Promise<{
@@ -438,6 +442,7 @@ export async function getCapitalLedger(): Promise<{
     type: "CAPITAL_IN",
     date: c.date.toISOString(),
     funder: c.partner.name,
+    partnerId: c.partnerId,
     contributionId: c.id,
     description: c.description || "مساهمة رأس مال",
     category: null,
@@ -446,6 +451,8 @@ export async function getCapitalLedger(): Promise<{
     notes: null,
     reference: c.reference,
     recurring: false,
+    fundFlow: c.fundFlow,
+    contributionType: c.type,
   }));
 
   const outflow: LedgerEntry[] = spends.map(s => ({
@@ -453,6 +460,7 @@ export async function getCapitalLedger(): Promise<{
     type: "CAPITAL_SPEND",
     date: s.date.toISOString(),
     funder: s.contribution?.partner.name ?? null,
+    partnerId: s.contribution?.partnerId ?? null,
     contributionId: s.contributionId,
     description: s.description,
     category: s.category,
@@ -461,6 +469,8 @@ export async function getCapitalLedger(): Promise<{
     notes: s.notes,
     reference: s.reference,
     recurring: !!s.fixedExpenseId,
+    fundFlow: null,
+    contributionType: null,
   }));
 
   const entries = [...inflow, ...outflow].sort(
@@ -475,4 +485,218 @@ export async function getCapitalLedger(): Promise<{
   }
 
   return { entries: entries.reverse(), summary: await getCapitalSummary() };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   EDIT / SOFT DELETE — contributions and spends (management actions)
+
+   All guards run against live (soft-delete-aware) aggregates so that
+   an edit or delete can never drive Available Capital negative or
+   corrupt historical running balances.
+   ═══════════════════════════════════════════════════════════════ */
+
+export async function updateCapitalContribution(input: {
+  id: string;
+  userId: string;
+  partnerId?: string;
+  amount?: number;
+  type?: string;
+  date?: Date;
+  description?: string | null;
+  reference?: string | null;
+  fundFlow?: string;
+}) {
+  const existing = await prisma.capitalContribution.findUnique({ where: { id: input.id } });
+  if (!existing) throw new CapitalValidationError("CONTRIBUTION_NOT_FOUND", "مساهمة التمويل غير موجودة");
+
+  const data: Record<string, unknown> = {};
+
+  if (input.amount !== undefined) {
+    const newP = toPiasters(input.amount); // validates > 0 and ≤2dp
+    const oldP = Math.round(existing.amount * 100);
+    if (newP !== oldP) {
+      data.amount = toEGP(newP);
+      // Reducing (or converting away) CASH money must never drive the
+      // derived balance negative: Available − reduction ≥ 0.
+      if (existing.type === "CASH") {
+        const summary = await getCapitalSummary();
+        const availableP = Math.round(summary.available * 100);
+        const reductionP = oldP - newP;
+        if (reductionP > availableP) {
+          throw new CapitalValidationError(
+            "INSUFFICIENT_CAPITAL",
+            `لا يمكن تعديل المساهمة إلى هذا المبلغ: الصرف الحالي (${toEGP(Math.round(summary.totalSpent * 100))} ج.م) يتجاوز رأس المال المتبقي بعد التعديل`,
+          );
+        }
+      }
+    }
+  }
+
+  if (input.type !== undefined && input.type !== existing.type) {
+    if (!["CASH", "ASSET"].includes(input.type)) {
+      throw new CapitalValidationError("INVALID_TYPE", "نوع المساهمة يجب أن يكون نقدي أو أصل");
+    }
+    if (existing.type === "CASH" && input.type === "ASSET") {
+      // Removing the contribution from the spendable pool entirely.
+      const summary = await getCapitalSummary();
+      const availableP = Math.round(summary.available * 100);
+      const oldP = Math.round(existing.amount * 100);
+      if (oldP > availableP) {
+        throw new CapitalValidationError(
+          "INSUFFICIENT_CAPITAL",
+          "لا يمكن تحويل المساهمة إلى أصل: الصرف الحالي يعتمد على هذا المبلغ وسيجعل الرصيد المتاح سالبًا",
+        );
+      }
+    }
+    data.type = input.type;
+  }
+
+  if (input.partnerId !== undefined && input.partnerId !== existing.partnerId) {
+    const partner = await prisma.partner.findUnique({ where: { id: input.partnerId } });
+    if (!partner) throw new CapitalValidationError("PARTNER_NOT_FOUND", "الممول غير موجود");
+    data.partnerId = input.partnerId;
+  }
+
+  if (input.date !== undefined) {
+    if (Number.isNaN(new Date(input.date).getTime())) {
+      throw new CapitalValidationError("INVALID_DATE", "التاريخ غير صالح");
+    }
+    data.date = input.date;
+  }
+  if (input.description !== undefined) data.description = input.description || null;
+  if (input.reference !== undefined) data.reference = input.reference || null;
+  if (input.fundFlow !== undefined && ["SPENT_ALREADY", "STILL_IN_TREASURY"].includes(input.fundFlow)) {
+    data.fundFlow = input.fundFlow; // legacy admin-stats flag — no capital-math impact
+  }
+
+  if (Object.keys(data).length === 0) return existing;
+
+  const updated = await prisma.capitalContribution.update({ where: { id: input.id }, data });
+  await prisma.activityLog.create({
+    data: { userId: input.userId, action: "UPDATE", entityType: "CapitalContribution", entityId: input.id },
+  });
+  return updated;
+}
+
+export async function softDeleteCapitalContribution(input: { id: string; userId: string }) {
+  const existing = await prisma.capitalContribution.findUnique({ where: { id: input.id } });
+  if (!existing) throw new CapitalValidationError("CONTRIBUTION_NOT_FOUND", "مساهمة التمويل غير موجودة");
+
+  if (existing.type === "CASH") {
+    const summary = await getCapitalSummary();
+    const availableAfterP = Math.round(summary.available * 100) - Math.round(existing.amount * 100);
+    if (availableAfterP < 0) {
+      throw new CapitalValidationError(
+        "INSUFFICIENT_CAPITAL",
+        `لا يمكن حذف هذه المساهمة: تم صرف ${toEGP(Math.round(summary.totalSpent * 100))} ج.م من رأس المال وحذف المساهمة سيجعل الرصيد المتاح سالبًا. احذف أو عدّل حركات الصرف أولًا.`,
+      );
+    }
+  }
+
+  const deleted = await softDeleteRecord("CapitalContribution", input.id, input.userId);
+  return deleted;
+}
+
+export async function updateCapitalSpend(input: {
+  id: string;
+  userId: string;
+  amount?: number;
+  date?: Date;
+  category?: string;
+  description?: string;
+  notes?: string | null;
+  reference?: string | null;
+  contributionId?: string | null;
+}) {
+  const existing = await prisma.capitalSpend.findUnique({ where: { id: input.id } });
+  if (!existing) throw new CapitalValidationError("SPEND_NOT_FOUND", "حركة الصرف غير موجودة");
+
+  const data: Record<string, unknown> = {};
+
+  if (input.amount !== undefined) {
+    const newP = toPiasters(input.amount); // validates > 0 and ≤2dp
+    const oldP = Math.round(existing.amount * 100);
+    if (newP !== oldP) {
+      // Increasing a spend must fit inside the currently available capital.
+      const deltaP = newP - oldP;
+      if (deltaP > 0) {
+        const summary = await getCapitalSummary();
+        const availableP = Math.round(summary.available * 100);
+        if (deltaP > availableP) {
+          throw new CapitalValidationError(
+            "INSUFFICIENT_CAPITAL",
+            `لا يمكن تعديل الصرف إلى هذا المبلغ: الزيادة (${toEGP(deltaP)} ج.م) تتجاوز رأس المال المتاح (${toEGP(availableP)} ج.م)`,
+          );
+        }
+      }
+      data.amount = toEGP(newP);
+    }
+  }
+
+  if (input.date !== undefined) {
+    if (Number.isNaN(new Date(input.date).getTime())) {
+      throw new CapitalValidationError("INVALID_DATE", "التاريخ غير صالح");
+    }
+    data.date = input.date;
+  }
+  if (input.category !== undefined) {
+    if (!input.category.trim()) throw new CapitalValidationError("MISSING_CATEGORY", "أدخل تصنيف الصرف");
+    data.category = input.category.trim();
+  }
+  if (input.description !== undefined) {
+    if (!input.description.trim()) throw new CapitalValidationError("MISSING_DESCRIPTION", "أدخل وصف الصرف");
+    data.description = input.description.trim();
+  }
+  if (input.notes !== undefined) data.notes = input.notes || null;
+  if (input.reference !== undefined) data.reference = input.reference || null;
+  if (input.contributionId !== undefined) {
+    if (input.contributionId) {
+      const contrib = await prisma.capitalContribution.findUnique({ where: { id: input.contributionId } });
+      if (!contrib) throw new CapitalValidationError("CONTRIBUTION_NOT_FOUND", "مساهمة التمويل غير موجودة");
+    }
+    data.contributionId = input.contributionId || null;
+  }
+
+  if (Object.keys(data).length === 0) return existing;
+
+  const updated = await prisma.capitalSpend.update({ where: { id: input.id }, data });
+  await prisma.activityLog.create({
+    data: { userId: input.userId, action: "UPDATE", entityType: "CapitalSpend", entityId: input.id },
+  });
+  return updated;
+}
+
+/**
+ * Soft-deletes a capital spend. The amount returns to Available Capital
+ * automatically (derived), never hard-deleting the historical row.
+ *
+ * If the spend was converted into a recurring FixedExpense, deletion is
+ * refused unless `force` is set: forcing soft-deletes the spend AND
+ * deactivates the recurring definition (stops future generation) while
+ * leaving the definition row and every generated OfficeExpense row intact.
+ */
+export async function softDeleteCapitalSpend(input: { id: string; userId: string; force?: boolean }) {
+  const existing = await prisma.capitalSpend.findUnique({ where: { id: input.id } });
+  if (!existing) throw new CapitalValidationError("SPEND_NOT_FOUND", "حركة الصرف غير موجودة");
+
+  if (existing.fixedExpenseId && !input.force) {
+    const def = await prisma.fixedExpense.findUnique({ where: { id: existing.fixedExpenseId } });
+    if (def) {
+      throw new CapitalValidationError(
+        "RECURRING_LINKED",
+        `هذا الصرف مرتبط بمصروف ثابت متكرر: "${def.name}" — الحذف سيفصل التعريف عن مصدره ويوقف التكرار المستقبلي. لن يتم حذف أي مصروفات مكتب مُنشأة سابقًا. أكّد الحذف للمتابعة.`,
+      );
+    }
+  }
+
+  return prisma.$transaction(async tx => {
+    if (existing.fixedExpenseId) {
+      await tx.fixedExpense.update({ where: { id: existing.fixedExpenseId }, data: { active: false } });
+      await tx.activityLog.create({
+        data: { userId: input.userId, action: "DEACTIVATE", entityType: "FixedExpense", entityId: existing.fixedExpenseId },
+      });
+    }
+    const deleted = await softDeleteRecord("CapitalSpend", input.id, input.userId);
+    return deleted;
+  });
 }

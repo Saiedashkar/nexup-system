@@ -8,6 +8,10 @@ import { createCapitalContribution,
   generateDueFixedExpenses,
   getCapitalLedger,
   getCapitalSummary,
+  softDeleteCapitalContribution,
+  softDeleteCapitalSpend,
+  updateCapitalContribution,
+  updateCapitalSpend,
 } from "@/lib/capital";
 import { prisma, prismaRaw } from "@/lib/prisma";
 import { softDeleteRecord } from "@/lib/soft-delete";
@@ -335,5 +339,274 @@ describe("Capital soft-delete isolation (Issue 2)", () => {
 
     // The extended client hides soft-deleted definitions from normal reads.
     expect(await prisma.fixedExpense.findUnique({ where: { id: def.id } })).toBeNull();
+  });
+});
+
+describe("Capital management actions — edit & soft delete (regression fix)", () => {
+  let partnerId: string;
+  let userId: string;
+  let contribId: string;
+
+  const toChrono = (entries: Awaited<ReturnType<typeof getCapitalLedger>>["entries"]) =>
+    [...entries].reverse();
+
+  beforeAll(async () => {
+    // Clean slate for the exact-numbers scenario: prior describes already
+    // asserted against their own accumulated state. Throwaway DB → hard
+    // delete via the raw client is safe and keeps summary math exact.
+    await prismaRaw.capitalSpend.deleteMany({});
+    await prismaRaw.capitalContribution.deleteMany({});
+
+    const user = await prisma.user.create({
+      data: {
+        email: "capital-mgmt-test@example.local", name: "Mgmt Test Admin",
+        role: "SUPER_ADMIN", passwordHash: "x",
+      },
+    });
+    const partner = await prisma.partner.create({ data: { name: "مموّل-TEST-MGMT" } });
+    userId = user.id;
+    partnerId = partner.id;
+  }, 60_000);
+
+  it("14. edit contribution IN PLACE: fields update, same row, no new record", async () => {
+    const contrib = await createCapitalContribution({
+      partnerId, amount: 20000, type: "CASH",
+      date: new Date("2026-09-01"), description: "رأس مال للمكتب", userId,
+    });
+    contribId = contrib.id;
+
+    const partnerB = await prisma.partner.create({ data: { name: "مموّل-TEST-MGMT-B" } });
+    const updated = await updateCapitalContribution({
+      id: contrib.id,
+      userId,
+      partnerId: partnerB.id,
+      amount: 20000,
+      date: new Date("2026-09-02"),
+      description: "وصف معدّل",
+      reference: "REF-1",
+      fundFlow: "STILL_IN_TREASURY",
+    });
+
+    // Same row edited — never a new contribution.
+    expect(updated.id).toBe(contrib.id);
+    expect(updated.description).toBe("وصف معدّل");
+    expect(updated.reference).toBe("REF-1");
+    expect(updated.fundFlow).toBe("STILL_IN_TREASURY");
+    expect(new Date(updated.date).getUTCDate()).toBe(2);
+
+    const s = await getCapitalSummary();
+    expect(s.totalReceived).toBe(20000);
+    expect(s.contributionCount).toBe(1); // no duplicate row created
+
+    const { entries } = await getCapitalLedger();
+    const inEntry = entries.find(e => e.type === "CAPITAL_IN");
+    expect(inEntry?.id).toBe(contrib.id);
+    expect(inEntry?.funder).toBe("مموّل-TEST-MGMT-B");
+    expect(inEntry?.description).toBe("وصف معدّل");
+    expect(inEntry?.fundFlow).toBe("STILL_IN_TREASURY");
+    expect(inEntry?.balanceAfter).toBe(20000);
+  });
+
+  it("15. 20,000 IN → spend 10,000 → available 10,000", async () => {
+    const spend = await createCapitalSpend({
+      amount: 10000, date: new Date("2026-09-05"),
+      category: "تجهيزات", description: "تجهيزات تأسيس المكتب", userId,
+    });
+    expect(spend.id).toBeTruthy();
+
+    const s = await getCapitalSummary();
+    expect(s.totalReceived).toBe(20000);
+    expect(s.totalSpent).toBe(10000);
+    expect(s.available).toBe(10000);
+  });
+
+  it("16. edit spend 10,000 → 8,000 → available 12,000 (PATCH updates same row)", async () => {
+    const { entries: before } = await getCapitalLedger();
+    const spendEntry = before.find(e => e.type === "CAPITAL_SPEND");
+    expect(spendEntry).toBeTruthy();
+
+    const updated = await updateCapitalSpend({
+      id: spendEntry!.id,
+      userId,
+      amount: 8000,
+      date: new Date("2026-09-06"),
+      category: "تجهيزات",
+      description: "تجهيزات معدّلة",
+      notes: "ملاحظة التعديل",
+      reference: "REF-8",
+      contributionId: contribId,
+    });
+
+    expect(updated.id).toBe(spendEntry!.id);
+    expect(updated.amount).toBe(8000);
+    expect(updated.description).toBe("تجهيزات معدّلة");
+    expect(updated.contributionId).toBe(contribId);
+
+    const s = await getCapitalSummary();
+    expect(s.totalSpent).toBe(8000);
+    expect(s.available).toBe(12000);
+
+    const { entries } = await getCapitalLedger();
+    const chrono = toChrono(entries);
+    expect(chrono).toHaveLength(2);
+    expect(chrono[0].balanceAfter).toBe(20000);
+    expect(chrono[1].balanceAfter).toBe(12000); // running balance recalculated
+    expect(chrono[1].amount).toBe(8000);
+    expect(chrono[1].contributionId).toBe(contribId);
+  });
+
+  it("17. delete spend → available back to 20,000; row soft-deleted and excluded from ledger", async () => {
+    const { entries: before } = await getCapitalLedger();
+    const spendEntry = before.find(e => e.type === "CAPITAL_SPEND");
+    expect(spendEntry).toBeTruthy();
+
+    await softDeleteCapitalSpend({ id: spendEntry!.id, userId });
+
+    const s = await getCapitalSummary();
+    expect(s.totalSpent).toBe(0);
+    expect(s.available).toBe(20000); // derived: deletion restored the amount
+    expect(s.spendCount).toBe(0);
+
+    const { entries } = await getCapitalLedger();
+    expect(entries.filter(e => e.type === "CAPITAL_SPEND")).toHaveLength(0);
+    expect(entries.find(e => e.type === "CAPITAL_IN")?.balanceAfter).toBe(20000);
+
+    // Soft delete: the historical row survives with deletedAt.
+    const raw = await prismaRaw.capitalSpend.findUnique({ where: { id: spendEntry!.id } });
+    expect(raw?.deletedAt).toBeTruthy();
+  });
+
+  it("18. new 5,000 spend; spend-edit guards: overspend/invalid amount rejected, boundary allowed", async () => {
+    const spend = await createCapitalSpend({
+      amount: 5000, date: new Date("2026-09-07"),
+      category: "مشتريات", description: "صرف جديد بعد الحذف", userId,
+    });
+    const s = await getCapitalSummary();
+    expect(s.available).toBe(15000);
+
+    // Increase beyond available: delta 15,001 > available 15,000.
+    await expect(
+      updateCapitalSpend({ id: spend.id, userId, amount: 20001 }),
+    ).rejects.toMatchObject({ code: "INSUFFICIENT_CAPITAL" });
+
+    // Invalid edit payloads are rejected.
+    await expect(updateCapitalSpend({ id: spend.id, userId, amount: 0 })).rejects.toMatchObject({ code: "INVALID_AMOUNT" });
+    await expect(updateCapitalSpend({ id: spend.id, userId, amount: 10.999 })).rejects.toMatchObject({ code: "INVALID_AMOUNT" });
+    await expect(updateCapitalSpend({ id: spend.id, userId, description: "   " })).rejects.toMatchObject({ code: "MISSING_DESCRIPTION" });
+    await expect(updateCapitalSpend({ id: spend.id, userId, date: new Date("garbage") })).rejects.toMatchObject({ code: "INVALID_DATE" });
+    await expect(updateCapitalSpend({ id: spend.id, userId, contributionId: "nonexistent" })).rejects.toMatchObject({ code: "CONTRIBUTION_NOT_FOUND" });
+
+    // Boundary: increasing by exactly the available balance is allowed, then restored.
+    await updateCapitalSpend({ id: spend.id, userId, amount: 20000 });
+    expect((await getCapitalSummary()).available).toBe(0);
+    await updateCapitalSpend({ id: spend.id, userId, amount: 5000 });
+    expect((await getCapitalSummary()).available).toBe(15000);
+  });
+
+  it("19. reducing Capital IN below existing spends is rejected; boundary allowed", async () => {
+    // Reduce 20,000 → 4,999 with 5,000 already spent: would leave −1.
+    await expect(
+      updateCapitalContribution({ id: contribId, userId, amount: 4999 }),
+    ).rejects.toMatchObject({ code: "INSUFFICIENT_CAPITAL" });
+
+    // Boundary: reduce to exactly the spent amount → available 0, allowed.
+    await updateCapitalContribution({ id: contribId, userId, amount: 5000 });
+    expect((await getCapitalSummary()).available).toBe(0);
+
+    // CASH → ASSET would remove the whole 5,000 from the spendable pool.
+    await expect(
+      updateCapitalContribution({ id: contribId, userId, type: "ASSET" }),
+    ).rejects.toMatchObject({ code: "INSUFFICIENT_CAPITAL" });
+
+    // Restore.
+    await updateCapitalContribution({ id: contribId, userId, amount: 20000 });
+    expect((await getCapitalSummary()).available).toBe(15000);
+
+    const s = await getCapitalSummary();
+    expect(s.contributionCount).toBe(1); // edits never duplicated the row
+  });
+
+  it("20. deleting Capital IN that would make the balance negative is rejected with an Arabic message", async () => {
+    const err = await softDeleteCapitalContribution({ id: contribId, userId }).then(
+      () => null,
+      (e: { code: string; message: string }) => e,
+    );
+    expect(err).not.toBeNull();
+    expect(err!.code).toBe("INSUFFICIENT_CAPITAL");
+    expect(err!.message).toContain("لا يمكن حذف هذه المساهمة");
+    expect(err!.message).toContain("احذف أو عدّل حركات الصرف");
+
+    // Nothing was deleted: the row and the ledger are untouched.
+    const { entries } = await getCapitalLedger();
+    expect(entries.filter(e => e.type === "CAPITAL_IN" && e.id === contribId)).toHaveLength(1);
+    expect((await getCapitalSummary()).totalReceived).toBe(20000);
+  });
+
+  it("21. recurring-linked spend delete requires explicit force; OfficeExpense history preserved", async () => {
+    const spend = await createCapitalSpend({
+      amount: 700, date: new Date("2026-09-08"),
+      category: "اشتراكات", description: "اشتراك إدارة", userId,
+    });
+    const { def } = await convertSpendToFixedExpense({
+      spendId: spend.id, recurringAmount: 700, name: "اشتراك إدارة", userId,
+    });
+    await generateDueFixedExpenses(new Date("2026-10-31"));
+    const occurrencesBefore = (await prisma.officeExpense.findMany()).filter(e => e.fixedExpenseId === def.id);
+    expect(occurrencesBefore.length).toBeGreaterThanOrEqual(1);
+
+    const { entries } = await getCapitalLedger();
+    expect(entries.find(e => e.id === spend.id)?.recurring).toBe(true);
+
+    // First attempt: refused, showing what is linked.
+    const err = await softDeleteCapitalSpend({ id: spend.id, userId }).then(
+      () => null,
+      (e: { code: string; message: string }) => e,
+    );
+    expect(err).not.toBeNull();
+    expect(err!.code).toBe("RECURRING_LINKED");
+    expect(err!.message).toContain("اشتراك إدارة");
+
+    // Nothing deleted yet.
+    expect(await prisma.capitalSpend.findUnique({ where: { id: spend.id } })).not.toBeNull();
+
+    // Explicit force: soft-delete the spend AND deactivate the recurrence.
+    await softDeleteCapitalSpend({ id: spend.id, userId, force: true });
+
+    const rawDef = await prismaRaw.fixedExpense.findUnique({ where: { id: def.id } });
+    expect(rawDef?.active).toBe(false); // stopped, never destroyed
+    const occurrencesAfter = (await prisma.officeExpense.findMany()).filter(e => e.fixedExpenseId === def.id);
+    expect(occurrencesAfter.length).toBe(occurrencesBefore.length); // history intact
+
+    const s = await getCapitalSummary();
+    expect(s.available).toBe(15000); // 700 returned to available
+    const { entries: after } = await getCapitalLedger();
+    expect(after.find(e => e.id === spend.id)).toBeUndefined();
+    const raw = await prismaRaw.capitalSpend.findUnique({ where: { id: spend.id } });
+    expect(raw?.deletedAt).toBeTruthy();
+  });
+
+  it("22. successful Capital IN soft delete: excluded from totals/ledger, row survives", async () => {
+    const extra = await createCapitalContribution({
+      partnerId, amount: 1000, type: "CASH",
+      date: new Date("2026-09-09"), description: "مساهمة إضافية تُحذف", userId,
+    });
+    expect((await getCapitalSummary()).available).toBe(16000);
+
+    const deleted = await softDeleteCapitalContribution({ id: extra.id, userId });
+    expect((deleted as { deletedAt: Date | null }).deletedAt).toBeTruthy();
+
+    const s = await getCapitalSummary();
+    expect(s.available).toBe(15000);
+    expect(s.contributionCount).toBe(1);
+    expect(s.funderCount).toBe(1);
+
+    const { entries } = await getCapitalLedger();
+    const inRows = entries.filter(e => e.type === "CAPITAL_IN");
+    expect(inRows).toHaveLength(1);
+    expect(inRows[0].id).toBe(contribId);
+    expect(inRows[0].balanceAfter).toBe(20000);
+
+    const raw = await prismaRaw.capitalContribution.findUnique({ where: { id: extra.id } });
+    expect(raw?.deletedAt).toBeTruthy();
   });
 });

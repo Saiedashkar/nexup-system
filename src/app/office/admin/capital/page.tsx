@@ -278,12 +278,11 @@ export default function CapitalPage() {
       )}
 
       {/* Summary cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 20 }}>
         {[
           { label: "إجمالي رأس المال المُستلم", value: fmt(summary?.totalReceived ?? 0), sub: `${summary?.contributionCount ?? 0} مساهمة · ${summary?.funderCount ?? 0} ممول`, color: "#10b981", bg: "rgba(16,185,129,0.06)" },
           { label: "إجمالي المصروف من رأس المال", value: fmt(summary?.totalSpent ?? 0), sub: `${summary?.spendCount ?? 0} حركة صرف`, color: "#ef4444", bg: "rgba(239,68,68,0.06)" },
           { label: "رأس المال المتاح", value: fmt(summary?.available ?? 0), sub: "المستلم − المصروف", color: "#8b5cf6", bg: "rgba(139,92,246,0.06)" },
-          { label: "عدد الممولين", value: String(summary?.funderCount ?? 0), sub: "المساهمون برأس المال النقدي", color: "#3b82f6", bg: "rgba(59,130,246,0.06)" },
         ].map(c => (
           <div key={c.label} style={{ padding: "18px 20px", borderRadius: 12, background: c.bg, border: "1px solid var(--border)" }}>
             <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>{c.label}</div>

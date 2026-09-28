@@ -18,8 +18,15 @@ export async function POST(req: NextRequest) {
   if (!session || !canAccessOfficeFinance(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  for (const field of ["amount", "date", "category", "description"]) {
+  for (const field of ["amount", "date", "description"]) {
     if (!body[field]) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  }
+  // Category is required only for EXPENSE. The service defaults it for
+  // PERSON_WITHDRAWAL ("سحب رأس مال") and CUSTODY ("عهدة") — the UI hides
+  // the field for those types, so demanding it here made every non-EXPENSE
+  // save fail with an opaque 400 before validation ever ran.
+  if (body.spendType === "EXPENSE" && !body.category) {
+    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
   try {

@@ -156,7 +156,8 @@ export default function CapitalPage() {
 
   const submitIn = async () => {
     setError(null);
-    if (!inForm.partnerId || !inForm.amount) return;
+    if (!inForm.partnerId) { setError("اختر الممول"); return; }
+    if (!inForm.amount) { setError("أدخل المبلغ"); return; }
     const res = await fetch("/api/office/capital-contributions", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...inForm, amount: parseFloat(inForm.amount) }),
@@ -167,7 +168,14 @@ export default function CapitalPage() {
 
   const submitSpend = async () => {
     setError(null);
-    if (!spendForm.amount || !spendForm.description || !spendForm.category) return;
+    // The category field is only rendered for EXPENSE — withdrawals and
+    // custody classify via the recipient instead, and the service defaults
+    // their category. Requiring category here made the Save button silently
+    // do nothing for PERSON_WITHDRAWAL / CUSTODY; every validation failure
+    // now surfaces a visible error instead of a silent return.
+    if (!spendForm.amount) { setError("أدخل مبلغ الصرف"); return; }
+    if (!spendForm.description.trim()) { setError("أدخل وصف الصرف"); return; }
+    if (spendForm.spendType === "EXPENSE" && !spendForm.category.trim()) { setError("أدخل تصنيف الصرف"); return; }
     const wantsRecipient = spendForm.spendType === "PERSON_WITHDRAWAL" || spendForm.spendType === "CUSTODY";
     if (wantsRecipient && !spendForm.recipientPartnerId && !spendForm.recipientName.trim()) {
       setError(spendForm.spendType === "PERSON_WITHDRAWAL" ? "حدد الشخص المستلم لسحب رأس المال" : "حدد مستلم العهدة");

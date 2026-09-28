@@ -292,7 +292,80 @@ describe("Capital mutation endpoints — centralized Office Finance authorizatio
     expect(s.available).toBe(10000);
   });
 
-  it("9. fixed-expenses [id] DELETE follows the same policy (deactivates, never destroys history)", async () => {
+  it("9. non-EXPENSE spends save WITHOUT category through the POST route (regression: silent-save bug)", async () => {
+    // The Production bug: the POST route hard-required `category` for every
+    // type, and the UI hid the field for PERSON_WITHDRAWAL / CUSTODY — so
+    // the Save button appeared dead. Exactly the payload the UI sends for a
+    // withdrawal (category ""), straight through the real route handler:
+    authState.current = sessionFor({ userId: adminFlagId, role: "ADMIN", canAccessOfficeFinanceFull: true });
+
+    const pw = await createSpendRoute(req("http://x/s", "POST", {
+      amount: 2850, date: "2026-09-18", category: "", description: "سحب شخصي",
+      notes: "0", spendType: "PERSON_WITHDRAWAL",
+      recipientPartnerId: partnerId, recipientName: null,
+      contributionId: null,
+    }));
+    expect(pw.status).toBe(201);
+    const pwRow = (await pw.json()) as { id: string; spendType: string; category: string; recipientPartnerId: string | null };
+    expect(pwRow.spendType).toBe("PERSON_WITHDRAWAL");
+    expect(pwRow.category).toBe("سحب رأس مال"); // service default, not the empty string
+    expect(pwRow.recipientPartnerId).toBe(partnerId);
+
+    // recipientName-only withdrawal (unregistered person) → 201 as well.
+    const named = await createSpendRoute(req("http://x/s", "POST", {
+      amount: 150, date: "2026-09-19", category: "", description: "سحب لشخص غير مسجل",
+      spendType: "PERSON_WITHDRAWAL", recipientPartnerId: null, recipientName: "عادل",
+      contributionId: null,
+    }));
+    expect(named.status).toBe(201);
+
+    // CUSTODY without category → 201 with the custody default.
+    const custody = await createSpendRoute(req("http://x/s", "POST", {
+      amount: 500, date: "2026-09-20", category: "", description: "عهدة شراء",
+      spendType: "CUSTODY", recipientPartnerId: partnerId, recipientName: null,
+      contributionId: null,
+    }));
+    expect(custody.status).toBe(201);
+    expect(((await custody.json()) as { category: string }).category).toBe("عهدة");
+
+    // EXPENSE without category must stay rejected (400) — the tightening.
+    const expenseNoCat = await createSpendRoute(req("http://x/s", "POST", {
+      amount: 10, date: "2026-09-20", category: "", description: "بدون تصنيف",
+      spendType: "EXPENSE",
+    }));
+    expect(expenseNoCat.status).toBe(400);
+
+    // Missing recipient for a withdrawal → 400 RECIPIENT_REQUIRED (surfaced, not silent).
+    const noRecipient = await createSpendRoute(req("http://x/s", "POST", {
+      amount: 10, date: "2026-09-20", category: "", description: "بدون مستلم",
+      spendType: "PERSON_WITHDRAWAL", recipientPartnerId: null, recipientName: "",
+    }));
+    expect(noRecipient.status).toBe(400);
+    expect(((await noRecipient.json()) as { error: string }).error).toBe("RECIPIENT_REQUIRED");
+
+    // Overspend guard still active through the route (409).
+    const overspend = await createSpendRoute(req("http://x/s", "POST", {
+      amount: 999999, date: "2026-09-20", category: "", description: "سحب أكبر من المتاح",
+      spendType: "PERSON_WITHDRAWAL", recipientPartnerId: partnerId, recipientName: null,
+    }));
+    expect(overspend.status).toBe(409);
+    expect(((await overspend.json()) as { error: string }).error).toBe("INSUFFICIENT_CAPITAL");
+
+    // Invalid contribution reference → 400 CONTRIBUTION_NOT_FOUND.
+    const badContrib = await createSpendRoute(req("http://x/s", "POST", {
+      amount: 10, date: "2026-09-20", category: "", description: "مساهمة غير صالحة",
+      spendType: "PERSON_WITHDRAWAL", recipientPartnerId: partnerId, recipientName: null,
+      contributionId: "nonexistent",
+    }));
+    expect(badContrib.status).toBe(400);
+    expect(((await badContrib.json()) as { error: string }).error).toBe("CONTRIBUTION_NOT_FOUND");
+
+    // Ledger impact is exactly the three created rows (2850 + 150 + 500 = 3500).
+    const s = await getCapitalSummary();
+    expect(s.totalSpent).toBe(13500); // 10000 + 3500
+  });
+
+  it("10. fixed-expenses [id] DELETE follows the same policy (deactivates, never destroys history)", async () => {
     // Unauthenticated → refused (middleware 401s at the edge; in-process 403).
     const anon = await deleteFixedExpense(req(`http://x/f`, "DELETE"), { params: Promise.resolve({ id: fixedExpenseId }) });
     expect(anon.status).toBe(403);

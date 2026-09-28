@@ -711,7 +711,7 @@ function RecurringTab() {
                   return (
                     <tr key={sub.id} style={{ borderBottom: "1px solid var(--border)", background: sub.status !== "ACTIVE" ? "rgba(245,158,11,0.03)" : "var(--surface)" }}>
                       <td style={{ padding: "8px 10px", fontWeight: 600 }}>{sub.client.name}</td>
-                      <td style={{ padding: "8px 10px", direction: "ltr", color: "var(--text-secondary)" }}>{sub.client.phone}</td>
+                      <td style={{ padding: "8px 10px", direction: "ltr" }}><a href={`https://wa.me/${sub.client.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" title="فتح واتساب" style={{ color: "#25D366", textDecoration: "none", fontWeight: 600 }}>{sub.client.phone}</a></td>
                       <td style={{ padding: "8px 10px" }}>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
                           {services.map((s: string, i: number) => <span key={i} style={{ padding: "1px 6px", borderRadius: 3, fontSize: 9, fontWeight: 600, background: "rgba(13,148,136,0.08)", color: "#0d9488" }}>{s}</span>)}
@@ -1051,7 +1051,7 @@ export default function NexupClientsPage() {
                             onMouseLeave={e => { if (!isDone) e.currentTarget.style.background = "var(--surface)"; }}
                           >
                             <td style={{ padding: "5px 8px", fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap", verticalAlign: "middle", borderLeft: "1px solid var(--border)" }}>{fmtDate(p.date)}</td>
-                            <td style={{ padding: "5px 8px", fontSize: 11, color: "var(--text-secondary)", direction: "ltr", verticalAlign: "middle", borderLeft: "1px solid var(--border)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.client.phone}</td>
+                            <td style={{ padding: "5px 8px", fontSize: 11, direction: "ltr", verticalAlign: "middle", borderLeft: "1px solid var(--border)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><a href={`https://wa.me/${p.client.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" title="فتح واتساب" style={{ color: "#25D366", textDecoration: "none", fontWeight: 600 }}>{p.client.phone}</a></td>
                             <td style={{ padding: "5px 8px", verticalAlign: "middle", borderLeft: "1px solid var(--border)" }}>
                               <div style={{ fontWeight: 600, fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
                                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.client.name}</span>

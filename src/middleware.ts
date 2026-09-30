@@ -31,6 +31,11 @@ const officeFinanceRoutes = [
   "/api/office/settings",
   "/office/admin/users",
   "/api/admin/users",
+  // AI Workforce (control core). Additive: these prefixes did not exist before,
+  // and access is intentionally limited to office-finance/super-admin in
+  // Phase 1A. The workforce permission policy still re-checks every tool call.
+  "/office/ai-workforce",
+  "/api/ai-workforce",
 ];
 
 export default async function middleware(request: NextRequest) {

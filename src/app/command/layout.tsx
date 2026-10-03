@@ -6,6 +6,9 @@ import "./command.css";
    Intelligence Core, department pods, actor presence, the adaptive rail and
    deck). It only *adds* — it redefines no token and overrides no shell rule. */
 import "./spatial.css";
+/* Phase UI-03 adds one more additive layer: the Department Workspace. Like the
+   two above it, it redefines no token and overrides no shell rule. */
+import "./workspace.css";
 
 /**
  * NEXUP COMMAND — route layout (Phase UI-01)

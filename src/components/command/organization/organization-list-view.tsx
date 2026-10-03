@@ -1,7 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCommand } from "../state/command-store";
 import { DEPARTMENTS, EXECUTIVE } from "../state/organization-model";
+import { workspaceHref } from "../state/department-workspace";
 import { DEPARTMENT_ICONS, IconMap, IconSpark } from "../ui/icons";
 import { cssVars } from "../ui/css-vars";
 import { STATUS_LABEL } from "../state/visual-state";
@@ -16,7 +18,8 @@ import { STATUS_LABEL } from "../state/visual-state";
  * organization. The spatial view is the hero; this one is the accessible twin.
  */
 export function OrganizationListView() {
-  const { snapshot, focusDepartment, setExecOpen, execOpen } = useCommand();
+  const { snapshot, setExecOpen, execOpen } = useCommand();
+  const router = useRouter();
 
   const rows = [
     {
@@ -36,8 +39,9 @@ export function OrganizationListView() {
       capability: department.capability,
       accentVar: department.accentVar,
       visual: snapshot.visual.departments[department.id],
-      onOpen: () => focusDepartment(department.id),
-      action: "Open department",
+      /* Phase UI-03: rows open the department's workspace route. */
+      onOpen: () => router.push(workspaceHref(department.id)),
+      action: "Open department workspace",
     })),
   ];
 

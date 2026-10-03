@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useCommand } from "./state/command-store";
+import { workspaceHref } from "./state/department-workspace";
 import { MOCK_PROJECTS } from "./state/demo-scenarios";
 import { ACTORS, describeActors } from "./state/actors";
 import { ActorChip } from "./scene/actor-presence";
@@ -197,7 +199,8 @@ export function ContextRail() {
 /* ── OVERVIEW MODE ─────────────────────────────────────────────────────── */
 
 function OverviewContext() {
-  const { snapshot, focusDepartment, selectScenario, notify } = useCommand();
+  const { snapshot, selectScenario, notify } = useCommand();
+  const router = useRouter();
 
   const nodes = [snapshot.visual.executive, ...Object.values(snapshot.visual.departments)];
   const working = nodes.filter(
@@ -250,9 +253,10 @@ function OverviewContext() {
                   style={{ minWidth: 0, textAlign: "left", flex: 1 }}
                   onClick={() => {
                     /* Context stays actionable: show the held state, then walk
-                       straight into the space that is waiting. */
+                       straight into the department workspace that is waiting
+                       (Phase UI-03 routes full department work there). */
                     selectScenario("approval");
-                    focusDepartment(approval.department);
+                    router.push(workspaceHref(approval.department));
                   }}
                   aria-label={`Open ${approval.title} in context`}
                 >

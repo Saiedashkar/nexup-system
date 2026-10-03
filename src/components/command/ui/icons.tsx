@@ -6,7 +6,7 @@
  * ships with zero new packages. These are 24×24 stroke icons on `currentColor`.
  */
 
-type IconProps = {
+export type IconProps = {
   size?: number;
   className?: string;
   strokeWidth?: number;

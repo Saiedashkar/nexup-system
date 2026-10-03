@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useCommand } from "../state/command-store";
 import { DEPARTMENTS, DEPARTMENT_BY_ID, type DepartmentId } from "../state/organization-model";
+import { workspaceHref } from "../state/department-workspace";
 import { cameraFor, cameraTransform, corePlacement, podPlacement } from "../state/spatial-camera";
 import { ConnectionField } from "./connection-field";
 import { DepartmentPod } from "./department-pod";
@@ -62,7 +64,8 @@ function RoomArchitecture() {
 }
 
 export function CommandScene() {
-  const { snapshot, focus, focusDepartment, clearFocus, setExecOpen, notify } = useCommand();
+  const { snapshot, focus, setExecOpen, notify } = useCommand();
+  const router = useRouter();
   const [hovered, setHovered] = useState<DepartmentId | null>(null);
 
   const { visual } = snapshot;
@@ -121,9 +124,14 @@ export function CommandScene() {
               hovered={hovered === department.id}
               signals={signalsFor(department.id)}
               onHover={setHovered}
-              /* Clicking the entered space returns to the overview — the same
-                 gesture goes in and out, so there is no "dead" pod. */
-              onOpen={(id) => (id === focus ? clearFocus() : focusDepartment(id))}
+              /* Phase UI-03: a department click now OPENS ITS WORKSPACE ROUTE.
+                 Full department work belongs on `/command/departments/<slug>`,
+                 not in a large overlay inside the overview. The scene's own
+                 focus architecture (hover spotlight, recede, the focused
+                 workspace, the focus header) is left intact — it still serves
+                 previews and context — it is simply no longer the primary
+                 click destination. */
+              onOpen={(id) => router.push(workspaceHref(id))}
             />
           ))}
         </div>

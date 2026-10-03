@@ -71,26 +71,52 @@
   --nc-r-4: 22px;
   --nc-r-pill: 999px;
 
-  /* ── Composition metrics — the shell and the ring both read these ─────── */
-  --nc-rail-w: 186px;
-  --nc-context-w: 300px;
-  --nc-topbar-h: 76px;
-  --nc-card-w: clamp(196px, 15vw, 240px);
-  --nc-card-h: 118px;
-  --nc-orb-size: clamp(132px, 11vw, 176px);
-  --nc-stage-h: 620px;
+  /* ── Composition metrics — the shell and the namespace both read these ── */
+  /* Navigation is secondary infrastructure (Phase UI-02.1): the rail got
+     narrower and quieter, so the ROOM is what the screen is made of. */
+  --nc-rail-w: 172px;
+  --nc-context-w: 296px;
+  --nc-topbar-h: 72px;
+  /* The command surface: the near edge of the room, flush with the shell. */
+  --nc-surface-h: 96px;
+
+  /* ── SPACE — the spatial scene, and only the spatial scene ─────────────
+     The scene is a real 3D space: one perspective on the stage, one
+     translateZ per node. Nothing here is WebGL; it is transform + perspective,
+     which keeps the whole environment inspectable, themable and cheap.     */
+  /* The stage is sized to the space the shell actually leaves under the
+     command bar and above the deck, so the whole organization is visible
+     without scrolling on a normal desktop. */
+  --nc-stage-h: 460px;
+  --nc-persp: 1600px;
+  --nc-persp-origin-y: 46%;
+  --nc-pod-w: clamp(208px, 15.2vw, 258px);
+  --nc-pod-h: 148px;
+  --nc-core-size: clamp(158px, 11.6vw, 206px);
+  /* Depth for every node — pod, core and system — is computed by the scene in
+     `state/spatial-camera.ts` and written to CSS custom properties, so no
+     promotion is ever declared twice. */
+  --nc-depth-void: -180px;
+  --nc-depth-floor: -120px;
+  --nc-depth-wire: -24px;
 
   /* ── MOTION TOKENS ─────────────────────────────────────────────────────
      One speed multiplier (--nc-speed) is the single knob the dev Motion Lab
-     turns to slow the whole system down for review.                        */
+     turns to slow the whole system down for review.
+
+     The categories below are the vocabulary the brief asks for, and each one
+     is used for exactly one kind of event: a press, a UI response, a focus
+     change, a camera move, an idle drift, or a depth promotion.            */
   --nc-speed: 1;
-  --nc-dur-instant: calc(80ms * var(--nc-speed));
-  --nc-dur-micro: calc(140ms * var(--nc-speed));
-  --nc-dur-quick: calc(220ms * var(--nc-speed));
-  --nc-dur-spatial: calc(460ms * var(--nc-speed));
-  --nc-dur-travel: calc(760ms * var(--nc-speed));
-  --nc-dur-breath: calc(2600ms * var(--nc-speed));
-  --nc-dur-drift: calc(30000ms * var(--nc-speed));
+  --nc-dur-instant: calc(80ms * var(--nc-speed));   /* fast interaction      */
+  --nc-dur-micro: calc(140ms * var(--nc-speed));    /* hover / press         */
+  --nc-dur-quick: calc(220ms * var(--nc-speed));    /* normal UI             */
+  --nc-dur-spatial: calc(460ms * var(--nc-speed));  /* panel / level reveal  */
+  --nc-dur-focus: calc(620ms * var(--nc-speed));    /* focus transition      */
+  --nc-dur-camera: calc(680ms * var(--nc-speed));   /* camera transition     */
+  --nc-dur-travel: calc(760ms * var(--nc-speed));   /* handoff travel        */
+  --nc-dur-breath: calc(2600ms * var(--nc-speed));  /* idle depth / attention*/
+  --nc-dur-drift: calc(34000ms * var(--nc-speed));  /* background depth      */
 
   --nc-ease-standard: cubic-bezier(0.22, 0.61, 0.36, 1);
   --nc-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -113,11 +139,22 @@
 .nc-root *::before,
 .nc-root *::after { box-sizing: border-box; }
 
-.nc-root button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
-.nc-root input,
-.nc-root textarea { font: inherit; color: inherit; background: none; border: 0; outline: none; }
-.nc-root ul { list-style: none; margin: 0; padding: 0; }
-.nc-root h1, .nc-root h2, .nc-root h3, .nc-root p { margin: 0; }
+/* ── Reset, deliberately WEAK ────────────────────────────────────────────
+   These are the environment's baseline, not its opinion. They are wrapped in
+   `:where()` so they contribute ZERO specificity: any component rule can
+   override them. Without this, `.nc-root button` (0,1,1) silently outranks a
+   component class like `.nc-pod__plate` (0,1,0) and every button in the
+   environment loses its background and border — which is exactly what was
+   happening until Phase UI-02.1 found it. The reset still outranks the
+   browser's own button styling, because author declarations always do.      */
+:where(.nc-root) button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+:where(.nc-root) input,
+:where(.nc-root) textarea { font: inherit; color: inherit; background: none; border: 0; outline: none; }
+:where(.nc-root) ul { list-style: none; margin: 0; padding: 0; }
+:where(.nc-root) h1,
+:where(.nc-root) h2,
+:where(.nc-root) h3,
+:where(.nc-root) p { margin: 0; }
 
 .nc-sr {
   position: absolute;
@@ -142,33 +179,14 @@
   overflow: hidden;
 }
 
-/* Warm window light falling from the upper-left, cool fill from the right. */
+/* Warm window light falling from the upper-left, cool fill from the right.
+   This is the *room*; the floor and horizon below belong to the scene itself. */
 .nc-ambient__window {
   position: absolute;
   inset: 0;
   background:
     radial-gradient(115% 85% at 16% -12%, rgba(255, 206, 148, 0.075), transparent 56%),
     radial-gradient(85% 65% at 82% 4%, rgba(148, 196, 255, 0.04), transparent 62%);
-}
-/* Deepening floor toward the bottom of the frame. */
-.nc-ambient__floor {
-  position: absolute;
-  left: 0; right: 0; bottom: 0;
-  height: 46%;
-  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.5) 68%, rgba(0, 0, 0, 0.76));
-}
-/* Floor grid: fades out before it can look like a diagram. */
-.nc-ambient__grid {
-  position: absolute;
-  left: 0; right: 0; bottom: 0;
-  height: 52%;
-  opacity: 0.5;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 84px 84px;
-  mask-image: radial-gradient(ellipse 70% 90% at 50% 100%, #000 0%, transparent 76%);
-  animation: nc-drift var(--nc-dur-drift) var(--nc-ease-standard) infinite alternate;
 }
 /* A few static blurred light points — depth, not decoration, never animated. */
 .nc-ambient__bokeh { position: absolute; inset: 0; }
@@ -201,79 +219,91 @@
 }
 .nc-shell[data-right="collapsed"] { --nc-context-w: 56px; }
 
-/* ── Left rail ─────────────────────────────────────────────────────────── */
+/* ── Left rail ───────────────────────────────────────────────────────────
+   Navigation is secondary infrastructure (Phase UI-02.1). Everything here got
+   smaller, quieter and less "app-like": shorter rows, smaller type, a flat
+   active state with one lime marker instead of a filled gradient pill. The room
+   is the product; this is the way around it.                             */
 
 .nc-rail {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 20px 14px 16px;
+  gap: 14px;
+  padding: 18px 12px 14px;
   border-right: 1px solid var(--nc-border);
-  background: linear-gradient(180deg, rgba(14, 16, 19, 0.92), rgba(8, 9, 11, 0.78));
+  background: linear-gradient(180deg, rgba(10, 12, 15, 0.88), rgba(6, 7, 9, 0.74));
   backdrop-filter: blur(12px);
   min-width: 0;
 }
 
-.nc-rail__brand { display: flex; flex-direction: column; gap: 1px; padding: 4px 10px 0; }
+.nc-rail__brand { display: flex; flex-direction: column; gap: 2px; padding: 4px 8px 0; }
 .nc-rail__wordmark {
-  font-size: 25px;
+  font-size: 19px;
   font-weight: 800;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.14em;
   line-height: 1;
-  color: var(--nc-text);
+  color: var(--nc-text-2);
 }
 .nc-rail__wordmark b { color: var(--nc-lime); font-weight: 800; }
 .nc-rail__sub {
-  font-size: 9.5px;
+  font-size: 8.5px;
   font-weight: 600;
-  letter-spacing: 0.34em;
+  letter-spacing: 0.3em;
   text-transform: uppercase;
   color: var(--nc-text-4);
   padding-left: 1px;
 }
 
-.nc-rail__nav { display: flex; flex-direction: column; gap: 3px; }
+.nc-rail__nav { display: flex; flex-direction: column; gap: 2px; }
 .nc-nav-item {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  height: 46px;
-  padding: 0 13px;
-  border-radius: 13px;
+  gap: 10px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 9px;
   border: 1px solid transparent;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  color: var(--nc-text-2);
+  color: var(--nc-text-3);
   width: 100%;
   text-align: left;
   transition:
     color var(--nc-dur-micro) var(--nc-ease-standard),
     background-color var(--nc-dur-micro) var(--nc-ease-standard),
-    border-color var(--nc-dur-quick) var(--nc-ease-standard),
-    transform var(--nc-dur-micro) var(--nc-ease-out);
+    border-color var(--nc-dur-quick) var(--nc-ease-standard);
 }
-.nc-nav-item:hover { color: var(--nc-text); background: rgba(255, 255, 255, 0.04); }
-.nc-nav-item:active { transform: scale(0.99); }
-.nc-nav-item__glyph { flex: none; color: var(--nc-text-3); transition: color var(--nc-dur-micro) var(--nc-ease-standard); }
-.nc-nav-item:hover .nc-nav-item__glyph { color: var(--nc-text-2); }
-/* Active = the lime pill, not a side bar. */
+.nc-nav-item:hover { color: var(--nc-text-2); background: rgba(255, 255, 255, 0.032); }
+.nc-nav-item__glyph { flex: none; color: var(--nc-text-4); transition: color var(--nc-dur-micro) var(--nc-ease-standard); }
+.nc-nav-item:hover .nc-nav-item__glyph { color: var(--nc-text-3); }
+/* Active = one lime marker and a flat surface. No gradient pill: the room is
+   allowed to be the only highlight on the screen. */
 .nc-nav-item[aria-current="page"] {
   color: var(--nc-text);
-  border-color: var(--nc-lime-line);
-  background: linear-gradient(100deg, rgba(182, 255, 0, 0.14), rgba(182, 255, 0, 0.03));
-  box-shadow: 0 0 0 1px rgba(182, 255, 0, 0.06), 0 10px 26px -16px var(--nc-lime-glow);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--nc-border);
+}
+.nc-nav-item[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--nc-lime);
 }
 .nc-nav-item[aria-current="page"] .nc-nav-item__glyph { color: var(--nc-lime); }
 .nc-nav-item__soon {
   margin-left: auto;
-  font-size: 8.5px;
+  font-size: 8px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--nc-text-4);
   border: 1px solid var(--nc-border);
   border-radius: var(--nc-r-pill);
-  padding: 1px 6px;
+  padding: 1px 5px;
 }
 
 .nc-rail__create {
@@ -281,8 +311,8 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 44px;
-  border-radius: 13px;
+  height: 38px;
+  border-radius: 9px;
   border: 1px solid var(--nc-border-2);
   font-size: 13.5px;
   font-weight: 600;
@@ -309,12 +339,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 14px 0 4px;
+  gap: 6px;
+  padding: 10px 0 2px;
+  opacity: 0.72;
 }
 .nc-rail__os-orb {
   position: relative;
-  width: 72px; height: 72px;
+  width: 52px; height: 52px;
   border-radius: 50%;
   background:
     radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.14), transparent 42%),
@@ -405,12 +436,16 @@
   flex: 1;
   min-height: 0;
 }
+/* The stage scrolls only if a reading genuinely needs it (the List view on a
+   short window). The room itself is sized to fit exactly, which is what removes
+   the "sections stacked on a page" feeling — and the clipped bottom dock with
+   it. Full-bleed by design: the room owns the whole working area. */
 .nc-main__scroll {
   position: absolute;
   inset: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0 26px 8px;
+  padding: 0;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
 }
@@ -601,521 +636,14 @@
   display: grid;
   place-items: center;
   border: 2px solid var(--nc-base);
-}
+}/* Founder identity and today's focus now stand INSIDE the room, at instrument
+   weight. See `.nc-ident` in spatial.css — there is no page heading any more. */
 
-/* ═══════════════════ Founder hero ═══════════════════ */
 
-.nc-hero {
-  display: flex;
-  align-items: flex-start;
-  gap: 22px;
-  padding: 6px 2px 18px;
-  animation: nc-rise var(--nc-dur-spatial) var(--nc-ease-out) both;
-}
-.nc-hero__copy { min-width: 0; }
-.nc-hero__greeting { font-size: 14px; color: var(--nc-text-2); }
-.nc-hero__name {
-  font-size: clamp(38px, 4vw, 50px);
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  line-height: 1.04;
-  margin-top: 2px;
-  color: var(--nc-text);
-}
-.nc-hero__tagline { font-size: 14px; color: var(--nc-text-3); margin-top: 6px; }
-.nc-hero__spacer { flex: 1; }
-
-.nc-focus-card {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  min-width: 236px;
-  padding: 14px 16px;
-  margin-top: 14px;
-  border-radius: var(--nc-r-3);
-  border: 1px solid var(--nc-border-2);
-  background: linear-gradient(158deg, rgba(28, 32, 39, 0.9), rgba(13, 15, 18, 0.92));
-  box-shadow: var(--nc-shadow-2);
-  text-align: left;
-  transition: border-color var(--nc-dur-quick) var(--nc-ease-standard), transform var(--nc-dur-quick) var(--nc-ease-out), box-shadow var(--nc-dur-spatial) var(--nc-ease-out);
-}
-.nc-focus-card:hover { border-color: var(--nc-border-3); transform: translateY(-2px); box-shadow: var(--nc-shadow-3); }
-.nc-focus-card__icon {
-  flex: none;
-  width: 36px; height: 36px;
-  display: grid; place-items: center;
-  border-radius: 11px;
-  color: var(--nc-lime);
-  background: rgba(182, 255, 0, 0.09);
-  border: 1px solid var(--nc-lime-line);
-}
-.nc-focus-card__label { display: block; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--nc-text-4); }
-.nc-focus-card__value { display: block; font-size: 13.5px; font-weight: 650; margin-top: 3px; }
-.nc-focus-card__chev { margin-left: auto; color: var(--nc-text-3); }
-
-/* ═══════════════════ LIVING ORGANIZATION ═══════════════════ */
-
-.nc-section { margin-top: 4px; }
-.nc-section__head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
-.nc-section__title { font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
-.nc-section__note { font-size: 11.5px; color: var(--nc-text-4); }
-.nc-section__spacer { flex: 1; }
-
-.nc-org {
-  position: relative;
-  border: 1px solid var(--nc-border);
-  border-radius: var(--nc-r-4);
-  background:
-    radial-gradient(80% 62% at 50% 44%, rgba(182, 255, 0, 0.05), transparent 64%),
-    linear-gradient(180deg, rgba(20, 23, 28, 0.6), rgba(8, 9, 11, 0.5));
-  box-shadow: var(--nc-shadow-3);
-  overflow: hidden;
-  animation: nc-rise var(--nc-dur-spatial) var(--nc-ease-out) both;
-  animation-delay: 80ms;
-}
-.nc-org__head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 18px;
-  border-bottom: 1px solid var(--nc-border);
-}
-.nc-org__title { font-size: 12.5px; font-weight: 650; letter-spacing: 0.02em; }
-.nc-org__sub { font-size: 11px; color: var(--nc-text-4); }
-.nc-org__legend { display: flex; gap: 13px; margin-left: auto; flex-wrap: wrap; }
-.nc-org__legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--nc-text-3); }
-.nc-org__legend-dot { width: 6px; height: 6px; border-radius: 50%; }
-
-.nc-org__crumbs { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--nc-text-3); }
-.nc-org__crumb { color: var(--nc-text-3); transition: color var(--nc-dur-micro) var(--nc-ease-standard); }
-.nc-org__crumb--link:hover { color: var(--nc-lime); }
-.nc-org__crumb--current { color: var(--nc-text); font-weight: 600; }
-
-.nc-org__stage {
-  position: relative;
-  overflow: hidden;
-  min-height: var(--nc-stage-h);
-}
-
-.nc-org__canvas {
-  position: absolute;
-  inset: 0;
-  transform-origin: 0 0;
-  transition: transform var(--nc-dur-travel) var(--nc-ease-out);
-  will-change: transform;
-}
-
-.nc-org__links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-
-/* Concentric rings around the Executive — the "one organism" cue. */
-.nc-ring {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.055);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-}
-.nc-ring--live { stroke: var(--nc-lime-line); stroke-opacity: 0.5; }
-.nc-ring--spin { animation: nc-dash var(--nc-dur-drift) linear infinite; }
-
-.nc-link {
-  stroke: rgba(255, 255, 255, 0.1);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-  transition: stroke var(--nc-dur-quick) var(--nc-ease-standard), stroke-width var(--nc-dur-quick) var(--nc-ease-standard);
-}
-.nc-link--live { stroke: var(--nc-link-accent, var(--nc-lime)); stroke-opacity: 0.5; stroke-width: 1.25; }
-.nc-link--handoff {
-  stroke: var(--nc-handoff);
-  stroke-width: 1.5;
-  stroke-dasharray: 5 9;
-  animation: nc-flow var(--nc-dur-travel) linear infinite;
-}
-.nc-travel {
-  position: absolute;
-  width: 9px; height: 9px;
-  margin: -4.5px 0 0 -4.5px;
-  border-radius: 50%;
-  background: var(--nc-handoff);
-  box-shadow: 0 0 14px rgba(255, 162, 92, 0.75);
-  animation: nc-travel var(--nc-dur-travel) var(--nc-ease-standard) both;
-  pointer-events: none;
-  z-index: 4;
-}
-
-/* ── The Executive orb ─────────────────────────────────────────────────── */
-
-.nc-orb {
-  position: absolute;
-  width: var(--nc-orb-size);
-  height: var(--nc-orb-size);
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  background:
-    radial-gradient(circle at 38% 30%, rgba(255, 255, 255, 0.18), transparent 40%),
-    radial-gradient(circle at 60% 74%, rgba(182, 255, 0, 0.5), transparent 58%),
-    radial-gradient(circle at 50% 50%, #2b3a12 0%, #131a0b 58%, #080a07 100%);
-  border: 1px solid var(--nc-lime-line);
-  box-shadow:
-    0 0 0 1px rgba(182, 255, 0, 0.06),
-    0 30px 70px -26px rgba(0, 0, 0, 0.92),
-    0 0 60px -12px var(--nc-lime-glow),
-    inset 0 -12px 30px rgba(0, 0, 0, 0.5);
-  transition: transform var(--nc-dur-quick) var(--nc-ease-out), box-shadow var(--nc-dur-spatial) var(--nc-ease-out);
-  z-index: 3;
-}
-.nc-orb:hover { transform: translate(-50%, calc(-50% - 3px)); }
-.nc-orb:focus-visible { outline: none; box-shadow: 0 0 0 4px rgba(182, 255, 0, 0.16), 0 30px 70px -26px rgba(0, 0, 0, 0.92); }
-.nc-orb__halo {
-  position: absolute;
-  inset: -22%;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--nc-lime-glow), transparent 62%);
-  filter: blur(16px);
-  z-index: -1;
-}
-.nc-orb__portrait {
-  width: 38%; height: 38%;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: #0e1008;
-  background: linear-gradient(150deg, #e6ff9c, #a4e000);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.8);
-}
-.nc-orb__title {
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.28em;
-  text-indent: 0.28em;
-  color: var(--nc-text);
-  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7);
-}
-.nc-orb__role { font-size: 9.5px; letter-spacing: 0.04em; color: rgba(243, 240, 233, 0.62); }
-.nc-orb__status {
-  position: absolute;
-  bottom: -26px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: var(--nc-r-pill);
-  border: 1px solid var(--nc-border-2);
-  background: rgba(10, 11, 14, 0.86);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--nc-status-color, var(--nc-idle));
-  white-space: nowrap;
-}
-.nc-orb[data-status="IDLE"] { --nc-status-color: var(--nc-idle); }
-.nc-orb[data-status="THINKING"] { --nc-status-color: var(--nc-thinking); }
-.nc-orb[data-status="ACTIVE"] { --nc-status-color: var(--nc-active); }
-.nc-orb[data-status="HANDOFF"] { --nc-status-color: var(--nc-handoff); }
-.nc-orb[data-status="WAITING"] { --nc-status-color: var(--nc-waiting); }
-.nc-orb[data-status="APPROVAL_REQUIRED"] { --nc-status-color: var(--nc-approval); }
-.nc-orb[data-status="BLOCKED"] { --nc-status-color: var(--nc-blocked); }
-.nc-orb[data-status="COMPLETED"] { --nc-status-color: var(--nc-completed); }
-.nc-orb[data-status="ERROR"] { --nc-status-color: var(--nc-error); }
-.nc-orb[data-status="ACTIVE"],
-.nc-orb[data-status="THINKING"] { animation: nc-breathe var(--nc-dur-breath) var(--nc-ease-standard) infinite; }
-
-/* ── Department slot: card + its lit platform ──────────────────────────── */
-
-.nc-slot {
-  position: absolute;
-  width: var(--nc-card-w);
-  height: var(--nc-card-h);
-  transform: translate(-50%, -50%);
-  transition: opacity var(--nc-dur-spatial) var(--nc-ease-standard), filter var(--nc-dur-spatial) var(--nc-ease-standard);
-  z-index: 2;
-}
-.nc-slot[data-dim="true"] { opacity: 0.34; filter: saturate(0.45); }
-
-/* The platform is derived from the card, so a card can never lose its base. */
-.nc-platform {
-  position: absolute;
-  left: 50%;
-  top: calc(100% + 4px);
-  width: 122%;
-  height: 66px;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  background: radial-gradient(62% 100% at 50% 38%, color-mix(in srgb, var(--nc-accent) 17%, transparent), transparent 74%);
-  border: 1px solid color-mix(in srgb, var(--nc-accent) 24%, transparent);
-  box-shadow:
-    0 28px 44px -24px rgba(0, 0, 0, 0.9),
-    inset 0 1px 0 color-mix(in srgb, var(--nc-accent) 28%, transparent);
-  opacity: 0.6;
-  transition:
-    opacity var(--nc-dur-spatial) var(--nc-ease-standard),
-    box-shadow var(--nc-dur-spatial) var(--nc-ease-out),
-    border-color var(--nc-dur-spatial) var(--nc-ease-standard);
-}
-.nc-platform::after {
-  content: "";
-  position: absolute;
-  inset: 16% 8% -22% 8%;
-  border-radius: 50%;
-  background: radial-gradient(52% 62% at 50% 18%, color-mix(in srgb, var(--nc-accent) 26%, transparent), transparent 72%);
-  filter: blur(12px);
-}
-
-.nc-dept-card {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 12px 13px 11px;
-  border-radius: var(--nc-r-3);
-  border: 1px solid var(--nc-border-2);
-  background: linear-gradient(168deg, rgba(31, 35, 43, 0.93), rgba(12, 14, 17, 0.95));
-  box-shadow: var(--nc-shadow-2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  text-align: left;
-  overflow: hidden;
-  transition:
-    transform var(--nc-dur-quick) var(--nc-ease-out),
-    border-color var(--nc-dur-quick) var(--nc-ease-standard),
-    box-shadow var(--nc-dur-spatial) var(--nc-ease-out);
-}
-.nc-dept-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(140deg, color-mix(in srgb, var(--nc-accent) 10%, transparent), transparent 46%);
-  opacity: 0.8;
-  pointer-events: none;
-}
-.nc-dept-card:hover {
-  transform: translateY(-3px);
-  border-color: color-mix(in srgb, var(--nc-accent) 46%, transparent);
-  box-shadow: var(--nc-shadow-3), 0 0 40px -18px color-mix(in srgb, var(--nc-accent) 60%, transparent);
-}
-.nc-dept-card:active { transform: translateY(-1px); }
-.nc-dept-card:focus-visible {
-  outline: none;
-  border-color: var(--nc-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nc-accent) 22%, transparent), var(--nc-shadow-2);
-}
-
-.nc-dept-card__top { display: flex; align-items: center; gap: 10px; }
-.nc-dept-card__icon {
-  flex: none;
-  width: 34px; height: 34px;
-  display: grid; place-items: center;
-  border-radius: 11px;
-  color: var(--nc-accent);
-  background: color-mix(in srgb, var(--nc-accent) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--nc-accent) 30%, transparent);
-}
-.nc-dept-card__name { font-size: 13.5px; font-weight: 650; letter-spacing: -0.008em; line-height: 1.2; }
-.nc-dept-card__capability {
-  font-size: 10.5px;
-  color: var(--nc-text-3);
-  margin-top: 2px;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* When a department is actually working, its identity line yields to the work
-   itself — so "who is doing what" is readable without opening anything. */
-.nc-dept-card__capability[data-working="true"] { color: var(--nc-status-color, var(--nc-text-2)); opacity: 0.95; }
-
-/* Concentric perspective rings around the Executive. A square SVG box keeps
-   the ellipses' shape stable at any stage width. */
-.nc-rings {
-  position: absolute;
-  width: calc(var(--nc-orb-size) * 3.1);
-  height: calc(var(--nc-orb-size) * 3.1);
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  z-index: 1;
-}
-.nc-dept-card__chev {
-  margin-left: auto;
-  flex: none;
-  width: 28px; height: 28px;
-  display: grid; place-items: center;
-  border-radius: 50%;
-  border: 1px solid var(--nc-border-2);
-  color: var(--nc-text-3);
-  transition: color var(--nc-dur-micro) var(--nc-ease-standard), border-color var(--nc-dur-micro) var(--nc-ease-standard), background-color var(--nc-dur-micro) var(--nc-ease-standard);
-}
-.nc-dept-card:hover .nc-dept-card__chev {
-  color: var(--nc-accent);
-  border-color: color-mix(in srgb, var(--nc-accent) 45%, transparent);
-  background: color-mix(in srgb, var(--nc-accent) 10%, transparent);
-}
-
-.nc-dept-card__bottom { display: flex; align-items: center; gap: 8px; }
-.nc-crew { display: inline-flex; align-items: center; }
-.nc-crew__dot {
-  width: 20px; height: 20px;
-  margin-left: -7px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(12, 14, 17, 0.95);
-  background: linear-gradient(150deg, #333a45, #1b1f26);
-  transition: background var(--nc-dur-quick) var(--nc-ease-standard), transform var(--nc-dur-quick) var(--nc-ease-settle);
-}
-.nc-crew__dot:first-child { margin-left: 0; }
-.nc-crew__dot[data-level="mid"] { background: color-mix(in srgb, var(--nc-accent) 45%, #1b1f26); }
-.nc-crew__dot[data-level="high"] {
-  background: var(--nc-accent);
-  transform: scale(1.08);
-  box-shadow: 0 0 9px color-mix(in srgb, var(--nc-accent) 55%, transparent);
-}
-.nc-crew__more { margin-left: 4px; font-size: 10.5px; font-weight: 600; color: var(--nc-text-3); }
-
-.nc-dept-card__status {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--nc-status-color, var(--nc-idle));
-}
-.nc-dept-card__led {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: var(--nc-status-color, var(--nc-idle));
-  box-shadow: 0 0 8px color-mix(in srgb, var(--nc-status-color, var(--nc-idle)) 70%, transparent);
-}
-
-.nc-dept-card__meter {
-  position: absolute;
-  left: 13px; right: 13px; bottom: 6px;
-  height: 2px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.07);
-  overflow: hidden;
-}
-.nc-dept-card__meter i {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--nc-status-color, var(--nc-idle)), color-mix(in srgb, var(--nc-status-color, var(--nc-idle)) 30%, transparent));
-  transition: width var(--nc-dur-travel) var(--nc-ease-out), background var(--nc-dur-quick) var(--nc-ease-standard);
-}
-
-.nc-dept-card__badge {
-  position: absolute;
-  top: -9px; right: 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  border-radius: var(--nc-r-pill);
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: #1b1405;
-  background: var(--nc-approval);
-  box-shadow: 0 6px 18px -6px rgba(240, 180, 41, 0.7);
-  animation: nc-attention var(--nc-dur-breath) var(--nc-ease-standard) infinite;
-  white-space: nowrap;
-}
-
-/* Status vocabulary on the slot: platform bloom + card affordances. */
-.nc-slot[data-status="IDLE"] { --nc-status-color: var(--nc-idle); }
-.nc-slot[data-status="THINKING"] { --nc-status-color: var(--nc-thinking); }
-.nc-slot[data-status="ACTIVE"] { --nc-status-color: var(--nc-active); }
-.nc-slot[data-status="HANDOFF"] { --nc-status-color: var(--nc-handoff); }
-.nc-slot[data-status="WAITING"] { --nc-status-color: var(--nc-waiting); }
-.nc-slot[data-status="APPROVAL_REQUIRED"] { --nc-status-color: var(--nc-approval); }
-.nc-slot[data-status="BLOCKED"] { --nc-status-color: var(--nc-blocked); }
-.nc-slot[data-status="COMPLETED"] { --nc-status-color: var(--nc-completed); }
-.nc-slot[data-status="ERROR"] { --nc-status-color: var(--nc-error); }
-
-.nc-slot[data-status="ACTIVE"] .nc-platform,
-.nc-slot[data-status="THINKING"] .nc-platform {
-  opacity: 1;
-  border-color: color-mix(in srgb, var(--nc-accent) 56%, transparent);
-  box-shadow:
-    0 30px 56px -22px rgba(0, 0, 0, 0.92),
-    0 0 60px -16px color-mix(in srgb, var(--nc-accent) 62%, transparent),
-    inset 0 1px 0 color-mix(in srgb, var(--nc-accent) 55%, transparent);
-}
-.nc-slot[data-status="APPROVAL_REQUIRED"] .nc-platform,
-.nc-slot[data-status="BLOCKED"] .nc-platform,
-.nc-slot[data-status="ERROR"] .nc-platform {
-  opacity: 1;
-  border-color: color-mix(in srgb, var(--nc-approval) 52%, transparent);
-  box-shadow:
-    0 30px 56px -22px rgba(0, 0, 0, 0.92),
-    0 0 54px -16px rgba(240, 180, 41, 0.45),
-    inset 0 1px 0 rgba(240, 180, 41, 0.4);
-}
-.nc-slot[data-status="ACTIVE"] .nc-dept-card {
-  border-color: color-mix(in srgb, var(--nc-accent) 40%, transparent);
-  box-shadow: var(--nc-shadow-2), 0 0 34px -18px color-mix(in srgb, var(--nc-accent) 60%, transparent);
-}
-.nc-slot[data-status="APPROVAL_REQUIRED"] .nc-dept-card {
-  border-color: color-mix(in srgb, var(--nc-approval) 55%, transparent);
-  box-shadow: 0 0 0 3px rgba(240, 180, 41, 0.08), var(--nc-shadow-2);
-}
-.nc-slot[data-status="BLOCKED"] .nc-dept-card,
-.nc-slot[data-status="ERROR"] .nc-dept-card {
-  border-color: color-mix(in srgb, var(--nc-blocked) 45%, transparent);
-}
-.nc-slot[data-status="COMPLETED"] .nc-dept-card { animation: nc-settle var(--nc-dur-spatial) var(--nc-ease-settle) both; }
-.nc-slot[data-status="ERROR"] .nc-dept-card { animation: nc-nudge var(--nc-dur-quick) var(--nc-ease-out) 2; }
-
-/* ── View switcher ─────────────────────────────────────────────────────── */
-
-.nc-org__foot {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 18px;
-  border-top: 1px solid var(--nc-border);
-}
-.nc-viewswitch {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 4px;
-  border-radius: var(--nc-r-pill);
-  border: 1px solid var(--nc-border);
-  background: rgba(255, 255, 255, 0.025);
-}
-.nc-viewswitch__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 30px;
-  padding: 0 15px;
-  border-radius: var(--nc-r-pill);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--nc-text-3);
-  transition: color var(--nc-dur-micro) var(--nc-ease-standard), background-color var(--nc-dur-quick) var(--nc-ease-standard), box-shadow var(--nc-dur-quick) var(--nc-ease-standard);
-}
-.nc-viewswitch__btn:hover { color: var(--nc-text); }
-.nc-viewswitch__btn[data-active="true"] {
-  color: #10120c;
-  background: var(--nc-lime);
-  box-shadow: 0 8px 20px -10px var(--nc-lime-glow);
-}
-.nc-org__foot-spacer { flex: 1; }
+/* LIVING ORGANIZATION, THE COMMAND SCENE, THE CONNECTION FIELD and the view
+   switcher all moved to spatial.css in Phase UI-02.1: the room is now full-bleed
+   and its instrumentation floats inside it, so there is no bordered section, no
+   head band and no footer band left to style here. */
 
 /* ── List view (a real second view of the same live state) ─────────────── */
 
@@ -1190,39 +718,6 @@
 .nc-list__row[data-status="COMPLETED"] { --nc-status-color: var(--nc-completed); }
 .nc-list__row[data-status="ERROR"] { --nc-status-color: var(--nc-error); }
 
-/* ── Department focus panel (contextual zoom destination) ─────────────── */
-
-.nc-focus {
-  position: absolute;
-  top: 14px; right: 14px; bottom: 14px;
-  width: min(400px, 46%);
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--nc-border-2);
-  border-radius: var(--nc-r-3);
-  background: linear-gradient(180deg, rgba(24, 27, 33, 0.97), rgba(11, 13, 16, 0.97));
-  box-shadow: var(--nc-shadow-3);
-  backdrop-filter: blur(16px);
-  animation: nc-reveal var(--nc-dur-spatial) var(--nc-ease-out) both;
-  overflow: hidden;
-  z-index: 8;
-}
-.nc-focus__scrim {
-  position: absolute;
-  inset: 0;
-  z-index: 7;
-  background: linear-gradient(90deg, transparent 30%, rgba(6, 7, 9, 0.78) 100%);
-  animation: nc-fade var(--nc-dur-spatial) var(--nc-ease-standard) both;
-  pointer-events: none;
-}
-.nc-focus__head {
-  padding: 15px 16px;
-  border-bottom: 1px solid var(--nc-border);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--nc-accent) 9%, transparent), transparent 70%);
-}
-.nc-focus__kicker { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--nc-accent); }
-.nc-focus__title { font-size: 17px; font-weight: 680; letter-spacing: -0.015em; margin-top: 3px; }
-.nc-focus__body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; }
 .nc-focus__grid { display: flex; flex-direction: column; gap: 8px; }
 .nc-worker {
   display: flex;
@@ -1256,7 +751,6 @@
 .nc-worker[data-state="WAITING"] { --nc-status-color: var(--nc-waiting); }
 .nc-worker[data-state="APPROVAL_REQUIRED"] { --nc-status-color: var(--nc-approval); }
 .nc-worker[data-state="IDLE"] { --nc-status-color: var(--nc-idle); }
-.nc-focus__foot { padding: 13px 16px; border-top: 1px solid var(--nc-border); display: flex; gap: 9px; }
 
 .nc-btn {
   display: inline-flex;
@@ -1276,103 +770,18 @@
 .nc-btn--lime { color: var(--nc-lime); border-color: var(--nc-lime-line); background: var(--nc-lime-soft); }
 .nc-btn--sm { height: 27px; padding: 0 10px; font-size: 11px; }
 
-/* ═══════════════════ Integrated bottom dock ═══════════════════ */
+/* ═══════════════════ Command surface ═══════════════════
+   The bottom band is now the ROOM'S near edge, not a floating toolbar. The
+   band itself only reserves space: the surface owns its own material, spans the
+   full width and sits flush against the bottom of the shell (see `.nc-surface`
+   in spatial.css). */
 
 .nc-rail-bottom {
   position: relative;
   flex: none;
   display: flex;
-  justify-content: center;
-  padding: 8px 26px 18px;
-  background: linear-gradient(180deg, rgba(7, 8, 10, 0), rgba(7, 8, 10, 0.85) 46%);
-  pointer-events: none;
+  align-items: stretch;
 }
-.nc-rail-bottom > * { pointer-events: auto; }
-
-.nc-dock {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
-  border-radius: 26px;
-  border: 1px solid var(--nc-border-2);
-  background: linear-gradient(180deg, rgba(26, 30, 36, 0.94), rgba(12, 14, 17, 0.97));
-  box-shadow: var(--nc-shadow-3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(16px);
-}
-.nc-dock__action {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  width: 92px;
-  padding: 9px 4px;
-  border-radius: 15px;
-  border: 1px solid transparent;
-  font-size: 10.5px;
-  font-weight: 550;
-  color: var(--nc-text-3);
-  transition: color var(--nc-dur-micro) var(--nc-ease-standard), background-color var(--nc-dur-quick) var(--nc-ease-standard), border-color var(--nc-dur-quick) var(--nc-ease-standard), transform var(--nc-dur-quick) var(--nc-ease-out);
-}
-.nc-dock__action svg { transition: color var(--nc-dur-micro) var(--nc-ease-standard), transform var(--nc-dur-quick) var(--nc-ease-settle); }
-.nc-dock__action:hover {
-  color: var(--nc-text);
-  border-color: var(--nc-border);
-  background: rgba(255, 255, 255, 0.045);
-  transform: translateY(-3px);
-}
-.nc-dock__action:hover svg { color: var(--nc-lime); transform: scale(1.06); }
-.nc-dock__action:active { transform: translateY(-1px) scale(0.98); }
-.nc-dock__action:focus-visible { outline: none; border-color: var(--nc-lime-line); box-shadow: 0 0 0 3px rgba(182, 255, 0, 0.1); }
-
-.nc-dock__exec {
-  position: relative;
-  flex: none;
-  width: 64px; height: 64px;
-  margin: 0 10px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  color: var(--nc-text);
-  background:
-    radial-gradient(circle at 38% 30%, rgba(255, 255, 255, 0.24), transparent 42%),
-    radial-gradient(circle at 50% 50%, #a8ef00 0%, #5f8f00 62%, #22330a 100%);
-  border: 1px solid var(--nc-lime-line);
-  box-shadow: 0 0 34px -6px var(--nc-lime-glow), inset 0 -8px 20px rgba(0, 0, 0, 0.35);
-  transition: transform var(--nc-dur-quick) var(--nc-ease-out), box-shadow var(--nc-dur-spatial) var(--nc-ease-out);
-}
-.nc-dock__exec:hover { transform: scale(1.05); box-shadow: 0 0 46px -4px var(--nc-lime-glow), inset 0 -8px 20px rgba(0, 0, 0, 0.35); }
-.nc-dock__exec:active { transform: scale(0.98); }
-.nc-dock__exec[data-open="true"] { animation: nc-ring var(--nc-dur-breath) var(--nc-ease-out) infinite; }
-.nc-dock__exec-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 7px;
-  margin: 0 6px;
-}
-.nc-dock__exec-label {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-}
-.nc-dock__exec-label b { font-size: 11.5px; font-weight: 620; color: var(--nc-text); }
-.nc-dock__exec-label span { font-size: 9.5px; color: var(--nc-text-4); }
-.nc-dock__wave { display: flex; align-items: center; gap: 2px; height: 20px; }
-.nc-dock__wave i {
-  display: block;
-  width: 3px;
-  border-radius: 3px;
-  background: rgba(10, 14, 6, 0.75);
-  animation: nc-wave calc(1100ms * var(--nc-speed) / 1) var(--nc-ease-standard) infinite;
-}
-.nc-dock__wave i:nth-child(1) { height: 8px;  animation-delay: 0ms; }
-.nc-dock__wave i:nth-child(2) { height: 15px; animation-delay: 110ms; }
-.nc-dock__wave i:nth-child(3) { height: 20px; animation-delay: 220ms; }
-.nc-dock__wave i:nth-child(4) { height: 13px; animation-delay: 330ms; }
-.nc-dock__wave i:nth-child(5) { height: 7px;  animation-delay: 440ms; }
 
 /* ── Executive command surface ─────────────────────────────────────────── */
 
@@ -1439,72 +848,10 @@
   border: 1px solid rgba(255, 162, 92, 0.32);
   border-radius: var(--nc-r-pill);
   padding: 2px 8px;
-}
+}/* The four-card Systems section is GONE (Phase UI-02.1). Systems are now the
+   Connected Systems Layer: perimeter nodes inside the room, plus a list in the
+   context column. See `.nc-sysnode` and `.nc-syslist` in spatial.css. */
 
-/* ═══════════════════ Systems launcher (page level) ═══════════════════
-   The context column carries a compact tile version; this is the fuller
-   treatment on the page, where there is room to show what each system can do.
-   NEXUP System is the only real link — nothing else is integrated.         */
-
-.nc-systems { display: grid; grid-template-columns: repeat(auto-fill, minmax(226px, 1fr)); gap: 12px; }
-.nc-system-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--nc-border);
-  border-radius: var(--nc-r-3);
-  background: linear-gradient(170deg, rgba(23, 26, 32, 0.78), rgba(11, 13, 16, 0.6));
-  text-align: left;
-  transition:
-    border-color var(--nc-dur-quick) var(--nc-ease-standard),
-    transform var(--nc-dur-quick) var(--nc-ease-out),
-    box-shadow var(--nc-dur-quick) var(--nc-ease-out);
-}
-.nc-system-card:hover { border-color: var(--nc-border-2); }
-.nc-system-card__top { display: flex; align-items: center; gap: 10px; }
-.nc-system-card__mark {
-  flex: none;
-  width: 30px; height: 30px;
-  display: grid; place-items: center;
-  border-radius: 9px;
-  font-size: 11px; font-weight: 800;
-  color: var(--nc-accent, var(--nc-lime));
-  background: color-mix(in srgb, var(--nc-accent, var(--nc-lime)) 11%, transparent);
-  border: 1px solid color-mix(in srgb, var(--nc-accent, var(--nc-lime)) 30%, transparent);
-}
-.nc-system-card__name { font-size: 13px; font-weight: 620; }
-.nc-system-card__kind { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--nc-text-4); }
-.nc-system-card__caps { display: flex; flex-wrap: wrap; gap: 5px; }
-.nc-system-card__cap {
-  font-size: 10px;
-  color: var(--nc-text-3);
-  border: 1px solid var(--nc-border);
-  border-radius: var(--nc-r-pill);
-  padding: 2px 7px;
-  transition: color var(--nc-dur-micro) var(--nc-ease-standard), border-color var(--nc-dur-micro) var(--nc-ease-standard);
-}
-.nc-system-card:hover .nc-system-card__cap { color: var(--nc-text-2); border-color: var(--nc-border-2); }
-.nc-system-card__foot { display: flex; align-items: center; gap: 7px; font-size: 10.5px; color: var(--nc-text-4); }
-.nc-system-card__foot i { width: 6px; height: 6px; border-radius: 50%; background: var(--nc-status-dot, var(--nc-idle)); box-shadow: 0 0 7px color-mix(in srgb, var(--nc-status-dot, var(--nc-idle)) 60%, transparent); }
-.nc-system-card[data-kind="online"] { --nc-status-dot: var(--nc-completed); }
-.nc-system-card[data-kind="running"] { --nc-status-dot: var(--nc-lime); }
-.nc-system-card[data-kind="connected"] { --nc-status-dot: var(--nc-finance); }
-.nc-system-card[data-kind="development"] { --nc-status-dot: var(--nc-operations); }
-.nc-system-card__mock { color: var(--nc-handoff); }
-.nc-system-card--connect {
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  border-style: dashed;
-  color: var(--nc-text-3);
-  font-size: 12px;
-  font-weight: 550;
-  gap: 8px;
-  min-height: 132px;
-}
-.nc-system-card--connect:hover { color: var(--nc-lime); border-color: var(--nc-lime-line); }
 
 /* ═══════════════════ Right context column ═══════════════════ */
 
@@ -1642,51 +989,10 @@
 .nc-project__meta { font-size: 10px; color: var(--nc-text-4); margin-top: 2px; }
 .nc-project__pct { margin-left: auto; font-size: 12px; font-weight: 650; color: var(--nc-text-2); }
 .nc-project__meter { height: 3px; margin-top: 7px; border-radius: 3px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
-.nc-project__meter i { display: block; height: 100%; border-radius: 3px; background: var(--nc-accent); transition: width var(--nc-dur-travel) var(--nc-ease-out); }
+.nc-project__meter i { display: block; height: 100%; border-radius: 3px; background: var(--nc-accent); transition: width var(--nc-dur-travel) var(--nc-ease-out); }/* Systems, in the context column, are a LIST of endpoint rows with the spaces
+   that reach them — a stack of tiles read as dashboard cards, which is exactly
+   what the layer replaced. See `.nc-syslist` / `.nc-sysrow` in spatial.css. */
 
-/* Systems tiles */
-.nc-systems-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.nc-system-tile {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  padding: 11px 11px 10px;
-  border: 1px solid var(--nc-border);
-  border-radius: var(--nc-r-2);
-  background: rgba(255, 255, 255, 0.018);
-  text-align: left;
-  transition: border-color var(--nc-dur-quick) var(--nc-ease-standard), background-color var(--nc-dur-quick) var(--nc-ease-standard), transform var(--nc-dur-quick) var(--nc-ease-out), box-shadow var(--nc-dur-quick) var(--nc-ease-out);
-}
-.nc-system-tile:hover { border-color: var(--nc-border-2); background: rgba(255, 255, 255, 0.04); transform: translateY(-2px); box-shadow: var(--nc-shadow-2); }
-.nc-system-tile__mark {
-  width: 30px; height: 30px;
-  display: grid; place-items: center;
-  border-radius: 9px;
-  font-size: 10.5px; font-weight: 800;
-  color: var(--nc-accent);
-  background: color-mix(in srgb, var(--nc-accent) 11%, transparent);
-  border: 1px solid color-mix(in srgb, var(--nc-accent) 30%, transparent);
-}
-.nc-system-tile__name { font-size: 11.5px; font-weight: 600; line-height: 1.25; }
-.nc-system-tile__status { display: flex; align-items: center; gap: 5px; font-size: 9.5px; color: var(--nc-text-3); }
-.nc-system-tile__status i { width: 6px; height: 6px; border-radius: 50%; background: var(--nc-status-dot, var(--nc-idle)); box-shadow: 0 0 7px color-mix(in srgb, var(--nc-status-dot, var(--nc-idle)) 60%, transparent); }
-.nc-system-tile[data-kind="online"] { --nc-status-dot: var(--nc-completed); }
-.nc-system-tile[data-kind="running"] { --nc-status-dot: var(--nc-lime); }
-.nc-system-tile[data-kind="connected"] { --nc-status-dot: var(--nc-finance); }
-.nc-system-tile[data-kind="development"] { --nc-status-dot: var(--nc-operations); }
-.nc-system-tile--connect {
-  grid-column: 1 / -1;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 46px;
-  border-style: dashed;
-  color: var(--nc-text-3);
-  font-size: 11.5px;
-  font-weight: 550;
-}
-.nc-system-tile--connect:hover { color: var(--nc-lime); border-color: var(--nc-lime-line); }
 
 /* Approvals */
 .nc-approval-row {
@@ -1728,10 +1034,11 @@
 
 .nc-lab {
   position: absolute;
-  left: 200px;
-  /* Above the bottom dock band, so the dev instrument never covers the dock
-     or the Graph/List/Map switcher underneath the stage. */
-  bottom: 170px;
+  /* Parked above the right end of the command surface. The room owns the middle
+     of the stage, so the dev instrument keeps out of the composition it is there
+     to review — it must never sit on top of a bay or the workspace. */
+  right: calc(var(--nc-context-w) + 18px);
+  bottom: calc(var(--nc-surface-h) + 16px);
   z-index: 40;
   width: 272px;
   border: 1px solid rgba(255, 162, 92, 0.28);
@@ -1819,7 +1126,7 @@
 /* 7 · success settle */
 @keyframes nc-settle { 0% { transform: translateY(-3px) scale(1.02); } 100% { transform: none; } }
 
-/* 8 · contextual zoom — the transform itself (see .nc-org__canvas) */
+/* 8 · contextual zoom — the transform itself (see `.nc-scene__canvas`) */
 
 /* 9 · hover depth — composable: declares no transition of its own, so it layers
    onto any component that already transitions transform/box-shadow. */
@@ -1860,9 +1167,11 @@
   transition-delay: 0ms !important;
 }
 /* Spatial state must still MOVE under reduced motion, just instantly —
-   otherwise focusing a department would break the mental model. */
-.nc-root[data-motion="reduced"] .nc-org__canvas,
-.nc-root[data-motion="reduced"] .nc-dept-card__meter i,
+   otherwise entering a department would break the mental model. */
+.nc-root[data-motion="reduced"] .nc-scene__canvas,
+.nc-root[data-motion="reduced"] .nc-pod,
+.nc-root[data-motion="reduced"] .nc-core,
+.nc-root[data-motion="reduced"] .nc-pod__meter i,
 .nc-root[data-motion="reduced"] .nc-list__meter i,
 .nc-root[data-motion="reduced"] .nc-project__meter i {
   transition-duration: 1ms !important;
@@ -1872,21 +1181,33 @@
    Desktop command centre first. Below these widths the shell folds down
    rather than breaking, leaving room for a real tablet/PWA pass later.     */
 @media (max-width: 1500px) {
-  .nc-root { --nc-rail-w: 168px; --nc-context-w: 286px; }
+  .nc-root { --nc-rail-w: 158px; --nc-context-w: 282px; }
 }
+/* Below the desktop target the room degrades rather than breaks: the rail folds
+   to icons, the context column stands down, the perspective softens and the
+   bays shrink. The composition is still one room. A real tablet/PWA command
+   experience is a later phase. */
 @media (max-width: 1240px) {
-  .nc-root { --nc-rail-w: 68px; --nc-context-w: 0px; --nc-card-w: 200px; --nc-stage-h: 580px; }
-  .nc-rail { padding: 18px 10px; align-items: center; }
+  .nc-root {
+    --nc-rail-w: 64px;
+    --nc-context-w: 0px;
+    --nc-pod-w: 196px;
+    --nc-pod-h: 136px;
+    --nc-core-size: 152px;
+    --nc-stage-h: 440px;
+    --nc-persp: 1900px;
+    --nc-surface-h: 84px;
+  }
+  .nc-rail { padding: 16px 8px; align-items: center; }
   .nc-rail__brand { align-items: center; padding: 4px 0 0; }
   .nc-rail__wordmark, .nc-rail__sub, .nc-rail__os, .nc-rail__user-text, .nc-rail__gear,
   .nc-nav-item__soon, .nc-nav-item__label, .nc-rail__create-label { display: none; }
   .nc-nav-item { justify-content: center; padding: 0; }
-  .nc-rail__create { width: 44px; padding: 0; }
+  .nc-nav-item[aria-current="page"]::before { display: none; }
+  .nc-rail__create { width: 40px; padding: 0; }
   .nc-rail__user { justify-content: center; padding: 6px; }
   .nc-context { display: none; }
-  .nc-main__scroll { padding: 0 20px 8px; }
-  .nc-topbar { padding: 14px 20px; }
-  .nc-rail-bottom { padding: 8px 20px 16px; }
-  .nc-exec-surface { left: 20px; right: 20px; }
-  .nc-lab { left: 84px; }
+  .nc-topbar { padding: 12px 18px; }
+  .nc-exec-surface { left: 18px; right: 18px; }
+  .nc-lab { right: 18px; }
 }

@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import { CommandShell } from "@/components/command/command-shell";
 import { CommandProvider } from "@/components/command/state/command-store";
 import "./command.css";
+/* Phase UI-02.1 adds one layer, in one place: the spatial scene (depth, the
+   Intelligence Core, department pods, actor presence, the adaptive rail and
+   deck). It only *adds* — it redefines no token and overrides no shell rule. */
+import "./spatial.css";
 
 /**
  * NEXUP COMMAND — route layout (Phase UI-01)
@@ -42,3 +46,11 @@ export default function CommandLayout({ children }: { children: React.ReactNode 
     </CommandProvider>
   );
 }
+
+// ── Dev-mode hygiene ───────────────────────────────────────────────────────
+// The Next.js DevTools instrumentation that ships in this repo's app/layout.tsx
+// (a <script dangerouslySetInnerHTML> that opens the DevTools overlay) is NOT
+// included beneath /command: CommandShell owns its own <html lang>/<head/> block
+// for this route, and adding that script here would surface an in-page overlay
+// that blocks screenshot capture in review.
+//

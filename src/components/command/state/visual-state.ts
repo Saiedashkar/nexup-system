@@ -88,6 +88,39 @@ export const isWorkingStatus = (status: NodeVisualStatus) =>
 export const needsHumanStatus = (status: NodeVisualStatus) =>
   status === "APPROVAL_REQUIRED" || status === "BLOCKED" || status === "ERROR";
 
+/**
+ * The four phases the Intelligence Core can *look* like. The nine runtime
+ * states collapse into these because a core that says "Handing off" is really
+ * saying "Running" — the vocabulary belongs to the core's own presence, and the
+ * operational detail stays in the rail, the list and the console.
+ */
+export type ExecPhase = "ready" | "thinking" | "running" | "waiting";
+
+export const EXEC_PHASE_LABEL: Record<ExecPhase, string> = {
+  ready: "Ready",
+  thinking: "Thinking",
+  running: "Running",
+  waiting: "Waiting for You",
+};
+
+/** Map any runtime state onto a core phase. No department-specific branches. */
+export function execPhase(status: NodeVisualStatus): ExecPhase {
+  switch (status) {
+    case "THINKING":
+      return "thinking";
+    case "ACTIVE":
+    case "HANDOFF":
+      return "running";
+    case "WAITING":
+    case "APPROVAL_REQUIRED":
+    case "BLOCKED":
+    case "ERROR":
+      return "waiting";
+    default:
+      return "ready";
+  }
+}
+
 /** Restrained, non-alarming labels — this is an operating environment. */
 export const STATUS_LABEL: Record<NodeVisualStatus, string> = {
   IDLE: "Idle",

@@ -10,9 +10,9 @@ import { IconChevronDown, IconSpark } from "./ui/icons";
  * Executive presence.
  *
  * The Executive is conceptually accessible from everywhere, so its control is
- * persistent and visual — a living orb with a voice waveform, sitting at the
- * centre of the bottom dock, not a chat bubble in the corner. Opening it raises
- * a command surface that reads like an operating console.
+ * persistent and visual — a living orb with a voice waveform — and it is the
+ * LEAD cell of the command surface, not a chat bubble in the corner. Opening it
+ * raises a console inside the stage, above the surface that opened it.
  *
  * There is no AI provider in this phase. Replies are produced locally by
  * `mock-intent.ts` and every reply says so out loud.
@@ -21,16 +21,16 @@ export function ExecutiveDockOrb() {
   const { execOpen, setExecOpen } = useCommand();
 
   return (
-    <div className="nc-dock__exec-wrap">
+    <div className="nc-exec-lead">
       <button
         type="button"
-        className="nc-dock__exec"
+        className="nc-exec-lead__orb"
         data-open={execOpen}
         onClick={() => setExecOpen(!execOpen)}
         aria-expanded={execOpen}
         aria-label="Talk to Executive"
       >
-        <span className="nc-dock__wave" aria-hidden="true">
+        <span className="nc-exec-lead__wave" aria-hidden="true">
           <i />
           <i />
           <i />
@@ -38,9 +38,9 @@ export function ExecutiveDockOrb() {
           <i />
         </span>
       </button>
-      <span className="nc-dock__exec-label">
-        <b>Talk to Executive...</b>
-        <span>{execOpen ? "⌘K to close" : "⌘K · nothing runs without you"}</span>
+      <span className="nc-exec-lead__text">
+        <span className="nc-exec-lead__title">Talk to Executive</span>
+        <span className="nc-exec-lead__hint">{execOpen ? "⌘K to close" : "⌘K · nothing runs without you"}</span>
       </span>
     </div>
   );
@@ -118,7 +118,7 @@ export function ExecutiveSurface() {
           {messages.map((message) => (
             <div key={message.id} className="nc-exec-surface__msg" data-role={message.role}>
               <div className="nc-exec-surface__who">
-                {message.role === "executive" ? "Executive" : "Saeed · Human Authority"}
+                {message.role === "executive" ? "Executive" : "Founder · Human authority"}
               </div>
               <div className="nc-exec-surface__bubble">{message.text}</div>
             </div>

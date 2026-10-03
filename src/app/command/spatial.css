@@ -1,0 +1,2925 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEXUP COMMAND — Phase UI-02.1 spatial layer
+   ───────────────────────────────────────────────────────────────────────────
+   Imported by src/app/command/layout.tsx, immediately AFTER command.css, so the
+   UI-01.1 tokens and shell remain the base and this file only adds the spatial
+   layer on top of them. Every rule is still scoped under `.nc-root`.
+
+   This file is the visual architecture of the room. It is organised as the room
+   itself is, from the outside in:
+
+     1 · ROOM          — the shell we stand in: wings, ceiling, floor, console edge
+     2 · LEVEL STATES  — how the room's light changes when a space is entered
+     3 · EXEC CORE     — the Intelligence Core, assembled as an instrument
+     4 · DEPARTMENT BAYS — floor, bay, strut, console surface, signals
+     5 · ENTERED SPACE — the workspace a bay becomes when you walk into it
+     6 · SYSTEMS LAYER — infrastructure mounted on the perimeter
+     7 · INSTRUMENTATION — identity, key, legend, view switcher, table readings
+     8 · FOCUS BAR     — the "where am I / take me back" affordance
+     9 · COMMAND SURFACE — the near edge of the room
+    10 · ACTOR PRESENCE
+    11 · CONTEXT RAIL — the two rail modes and the system list
+    12 · MOTION + RESPONSIVE
+
+   Depth is real: one `perspective` on `.nc-scene` and one `translateZ` per node,
+   all resolved by `state/spatial-camera.ts`. Nothing here is WebGL, no canvas, no
+   extra dependency, and every rule is inspectable in devtools.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1 · ROOM
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-scene {
+  position: absolute;
+  inset: 0;
+  perspective: var(--nc-persp);
+  perspective-origin: 50% var(--nc-persp-origin-y);
+}
+
+/* ── The shell: everything that is architecture and nothing that is content ── */
+.nc-room__shell {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Far plane: layered depth — structure, not empty darkness. */
+.nc-room__void {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(52% 38% at 50% 42%, rgba(182, 255, 0, 0.04), transparent 70%),
+    radial-gradient(130% 90% at 50% 110%, rgba(0, 0, 0, 0.78), transparent 58%),
+    linear-gradient(180deg, rgba(5, 6, 8, 0.94) 0%, rgba(8, 9, 12, 0.5) 38%, rgba(5, 6, 8, 0.9) 70%, rgba(3, 4, 6, 0.98) 100%);
+}
+/* Distant equipment silhouette: the room has architecture at the back wall */
+.nc-room__void::before {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 18%;
+  height: 38%;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 28px, rgba(255, 255, 255, 0.015) 28px 30px, transparent 30px 58px, rgba(255, 255, 255, 0.012) 58px 60px, transparent 60px),
+    linear-gradient(180deg, rgba(5, 6, 8, 0.9), rgba(3, 4, 6, 0.98));
+  mask-image: radial-gradient(ellipse 60% 80% at 50% 40%, #000 0%, transparent 72%);
+  opacity: 0.5;
+}
+/* Ceiling structure: ribs and beams */
+.nc-room__ceiling {
+  position: absolute;
+  left: -12%;
+  right: -12%;
+  top: -8%;
+  height: 34%;
+  background: linear-gradient(180deg, rgba(2, 3, 4, 0.98) 0%, rgba(4, 5, 7, 0.6) 42%, transparent 100%);
+  border-radius: 0 0 50% 50%;
+}
+/* Ceiling ribs */
+.nc-room__ceiling::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 100%;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 18%, rgba(255, 255, 255, 0.025) 18% 20%, transparent 20% 36%, rgba(255, 255, 255, 0.02) 36% 38%, transparent 38%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 35%, transparent 100%);
+}
+/* Ceiling edge highlight */
+.nc-room__ceiling::after {
+  content: "";
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: 3%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1) 25%, rgba(255, 255, 255, 0.1) 75%, transparent);
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Side walls: darker, with structural vertical lines */
+.nc-room__wing {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24%;
+}
+.nc-room__wing[data-side="left"] {
+  left: 0;
+  background:
+    linear-gradient(180deg, rgba(8, 9, 12, 0.94), rgba(8, 9, 12, 0.5) 60%, rgba(8, 9, 12, 0.2) 100%),
+    repeating-linear-gradient(0deg, transparent 0 32px, rgba(255, 255, 255, 0.012) 32px 33px, transparent 33px);
+  border-left: 1px solid rgba(255, 255, 255, 0.025);
+}
+.nc-room__wing[data-side="right"] {
+  right: 0;
+  background:
+    linear-gradient(180deg, rgba(8, 9, 12, 0.94), rgba(8, 9, 12, 0.5) 60%, rgba(8, 9, 12, 0.2) 100%),
+    repeating-linear-gradient(0deg, transparent 0 32px, rgba(255, 255, 255, 0.012) 32px 33px, transparent 33px);
+}
+
+/* Structural bays: heavier, more architectural, with depth */
+.nc-room__bay {
+  position: absolute;
+  top: 6%;
+  bottom: 14%;
+  width: 72px;
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(24, 29, 36, 0.55), rgba(12, 14, 18, 0.1) 55%, transparent 100%),
+    linear-gradient(90deg, rgba(8, 9, 12, 0.6), rgba(8, 9, 12, 0.2) 50%, rgba(8, 9, 12, 0.6));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 4px 16px -8px rgba(0, 0, 0, 0.6);
+}
+.nc-room__bay[data-side="left"] { left: 1.2%; transform: perspective(760px) rotateY(18deg); }
+.nc-room__bay[data-side="right"] { right: 1.2%; transform: perspective(760px) rotateY(-18deg); }
+/* Bay rack detail: equipment mounting rail */
+.nc-room__bay i {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.nc-room__bay i:nth-child(1) { top: 14%; }
+.nc-room__bay i:nth-child(2) { top: 28%; background: rgba(182, 255, 0, 0.07); box-shadow: 0 0 6px -2px rgba(182, 255, 0, 0.05); }
+.nc-room__bay i:nth-child(3) { top: 42%; }
+.nc-room__bay i:nth-child(4) { top: 56%; background: rgba(255, 255, 255, 0.03); }
+
+/* Two vertical light edges: the scale reference that makes the middle feel deep. */
+.nc-room__beam {
+  position: absolute;
+  top: 8%;
+  bottom: 30%;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.055) 34%, rgba(182, 255, 0, 0.06) 72%, transparent);
+}
+.nc-room__beam[data-side="left"] { left: 27%; }
+.nc-room__beam[data-side="right"] { right: 27%; }
+
+/* The floor: a structural platform with stronger grid and base plate */
+.nc-room__floor {
+  position: absolute;
+  left: -28%;
+  right: -28%;
+  bottom: -16%;
+  height: 72%;
+  opacity: 0.72;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 96px 96px;
+  transform: perspective(820px) rotateX(70deg);
+  transform-origin: 50% 100%;
+  mask-image: radial-gradient(ellipse 62% 82% at 50% 88%, #000 0%, transparent 78%);
+  animation: nc-drift var(--nc-dur-drift) var(--nc-ease-standard) infinite alternate;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+/* Floor base plate: the structural slab the whole room sits on */
+.nc-room__floor::before {
+  content: "";
+  position: absolute;
+  left: -5%;
+  right: -5%;
+  bottom: -8%;
+  height: 12%;
+  background: linear-gradient(180deg, rgba(16, 19, 24, 0.6), rgba(6, 7, 9, 0.3) 60%, transparent 100%);
+  transform: perspective(900px) rotateX(75deg);
+  transform-origin: 50% 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
+}
+/* Floor center line: structural seam */
+.nc-room__floor::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.02) 30%, rgba(182, 255, 0, 0.015) 60%, transparent);
+  transform: translateX(-50%);
+}
+/* The horizon: stronger drawn edge */
+.nc-room__horizon {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  top: 72%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08) 20%, rgba(255, 255, 255, 0.08) 50%, rgba(182, 255, 0, 0.03) 70%, rgba(255, 255, 255, 0.08) 80%, transparent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+/* The near console edge: stronger structural connection to the surface */
+.nc-room__console {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  bottom: -4%;
+  height: 22%;
+  background:
+    linear-gradient(180deg, rgba(18, 22, 28, 0.55), rgba(8, 10, 13, 0.08) 60%, rgba(4, 5, 7, 0.02) 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+  transform: perspective(900px) rotateX(63deg);
+  transform-origin: 50% 100%;
+  mask-image: radial-gradient(ellipse 78% 100% at 50% 0%, #000 6%, transparent 80%);
+  box-shadow: 0 4px 20px -8px rgba(0, 0, 0, 0.6);
+}
+/* Console surface detail */
+.nc-room__console::before {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 20%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.025), transparent);
+}
+/* Vertical structural beams on floor */
+.nc-room__floor::before,
+.nc-room__floor::after { content: ""; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2 · LEVEL STATES — the room re-lights when a space is entered
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* At rest the room is calm. Asking about one space lowers the contrast of
+   everything else, which is the cheapest honest way to express focus. */
+.nc-scene[data-hovered] .nc-pod[data-hovered="false"][data-dim="false"] {
+  opacity: 0.72;
+  filter: saturate(0.7) brightness(0.9);
+}
+
+/* Entered: the lights come down, the far plane deepens, and the room's
+   architecture steps back. The scene gets QUIETER, so the workspace can be the
+   only loud object — the opposite of the first pass, where entering a space
+   brightened an enlarged card on top of everything else. */
+.nc-scene[data-level="department"] .nc-room__void {
+  background:
+    radial-gradient(46% 40% at 68% 52%, rgba(255, 255, 255, 0.022), transparent 70%),
+    radial-gradient(120% 84% at 50% 108%, rgba(0, 0, 0, 0.82), transparent 60%),
+    linear-gradient(180deg, rgba(3, 4, 5, 0.96) 0%, rgba(6, 7, 9, 0.6) 44%, rgba(3, 4, 5, 0.94) 100%);
+}
+.nc-scene[data-level="department"] .nc-room__wing { opacity: 0.55; }
+.nc-scene[data-level="department"] .nc-room__bay,
+.nc-scene[data-level="department"] .nc-room__beam { opacity: 0.5; }
+.nc-scene[data-level="department"] .nc-room__floor { opacity: 0.3; }
+.nc-scene[data-level="department"] .nc-room__horizon { opacity: 0.55; }
+.nc-scene[data-level="department"] .nc-room__ceiling { opacity: 0.8; }
+
+/* ── The 3D stage and its one canvas ────────────────────────────────────── */
+.nc-scene__stage {
+  position: absolute;
+  inset: 0;
+  /* NOT clipped and NOT filtered: either one would flatten the 3D context. */
+  transform-style: preserve-3d;
+}
+.nc-scene__canvas {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+.nc-root[data-motion="full"] .nc-scene__canvas {
+  transition: transform var(--nc-dur-camera) var(--nc-ease-out);
+}
+
+/* ── The connection field ────────────────────────────────────────────────
+   At rest the room is barely wired on purpose. Light on a wire means "this is
+   doing something"; the infrastructure spine is the quietest line in the scene. */
+.nc-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  transform: translateZ(var(--nc-depth-wire));
+}
+.nc-wire {
+  stroke: rgba(255, 255, 255, 0.055);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  transition:
+    stroke var(--nc-dur-quick) var(--nc-ease-standard),
+    stroke-opacity var(--nc-dur-spatial) var(--nc-ease-standard),
+    stroke-width var(--nc-dur-quick) var(--nc-ease-standard);
+}
+.nc-wire[data-live="true"] {
+  stroke: var(--nc-wire-accent, var(--nc-lime));
+  stroke-opacity: 0.42;
+  stroke-width: 1.2;
+}
+/* Asking about one space relaxes the others: the room lowers its own contrast. */
+.nc-field[data-quiet="true"] .nc-wire { stroke-opacity: 0.4; }
+.nc-field[data-quiet="true"] .nc-wire[data-receded="true"] { stroke-opacity: 0.1; }
+.nc-wire[data-focus="true"] {
+  stroke: var(--nc-wire-accent, var(--nc-lime));
+  stroke-opacity: 0.9;
+  stroke-width: 1.6;
+}
+/* Infrastructure spine: dotted, hairline, structural. */
+.nc-field .nc-wire--spine {
+  stroke: rgba(255, 255, 255, 0.035);
+  stroke-width: 1;
+  stroke-dasharray: 2 7;
+  stroke-opacity: 1;
+}
+.nc-field .nc-wire--spine[data-live="true"] {
+  stroke: var(--nc-wire-accent, var(--nc-lime));
+  stroke-opacity: 0.5;
+  stroke-dasharray: 4 5;
+}
+/* Feeds: the systems the open space actually reaches. */
+.nc-field .nc-wire--feed {
+  stroke: var(--nc-wire-accent, var(--nc-lime));
+  stroke-width: 1.4;
+  stroke-opacity: 0.55;
+  stroke-dasharray: 7 9;
+  animation: nc-flow var(--nc-dur-travel) linear infinite;
+}
+.nc-wire--handoff {
+  stroke: var(--nc-handoff);
+  stroke-width: 1.5;
+  stroke-opacity: 1;
+  stroke-dasharray: 5 9;
+  animation: nc-flow var(--nc-dur-travel) linear infinite;
+}
+/* Energy travelling along a wire: the actual "data signal" of a handoff. */
+.nc-pulse {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--nc-handoff);
+  box-shadow: 0 0 14px rgba(255, 162, 92, 0.75);
+  animation: nc-travel var(--nc-dur-travel) var(--nc-ease-standard) both;
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3 · EXEC CORE — the Intelligence Core, built as an instrument
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-core {
+  position: absolute;
+  left: var(--nc-core-x);
+  top: var(--nc-core-y);
+  width: var(--nc-core-size);
+  height: calc(var(--nc-core-size) * 0.82);
+  transform: translate(-50%, -50%) translateZ(var(--nc-core-z, 0px));
+  transform-style: preserve-3d;
+  border-radius: 38% 58% 58% 38% / 58% 52% 48% 42%;
+  z-index: 5;
+  transition:
+    left var(--nc-dur-camera) var(--nc-ease-out),
+    top var(--nc-dur-camera) var(--nc-ease-out),
+    filter var(--nc-dur-focus) var(--nc-ease-standard);
+}
+.nc-root[data-motion="reduced"] .nc-core { transition-duration: 1ms; }
+.nc-core:focus-visible { outline: none; }
+.nc-core:focus-visible .nc-core__body {
+  box-shadow:
+    0 0 0 5px rgba(182, 255, 0, 0.14),
+    0 40px 90px -30px rgba(0, 0, 0, 0.95),
+    inset 0 -14px 34px rgba(0, 0, 0, 0.6);
+}
+
+/* ── The deck: the instrument's base plate — a horizontal machine bed ──── */
+.nc-core__deck {
+  position: absolute;
+  left: 50%;
+  top: 108%;
+  width: 320%;
+  height: 46px;
+  transform: translate(-50%, -50%) rotateX(68deg);
+  transform-origin: 50% 0;
+  pointer-events: none;
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(24, 29, 36, 0.94), rgba(9, 11, 15, 0.88) 70%, rgba(6, 7, 10, 0.35));
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-top-color: rgba(182, 255, 0, 0.18);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow:
+    0 26px 58px -22px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  opacity: 0.88;
+}
+/* Deck surface detail: rear mount slots */
+.nc-core__deck::before {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 54%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.055) 18%, rgba(255, 255, 255, 0.055) 82%, transparent);
+}
+/* Deck front edge highlight — machined lip */
+.nc-core__deck::after {
+  content: "";
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: 1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(182, 255, 0, 0.12) 30%, rgba(255, 255, 255, 0.04) 60%, transparent);
+}
+
+/* Deck front mount feet */
+.nc-core__deck-ring {
+  position: absolute;
+  bottom: -12px;
+  width: 10px;
+  height: 12px;
+  border-radius: 2px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.75));
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: 0 2px 5px -2px rgba(0, 0, 0, 0.7);
+}
+.nc-core__deck-ring[data-ring="outer"] { left: 12%; }
+.nc-core__deck-ring[data-ring="mid"] { left: 40%; }
+.nc-core__deck-ring[data-ring="inner"] { left: 68%; }
+
+/* ── The gantry: a structural frame — two columns and a top cross-member. ── */
+.nc-core__gantry {
+  position: absolute;
+  inset: -24% -38%;
+  pointer-events: none;
+}
+/* Left column — 6px machined structural column */
+.nc-core__pillar {
+  position: absolute;
+  top: 4%;
+  bottom: 28%;
+  width: 6px;
+  border-radius: 2px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.12) 16%, rgba(255, 255, 255, 0.05) 68%, transparent 100%);
+  box-shadow: 0 0 10px -2px rgba(182, 255, 0, 0.08);
+}
+.nc-core__pillar[data-side="left"] { left: 1.5%; }
+.nc-core__pillar[data-side="right"] { right: 1.5%; }
+/* Pillar mounting plates — top and bottom caps */
+.nc-core__pillar::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: -4px;
+  right: -4px;
+  height: 7px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(30, 36, 44, 0.92), rgba(10, 12, 16, 0.72));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 0;
+  box-shadow: 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+}
+.nc-core__pillar::after {
+  content: "";
+  position: absolute;
+  bottom: -5px;
+  left: -4px;
+  right: -4px;
+  height: 7px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(10, 12, 16, 0.72), rgba(0, 0, 0, 0.92));
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  border-top: 0;
+  box-shadow: 0 2px 4px -2px rgba(0, 0, 0, 0.6);
+}
+/* Top cross-member — the structural arch that gives the instrument its horizontal signature */
+.nc-core__gantry-arc {
+  position: absolute;
+  left: -2%;
+  right: -2%;
+  top: -3%;
+  height: 22%;
+  border: 0;
+  border-radius: 5px;
+  background:
+    linear-gradient(180deg, rgba(28, 34, 42, 0.95), rgba(14, 17, 22, 0.9) 52%, rgba(8, 10, 13, 0.55) 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow:
+    0 6px 18px -4px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 26%, #000 74%, transparent 100%);
+}
+/* Cross-member underside highlight — machined edge */
+.nc-core__gantry-arc::before {
+  content: "";
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  bottom: 2px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(182, 255, 0, 0.13) 30%, rgba(255, 255, 255, 0.06) 55%, rgba(182, 255, 0, 0.13) 80%, transparent);
+}
+/* Cross-member surface detail: rear accent strip */
+.nc-core__gantry-arc::after {
+  content: "";
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  top: 52%;
+  height: 1px;
+  background: rgba(182, 255, 0, 0.09);
+}
+
+/* ── Rings: a single equatorial gauge — the instrument's read-out band ───── */
+.nc-core__rings {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--nc-core-size) * 1.45);
+  height: calc(var(--nc-core-size) * 0.18);
+  transform: translate(-50%, -50%) rotateX(80deg);
+  pointer-events: none;
+}
+.nc-core__ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.045);
+  stroke-width: 0.9;
+  transition: stroke var(--nc-dur-focus) var(--nc-ease-standard);
+}
+.nc-core__ring[data-tilt="back"] { display: none; }
+.nc-core__ring[data-tilt="front"] {
+  stroke: rgba(255, 255, 255, 0.055);
+  stroke-dasharray: 3 9;
+}
+.nc-core__ring--live { stroke: rgba(182, 255, 0, 0.18); }
+.nc-core__ring--spin { animation: nc-dash var(--nc-dur-drift) linear infinite; }
+.nc-core[data-phase="thinking"] .nc-core__ring[data-tilt="front"] { animation: nc-dash var(--nc-dur-travel) linear infinite; }
+
+/* ── The body: a dense machined instrument block, asymmetric mass ───────── */
+.nc-core__body {
+  position: absolute;
+  inset: 0;
+  border-radius: 38% 58% 58% 38% / 62% 56% 44% 38%;
+  box-shadow:
+    0 48px 100px -34px rgba(0, 0, 0, 0.97),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: filter var(--nc-dur-focus) var(--nc-ease-standard);
+}
+/* Upper casing: dense graphite block, lit from above-left, asymmetric */
+.nc-core__casing {
+  position: absolute;
+  inset: 0 0 44% 0;
+  border-radius: 38% 64% 6% 6% / 62% 54% 4% 4%;
+  background:
+    radial-gradient(80% 130% at 28% 4%, rgba(255, 255, 255, 0.08), transparent 58%),
+    radial-gradient(90% 80% at 82% 22%, rgba(0, 0, 0, 0.58), transparent 70%),
+    linear-gradient(172deg, #2d343f 0%, #1c2229 40%, #0f1318 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom-color: rgba(0, 0, 0, 0.6);
+  border-right-color: rgba(0, 0, 0, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -7px 18px rgba(0, 0, 0, 0.55);
+}
+/* Casing surface detail: top machined groove */
+.nc-core__casing::before {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 10%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06) 30%, rgba(255, 255, 255, 0.06) 70%, transparent);
+}
+/* Casing side panel: darker lower side, asymmetric mass */
+.nc-core__casing::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 32%;
+  bottom: 0;
+  height: 46%;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.55) 100%);
+  border-radius: 0 12% 0 0;
+}
+/* Lower housing: dark base with recessed shadow */
+.nc-core__housing {
+  position: absolute;
+  inset: 46% 0 0 0;
+  border-radius: 6% 6% 44% 44% / 4% 4% 54% 54%;
+  background:
+    radial-gradient(80% 120% at 60% 96%, rgba(182, 255, 0, 0.06), transparent 55%),
+    linear-gradient(0deg, #080b0e 0%, #13171e 40%, #1b2028 100%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-top-color: rgba(0, 0, 0, 0.55);
+  box-shadow:
+    inset 0 -14px 30px rgba(0, 0, 0, 0.75),
+    inset 0 2px 0 rgba(255, 255, 255, 0.02);
+}
+/* Housing lower plate: structural base */
+.nc-core__housing::before {
+  content: "";
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  bottom: 2%;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05) 20%, rgba(255, 255, 255, 0.05) 80%, transparent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+/* The equatorial band: wide machined rib across the instrument midsection */
+.nc-core__band {
+  position: absolute;
+  left: -3%;
+  right: -3%;
+  top: 44%;
+  height: 16%;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 10px),
+    linear-gradient(180deg, #3a414a 0%, #1d232b 48%, #0a0d11 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.7);
+  box-shadow:
+    0 3px 14px -2px rgba(0, 0, 0, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+/* Band detail: rear readout slots */
+.nc-core__band::before {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 50%;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.65);
+  box-shadow:
+    0 9px 0 rgba(0, 0, 0, 0.65),
+    0 18px 0 rgba(0, 0, 0, 0.45);
+}
+/* Vent slots either side of the band: vertical cooling channels */
+.nc-core__vent {
+  position: absolute;
+  top: 24%;
+  width: 9%;
+  height: 40%;
+  border-radius: 3px;
+  background: repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 5px);
+  opacity: 0.65;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.6);
+}
+.nc-core__vent[data-side="left"] { left: 5%; }
+.nc-core__vent[data-side="right"] { right: 5%; }
+
+/* The aperture: a recessed chamber — the instrument's intelligence cell */
+.nc-core__lens {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 28%;
+  height: 26%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background:
+    radial-gradient(circle at 50% 36%, #030507 0%, #07090d 58%, #0f1318 100%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom-color: rgba(0, 0, 0, 0.65);
+  box-shadow:
+    inset 0 5px 16px rgba(0, 0, 0, 0.97),
+    inset 0 -3px 5px rgba(255, 255, 255, 0.02),
+    0 1px 0 rgba(255, 255, 255, 0.04);
+}
+/* Lens rim: machined bezel */
+.nc-core__lens::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 60%);
+  pointer-events: none;
+}
+/* Iris: small slitted blades inside the chamber */
+.nc-core__iris {
+  position: absolute;
+  inset: 20%;
+  border-radius: 3px;
+  background: conic-gradient(
+    from 0deg,
+    rgba(255, 255, 255, 0.045) 0deg 7deg,
+    transparent 7deg 38deg,
+    rgba(255, 255, 255, 0.045) 38deg 45deg,
+    transparent 45deg 88deg,
+    rgba(255, 255, 255, 0.045) 88deg 95deg,
+    transparent 95deg 138deg,
+    rgba(255, 255, 255, 0.045) 138deg 145deg,
+    transparent 145deg 188deg,
+    rgba(255, 255, 255, 0.045) 188deg 195deg,
+    transparent 195deg 238deg
+  );
+  mask-image: radial-gradient(circle, transparent 38%, #000 50%, transparent 93%);
+}
+/* The intelligence source: a SMALL controlled lime cell inside recessed chamber */
+.nc-core__energy {
+  position: absolute;
+  width: 36%;
+  height: 36%;
+  border-radius: 3px;
+  background: radial-gradient(circle at 48% 42%, #f4ffc0 0%, var(--nc-lime) 36%, rgba(140, 195, 5, 0.42) 58%, rgba(182, 255, 0, 0) 76%);
+  box-shadow:
+    0 0 10px rgba(182, 255, 0, 0.45),
+    0 0 28px rgba(182, 255, 0, 0.15);
+  transition: opacity var(--nc-dur-focus) var(--nc-ease-standard), transform var(--nc-dur-focus) var(--nc-ease-out);
+}
+.nc-core__energy[data-energy="rest"] { opacity: 0.4; transform: scale(0.82); box-shadow: 0 0 4px rgba(182, 255, 0, 0.18); }
+.nc-core__energy[data-energy="live"] {
+  opacity: 1;
+  animation: nc-core-energy var(--nc-dur-breath) var(--nc-ease-standard) infinite;
+}
+
+/* The AI mark: the core says out loud that it is an agent, not a person. */
+.nc-core__mark {
+  position: absolute;
+  right: 7%;
+  bottom: 28%;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 9px;
+  color: var(--nc-lime);
+  background: rgba(6, 8, 10, 0.74);
+  border: 1px solid rgba(182, 255, 0, 0.22);
+  box-shadow: 0 0 8px -4px rgba(182, 255, 0, 0.08);
+}
+
+/* ── Readout: instrument status plate, mounted on the chassis ──────────── */
+.nc-core__readout {
+  position: absolute;
+  left: 50%;
+  bottom: -8%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px 4px 10px;
+  border-radius: 3px;
+  border: 1px solid var(--nc-border-2);
+  border-left: 2px solid color-mix(in srgb, var(--nc-status-color, var(--nc-idle)) 50%, transparent);
+  background: linear-gradient(180deg, rgba(22, 27, 33, 0.94), rgba(10, 12, 15, 0.96));
+  box-shadow:
+    0 8px 20px -10px rgba(0, 0, 0, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* Readout mounting tabs */
+.nc-core__readout::before,
+.nc-core__readout::after {
+  content: "";
+  position: absolute;
+  bottom: -3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(10, 12, 15, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+.nc-core__readout::before { left: 14px; }
+.nc-core__readout::after { right: 14px; }
+.nc-core__readout-led {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--nc-status-color, var(--nc-idle));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--nc-status-color, var(--nc-idle)) 70%, transparent);
+}
+.nc-core__readout-state { color: var(--nc-status-color, var(--nc-idle)); }
+.nc-core__readout-sep { width: 1px; height: 9px; background: var(--nc-border-2); }
+.nc-core__readout-level { color: var(--nc-text-4); letter-spacing: 0.18em; }
+
+/* ── Identity: floor-mounted nameplate under the instrument ────────────── */
+.nc-core__identity {
+  position: absolute;
+  top: calc(100% + 28px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* Nameplate plate */
+.nc-core__identity::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 5px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(30, 36, 44, 0.9), rgba(10, 12, 15, 0.7));
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 0;
+  box-shadow: 0 4px 8px -4px rgba(0, 0, 0, 0.7);
+}
+.nc-core__title {
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--nc-text);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+.nc-core__role {
+  font-size: 8.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--nc-text-3);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* Four phases, four presences. The core never changes size — scale would fight
+   the depth it is meant to anchor. */
+.nc-core[data-phase="ready"] { --nc-status-color: var(--nc-idle); }
+.nc-core[data-phase="thinking"] { --nc-status-color: var(--nc-thinking); }
+.nc-core[data-phase="running"] { --nc-status-color: var(--nc-active); }
+.nc-core[data-phase="waiting"] { --nc-status-color: var(--nc-approval); }
+
+.nc-core[data-phase="running"] .nc-core__casing,
+.nc-core[data-phase="thinking"] .nc-core__casing {
+  border-color: rgba(182, 255, 0, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.5),
+    0 0 30px -10px rgba(182, 255, 0, 0.08);
+}
+.nc-core[data-phase="running"] .nc-core__band {
+  border-top-color: rgba(182, 255, 0, 0.2);
+  box-shadow:
+    0 2px 12px -2px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 20px -6px rgba(182, 255, 0, 0.06);
+}
+.nc-core[data-phase="running"] .nc-core__deck-ring[data-ring="inner"] {
+  box-shadow: 0 0 30px -6px rgba(182, 255, 0, 0.18);
+}
+.nc-core[data-phase="waiting"] .nc-core__ring[data-tilt="front"] { stroke: rgba(240, 180, 41, 0.2); }
+.nc-core[data-phase="waiting"] .nc-core__lens {
+  box-shadow:
+    inset 0 4px 14px rgba(0, 0, 0, 0.95),
+    inset 0 -2px 4px rgba(255, 255, 255, 0.02),
+    0 0 0 1px rgba(240, 180, 41, 0.1);
+}
+.nc-core[data-phase="waiting"] .nc-core__band {
+  border-top-color: rgba(240, 180, 41, 0.2);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4 · DEPARTMENT BAYS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-pod {
+  position: absolute;
+  left: var(--nc-pod-x);
+  top: var(--nc-pod-y);
+  width: var(--nc-pod-w);
+  height: var(--nc-pod-h);
+  /* Order matters: place, push to depth, then turn to face the room. */
+  transform: translate(-50%, -50%) translateZ(var(--nc-pod-z, 0px)) rotateY(var(--nc-pod-face, 0deg));
+  transform-style: preserve-3d;
+  transition:
+    left var(--nc-dur-camera) var(--nc-ease-out),
+    top var(--nc-dur-camera) var(--nc-ease-out),
+    transform var(--nc-dur-focus) var(--nc-ease-out),
+    opacity var(--nc-dur-focus) var(--nc-ease-standard),
+    filter var(--nc-dur-focus) var(--nc-ease-standard);
+}
+.nc-root[data-motion="reduced"] .nc-pod { transition-duration: 1ms; }
+
+/* Receded: the space is still readable, but it is no longer the subject. */
+.nc-pod[data-dim="true"] {
+  opacity: 0.24;
+  filter: saturate(0.35) brightness(0.74);
+  pointer-events: none;
+}
+.nc-pod[data-focused="true"] {
+  width: min(660px, 48vw);
+  height: min(392px, 46vh);
+  z-index: 6;
+}
+
+/* ── The floor the bay stands on — a structural platform slab ──────────── */
+.nc-pod__floor {
+  position: absolute;
+  left: 50%;
+  bottom: -34px;
+  width: 156%;
+  height: 108px;
+  transform: translateX(-50%) rotateX(62deg);
+  transform-origin: 50% 0;
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(24, 29, 36, 0.82), rgba(12, 14, 18, 0.5) 55%, rgba(8, 9, 12, 0.15) 100%);
+  border: 1px solid color-mix(in srgb, var(--nc-accent) 16%, transparent);
+  border-top-color: color-mix(in srgb, var(--nc-accent) 22%, transparent);
+  opacity: 0.55;
+  pointer-events: none;
+  transition:
+    opacity var(--nc-dur-focus) var(--nc-ease-standard),
+    border-color var(--nc-dur-focus) var(--nc-ease-standard),
+    box-shadow var(--nc-dur-focus) var(--nc-ease-out);
+  box-shadow:
+    0 8px 24px -12px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+/* Floor deck detail: rear mounting slots */
+.nc-pod__floor::before {
+  content: "";
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  top: 38%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--nc-accent) 22%, transparent) 40%, color-mix(in srgb, var(--nc-accent) 22%, transparent) 60%, transparent);
+}
+/* Floor surface detail: circular equipment pad */
+.nc-pod__floor::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  transform: translateX(-50%);
+  width: 36%;
+  height: 28%;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--nc-accent) 14%, transparent), transparent 72%);
+  border: 1px solid color-mix(in srgb, var(--nc-accent) 10%, transparent);
+}
+
+/* ── The bay: the structural frame BEHIND the surface, with depth ─────── */
+.nc-pod__bay {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 96%;
+  height: 132%;
+  transform: translate(-50%, -50%) translateZ(-95px) translateY(-14%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(28, 34, 42, 0.68), rgba(12, 14, 18, 0.08) 55%, rgba(6, 7, 10, 0.15) 100%),
+    linear-gradient(90deg, rgba(8, 9, 12, 0.7), color-mix(in srgb, var(--nc-accent) 5%, transparent) 45%, rgba(8, 9, 12, 0.7));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 6px 20px -12px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+/* Bay rear frame: structural edge highlights */
+.nc-pod__bay::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.02);
+  border-radius: 2px;
+  pointer-events: none;
+}
+/* Bay equipment rail: accent strip along top */
+.nc-pod__bay::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 10px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--nc-accent) 38%, transparent) 30%, color-mix(in srgb, var(--nc-accent) 38%, transparent) 70%, transparent);
+  opacity: 0.55;
+  border-radius: 1px;
+}
+
+/* ── The strut: a substantial support column — not a hairline ─────────── */
+.nc-pod__strut {
+  position: absolute;
+  left: 50%;
+  top: 76%;
+  width: 4px;
+  height: 50%;
+  transform: translateX(-50%);
+  background:
+    linear-gradient(180deg, rgba(28, 34, 42, 0.9), rgba(14, 16, 20, 0.7) 50%, rgba(8, 9, 12, 0.5) 100%);
+  border-radius: 2px;
+  pointer-events: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 2px 6px -2px rgba(0, 0, 0, 0.4);
+}
+/* Strut mounting bracket at top */
+.nc-pod__strut::before {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: -4px;
+  right: -4px;
+  height: 5px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(30, 36, 44, 0.85), rgba(12, 14, 18, 0.7));
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: 0 2px 4px -2px rgba(0, 0, 0, 0.4);
+}
+/* Strut base plate: where it meets the floor */
+.nc-pod__strut::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  width: 52px;
+  height: 14px;
+  transform: translateX(-50%) rotateX(64deg);
+  border-radius: 3px;
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--nc-accent) 28%, transparent), transparent 72%);
+  border: 1px solid color-mix(in srgb, var(--nc-accent) 14%, transparent);
+  border-top-color: color-mix(in srgb, var(--nc-accent) 20%, transparent);
+  box-shadow: 0 4px 10px -4px rgba(0, 0, 0, 0.5);
+}
+
+/* ── The console surface: a recessed equipment panel — not a card ──────── */
+.nc-pod__plate {
+  --nc-pod-wash: 8%;
+  --nc-pod-line: var(--nc-accent);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 19px 17px;
+  text-align: left;
+  border: 0;
+  border-radius: 0;
+  /* Mounted panel: inner bezel, carved into the bay rather than sitting on top */
+  clip-path: polygon(
+    0 0, calc(100% - 28px) 0, 100% 28px, 100% 100%, 0 100%
+  );
+  background:
+    /* Recessed inner edge shadow */
+    linear-gradient(180deg,
+      rgba(0, 0, 0, 0.35) 0%, transparent 3%,
+      transparent 94%, rgba(0, 0, 0, 0.25) 100%),
+    /* Panel surface: dark with subtle accent wash */
+    linear-gradient(160deg,
+      rgba(28, 33, 40, 0.97) 0%,
+      rgba(16, 18, 22, 0.94) 42%,
+      rgba(10, 11, 14, 0.9) 100%),
+    /* Accent wash at top edge */
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--nc-accent) var(--nc-pod-wash), transparent) 0%,
+      color-mix(in srgb, var(--nc-accent) calc(var(--nc-pod-wash) * 0.6), transparent) 28%,
+      transparent 50%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    inset 0 -8px 18px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  transition: background var(--nc-dur-quick) var(--nc-ease-standard);
+}
+/* Panel raised bezel: inner border that reads as a mounted surface */
+.nc-pod__plate::before {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.025);
+  border-radius: 2px;
+  pointer-events: none;
+}
+/* Panel top surface highlight: machined edge */
+.nc-pod__plate::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 3px;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent,
+    color-mix(in srgb, var(--nc-accent) 28%, transparent) 20%,
+    color-mix(in srgb, var(--nc-accent) 28%, transparent) 80%,
+    transparent);
+  opacity: 0.6;
+  pointer-events: none;
+}
+.nc-pod__plate:focus-visible {
+  outline: none;
+  --nc-pod-wash: 14%;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    inset 0 -8px 18px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px color-mix(in srgb, var(--nc-accent) 40%, transparent);
+}
+/* The ledge: the panel overhangs its mount — structural cantilever */
+.nc-pod__ledge {
+  position: absolute;
+  left: -6%;
+  right: 28px;
+  top: -2px;
+  height: 3px;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--nc-accent) 38%, transparent),
+    color-mix(in srgb, var(--nc-accent) 18%, transparent) 55%,
+    transparent);
+  opacity: 0.9;
+  border-radius: 1px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+/* The spine: vertical structural member on the left edge */
+.nc-pod__spine {
+  position: absolute;
+  left: 0;
+  top: 18px;
+  width: 3px;
+  height: 32px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--nc-accent) 70%, transparent), var(--nc-accent) 40%, transparent);
+  opacity: 0.9;
+  border-radius: 2px;
+  box-shadow: 0 0 6px -2px color-mix(in srgb, var(--nc-accent) 40%, transparent);
+}
+
+.nc-pod__kicker {
+  font-size: 8.5px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+.nc-pod__head { display: flex; align-items: baseline; gap: 10px; }
+.nc-pod__name {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  min-width: 0;
+}
+.nc-pod__state {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--nc-status-color, var(--nc-idle));
+}
+.nc-pod__led {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--nc-status-color, var(--nc-idle));
+  box-shadow: 0 0 7px color-mix(in srgb, var(--nc-status-color, var(--nc-idle)) 70%, transparent);
+}
+/* One insight, and it says so when it is live rather than configured. */
+.nc-pod__insight {
+  font-size: 12.5px;
+  color: var(--nc-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nc-pod__insight[data-live="true"] { color: var(--nc-status-color, var(--nc-text-2)); }
+
+.nc-pod__foot { display: flex; align-items: center; gap: 10px; margin-top: auto; }
+.nc-pod__enter {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--nc-accent);
+  opacity: 0;
+  transform: translateX(-3px);
+  transition: opacity var(--nc-dur-quick) var(--nc-ease-standard), transform var(--nc-dur-quick) var(--nc-ease-out);
+}
+.nc-pod[data-hovered="true"] .nc-pod__enter,
+.nc-pod[data-focused="true"] .nc-pod__enter { opacity: 1; transform: none; }
+
+.nc-pod__meter {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 8px;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+.nc-pod__meter i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--nc-status-color, var(--nc-idle)), color-mix(in srgb, var(--nc-status-color, var(--nc-idle)) 26%, transparent));
+  transition: width var(--nc-dur-travel) var(--nc-ease-out), background var(--nc-dur-quick) var(--nc-ease-standard);
+}
+
+/* ── The console rib: readout slots continuing past the surface's own edge ── */
+.nc-pod__rib {
+  position: absolute;
+  left: 10%;
+  right: 26px;
+  top: calc(100% - 10px);
+  height: 20px;
+  transform: perspective(420px) rotateX(58deg);
+  transform-origin: 50% 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-top-color: color-mix(in srgb, var(--nc-accent) 22%, transparent);
+  background: linear-gradient(180deg, rgba(20, 24, 29, 0.9), rgba(9, 11, 14, 0.6));
+  opacity: 0.85;
+  pointer-events: none;
+}
+.nc-pod__rib i {
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.07);
+}
+.nc-pod__rib i:nth-child(1) { width: 22%; background: color-mix(in srgb, var(--nc-accent) 35%, transparent); }
+.nc-pod__rib i:nth-child(2) { width: 12%; }
+.nc-pod__rib i:nth-child(3) { width: 34%; }
+
+/* ── Exactly three signals, and only when asked for ─────────────────────── */
+.nc-pod__signals {
+  position: absolute;
+  left: 6%;
+  right: 2%;
+  top: calc(100% + 20px);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px;
+  border: 1px solid var(--nc-border-2);
+  border-top-color: color-mix(in srgb, var(--nc-accent) 26%, transparent);
+  background: linear-gradient(180deg, rgba(16, 19, 24, 0.96), rgba(8, 9, 12, 0.94));
+  box-shadow: var(--nc-shadow-2);
+  opacity: 0;
+  transform: translateY(-5px);
+  pointer-events: none;
+  transition: opacity var(--nc-dur-quick) var(--nc-ease-standard), transform var(--nc-dur-quick) var(--nc-ease-out);
+}
+.nc-pod__signals[data-reveal="true"] { opacity: 1; transform: none; }
+/* An entered space shows its signals on its own surface, not floating beside it. */
+.nc-pod[data-focused="true"] .nc-pod__signals { display: none; }
+.nc-pod__signal { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.nc-pod__signal:last-child { margin-left: auto; }
+.nc-pod__signal-key {
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+.nc-pod__signal-val { font-size: 11px; font-weight: 620; color: var(--nc-text-2); }
+.nc-pod__signal[data-attention="true"] .nc-pod__signal-val { color: var(--nc-approval); }
+
+/* ── Status vocabulary on the bay ──────────────────────────────────────── */
+.nc-pod[data-status="IDLE"] { --nc-status-color: var(--nc-idle); }
+.nc-pod[data-status="THINKING"] { --nc-status-color: var(--nc-thinking); }
+.nc-pod[data-status="ACTIVE"] { --nc-status-color: var(--nc-active); }
+.nc-pod[data-status="HANDOFF"] { --nc-status-color: var(--nc-handoff); }
+.nc-pod[data-status="WAITING"] { --nc-status-color: var(--nc-waiting); }
+.nc-pod[data-status="APPROVAL_REQUIRED"] { --nc-status-color: var(--nc-approval); }
+.nc-pod[data-status="BLOCKED"] { --nc-status-color: var(--nc-blocked); }
+.nc-pod[data-status="COMPLETED"] { --nc-status-color: var(--nc-completed); }
+.nc-pod[data-status="ERROR"] { --nc-status-color: var(--nc-error); }
+
+.nc-pod[data-status="ACTIVE"] .nc-pod__floor,
+.nc-pod[data-status="THINKING"] .nc-pod__floor,
+.nc-pod[data-status="HANDOFF"] .nc-pod__floor {
+  opacity: 1;
+  border-color: color-mix(in srgb, var(--nc-accent) 48%, transparent);
+  box-shadow: 0 26px 54px -26px rgba(0, 0, 0, 0.9), 0 0 62px -22px color-mix(in srgb, var(--nc-accent) 62%, transparent);
+}
+.nc-pod[data-status="APPROVAL_REQUIRED"] .nc-pod__floor,
+.nc-pod[data-status="BLOCKED"] .nc-pod__floor,
+.nc-pod[data-status="ERROR"] .nc-pod__floor {
+  opacity: 1;
+  border-color: rgba(240, 180, 41, 0.42);
+  box-shadow: 0 26px 54px -26px rgba(0, 0, 0, 0.9), 0 0 52px -22px rgba(240, 180, 41, 0.42);
+}
+.nc-pod[data-hovered="true"] .nc-pod__floor { opacity: 0.92; }
+.nc-pod[data-focused="true"] .nc-pod__floor { opacity: 1; }
+
+.nc-pod[data-status="ACTIVE"] .nc-pod__plate { --nc-pod-line: color-mix(in srgb, var(--nc-accent) 32%, transparent); }
+.nc-pod[data-status="APPROVAL_REQUIRED"] .nc-pod__plate {
+  --nc-pod-wash: 13%;
+}
+.nc-pod[data-status="APPROVAL_REQUIRED"] .nc-pod__ledge,
+.nc-pod[data-status="BLOCKED"] .nc-pod__ledge,
+.nc-pod[data-status="ERROR"] .nc-pod__ledge {
+  background: linear-gradient(90deg, var(--nc-approval), transparent);
+  animation: nc-attention var(--nc-dur-breath) var(--nc-ease-standard) infinite;
+}
+.nc-pod[data-status="BLOCKED"] .nc-pod__plate,
+.nc-pod[data-status="ERROR"] .nc-pod__plate { --nc-pod-wash: 12%; }
+.nc-pod[data-status="COMPLETED"] .nc-pod__plate { animation: nc-settle var(--nc-dur-spatial) var(--nc-ease-settle) both; }
+.nc-pod[data-status="ERROR"] .nc-pod__plate { animation: nc-nudge var(--nc-dur-quick) var(--nc-ease-out) 2; }
+
+.nc-pod[data-hovered="true"] .nc-pod__plate { --nc-pod-wash: 14%; }
+/* Entering a space changes its FORM, not its highlight. */
+.nc-pod[data-focused="true"] .nc-pod__plate { --nc-pod-wash: 12%; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5 · ENTERED SPACE — the workspace a bay becomes
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-ws {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  background:
+    radial-gradient(84% 62% at 18% 0%, color-mix(in srgb, var(--nc-accent) 9%, transparent), transparent 62%),
+    linear-gradient(168deg, rgba(20, 24, 30, 0.97), rgba(8, 9, 12, 0.96));
+  border: 1px solid color-mix(in srgb, var(--nc-accent) 28%, transparent);
+  border-radius: 4px 22px 4px 4px;
+  box-shadow:
+    var(--nc-shadow-4),
+    0 0 0 1px rgba(255, 255, 255, 0.02),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  overflow: hidden;
+  animation: nc-ws-in var(--nc-dur-spatial) var(--nc-ease-out) both;
+}
+/* A single lit edge along the top: the workspace is switched ON. */
+.nc-ws::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 1px;
+  width: 62%;
+  background: linear-gradient(90deg, var(--nc-accent), transparent);
+  opacity: 0.85;
+}
+
+.nc-ws__head { display: flex; align-items: center; gap: 12px; padding: 14px 17px 12px; }
+.nc-ws__mark {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--nc-accent);
+  background: color-mix(in srgb, var(--nc-accent) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--nc-accent) 32%, transparent);
+}
+.nc-ws__titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.nc-ws__kicker {
+  font-size: 8.5px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--nc-accent);
+}
+.nc-ws__name { font-size: 19px; font-weight: 660; letter-spacing: -0.02em; }
+.nc-ws__state {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nc-status-color, var(--nc-idle));
+}
+.nc-ws__led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nc-status-color, var(--nc-idle));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--nc-status-color, var(--nc-idle)) 70%, transparent);
+}
+.nc-ws__meter {
+  flex: none;
+  width: 76px;
+  height: 3px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.nc-ws__meter i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--nc-status-color, var(--nc-accent));
+  transition: width var(--nc-dur-travel) var(--nc-ease-out);
+}
+
+/* The internal surface rail: this is the scene being *capable* of hosting the
+   department's own rooms, three of which arrive in a later phase. */
+.nc-ws__modes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.014);
+}
+.nc-ws__mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 27px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--nc-text-3);
+  transition:
+    color var(--nc-dur-micro) var(--nc-ease-standard),
+    border-color var(--nc-dur-micro) var(--nc-ease-standard),
+    background-color var(--nc-dur-micro) var(--nc-ease-standard);
+}
+.nc-ws__mode:hover { color: var(--nc-text); border-color: var(--nc-border-2); background: rgba(255, 255, 255, 0.04); }
+.nc-ws__mode[data-current="true"] {
+  color: #0e1008;
+  background: var(--nc-accent);
+  border-color: var(--nc-accent);
+}
+
+/* The operating surface: three bays divided by hairlines, like a console. */
+.nc-ws__surface {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.72fr) minmax(0, 1fr);
+  gap: 1px;
+  min-height: 0;
+  background: rgba(255, 255, 255, 0.06);
+}
+.nc-ws__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(12, 14, 18, 0.96), rgba(9, 10, 13, 0.98));
+  overflow: hidden;
+}
+.nc-ws__panel-kicker {
+  font-size: 8.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+.nc-ws__job {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.32;
+  color: var(--nc-text-2);
+}
+.nc-ws__job[data-live="true"] { color: var(--nc-text); }
+.nc-ws__workers { display: flex; flex-direction: column; gap: 7px; margin-top: 2px; }
+.nc-ws__worker { display: flex; flex-direction: column; gap: 4px; }
+.nc-ws__worker-name { font-size: 11.5px; color: var(--nc-text-3); }
+.nc-ws__worker-meter { height: 2px; border-radius: 2px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.nc-ws__worker-meter i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--nc-status-color, var(--nc-text-4));
+  transition: width var(--nc-dur-travel) var(--nc-ease-out);
+}
+.nc-ws__worker[data-level="high"] .nc-ws__worker-name { color: var(--nc-text); }
+.nc-ws__worker[data-level="high"] .nc-ws__worker-meter i { background: var(--nc-accent); }
+.nc-ws__worker[data-level="mid"] .nc-ws__worker-meter i { background: color-mix(in srgb, var(--nc-accent) 55%, transparent); }
+
+.nc-ws__figure { display: flex; flex-direction: column; gap: 2px; }
+.nc-ws__figure b { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
+.nc-ws__figure span { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--nc-text-4); }
+.nc-ws__figure[data-attention="true"] b { color: var(--nc-approval); }
+
+.nc-ws__system {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border: 1px solid var(--nc-border);
+  border-radius: var(--nc-r-2);
+  background: rgba(255, 255, 255, 0.016);
+  text-align: left;
+  transition: border-color var(--nc-dur-quick) var(--nc-ease-standard), background-color var(--nc-dur-quick) var(--nc-ease-standard);
+}
+.nc-ws__system:hover { border-color: color-mix(in srgb, var(--nc-accent) 34%, transparent); background: rgba(255, 255, 255, 0.04); }
+.nc-ws__system-mark {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: var(--nc-accent);
+  background: color-mix(in srgb, var(--nc-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--nc-accent) 30%, transparent);
+}
+.nc-ws__system-name { font-size: 11.5px; font-weight: 600; }
+.nc-ws__system-status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+.nc-ws__system-status i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--nc-accent);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--nc-accent) 60%, transparent);
+}
+.nc-ws__none { font-size: 11px; color: var(--nc-text-4); }
+.nc-ws__bottleneck {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 9px;
+  border-top: 1px solid var(--nc-border);
+  font-size: 11px;
+  color: var(--nc-text-3);
+}
+.nc-ws__bottleneck-mark {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nc-approval);
+  box-shadow: 0 0 8px rgba(240, 180, 41, 0.55);
+}
+
+.nc-ws__foot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 17px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.014);
+}
+.nc-ws__foot .nc-actors { flex-direction: row; gap: 8px; }
+.nc-ws__capability {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+
+@keyframes nc-ws-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6 · CONNECTED SYSTEMS LAYER — infrastructure on the perimeter
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-systems-layer { position: absolute; inset: 0; transform-style: preserve-3d; }
+
+.nc-sysnode {
+  position: absolute;
+  left: var(--nc-node-x);
+  top: var(--nc-node-y);
+  width: 138px;
+  transform: translate(-50%, -50%) translateZ(var(--nc-node-z, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 11px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-left: 2px solid color-mix(in srgb, var(--nc-accent) 30%, transparent);
+  border-radius: 4px 10px 10px 4px;
+  background: linear-gradient(180deg, rgba(17, 21, 26, 0.74), rgba(7, 8, 11, 0.66));
+  color: var(--nc-text-3);
+  z-index: 1;
+  /* Cold at rest: infrastructure is present, it is not content. */
+  opacity: 0.5;
+  filter: saturate(0.45);
+  transition:
+    opacity var(--nc-dur-focus) var(--nc-ease-standard),
+    filter var(--nc-dur-focus) var(--nc-ease-standard),
+    border-color var(--nc-dur-focus) var(--nc-ease-standard),
+    transform var(--nc-dur-focus) var(--nc-ease-out);
+}
+.nc-sysnode[data-role="base"] { width: 152px; }
+/* The systems this space actually reaches. */
+.nc-sysnode[data-state="relevant"] {
+  opacity: 1;
+  filter: none;
+  border-color: color-mix(in srgb, var(--nc-accent) 34%, transparent);
+  border-left-color: var(--nc-accent);
+  background: linear-gradient(180deg, rgba(22, 27, 33, 0.9), rgba(10, 12, 15, 0.86));
+  box-shadow: 0 0 54px -22px color-mix(in srgb, var(--nc-accent) 60%, transparent);
+}
+.nc-sysnode[data-state="fallback"] { opacity: 0.16; filter: saturate(0.25) brightness(0.8); }
+.nc-sysnode:hover { opacity: 1; filter: none; }
+
+.nc-sysnode__hatch {
+  position: absolute;
+  left: -11px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 58%;
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 0;
+}
+.nc-sysnode__hatch i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--nc-accent) 70%, transparent);
+}
+.nc-sysnode__body { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.nc-sysnode__mark {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--nc-accent);
+  background: color-mix(in srgb, var(--nc-accent) 11%, transparent);
+  border: 1px solid color-mix(in srgb, var(--nc-accent) 28%, transparent);
+}
+.nc-sysnode__text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nc-sysnode__name {
+  font-size: 11.5px;
+  font-weight: 620;
+  color: var(--nc-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nc-sysnode[data-state="relevant"] .nc-sysnode__name { color: var(--nc-text); }
+.nc-sysnode__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+.nc-sysnode__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--nc-status-dot, var(--nc-idle));
+  box-shadow: 0 0 7px color-mix(in srgb, var(--nc-status-dot, var(--nc-idle)) 60%, transparent);
+}
+.nc-sysnode[data-role="base"] .nc-sysnode__dot { --nc-status-dot: var(--nc-completed); }
+.nc-sysnode__kind { letter-spacing: 0.08em; opacity: 0.7; }
+.nc-sysnode__go { color: var(--nc-text-4); display: flex; }
+.nc-sysnode:hover .nc-sysnode__go { color: var(--nc-accent); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   7 · INSTRUMENTATION — everything that used to be a page band
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-page { height: 100%; display: flex; flex-direction: column; }
+.nc-room {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.nc-room__stage {
+  position: relative;
+  flex: 1;
+  min-height: var(--nc-stage-h);
+  overflow: hidden;
+}
+.nc-room__view {
+  position: absolute;
+  inset: 0;
+  transition: opacity var(--nc-dur-quick) var(--nc-ease-standard);
+}
+.nc-room__view[data-active="false"] { opacity: 0; visibility: hidden; pointer-events: none; }
+
+.nc-room__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.nc-room__overlay > * { pointer-events: auto; }
+/* The instrumentation describes the ROOM, so it stands down in the table
+   readings, where the panel's own header does the same job. */
+.nc-room__overlay[data-active="false"] .nc-ident,
+.nc-room__overlay[data-active="false"] .nc-room__key { display: none; }
+
+/* ── Identity: standing IN the room, translucent, not a page heading ───── */
+.nc-ident {
+  position: absolute;
+  left: 30px;
+  top: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: flex-start;
+  animation: nc-reveal var(--nc-dur-spatial) var(--nc-ease-out) both;
+  transition: opacity var(--nc-dur-focus) var(--nc-ease-standard);
+}
+.nc-ident__copy { min-width: 0; }
+.nc-ident__greeting { font-size: 12px; color: var(--nc-text-3); letter-spacing: 0.01em; }
+.nc-ident__name {
+  font-size: 26px;
+  font-weight: 680;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin-top: 1px;
+  color: var(--nc-text);
+}
+.nc-ident__tagline { font-size: 12px; color: var(--nc-text-4); margin-top: 4px; }
+/* Entered: identity stays, but it stops competing with the workspace. */
+.nc-room[data-level="department"] .nc-ident { opacity: 0.32; }
+.nc-room[data-level="department"] .nc-ident__focus { opacity: 0; pointer-events: none; }
+
+.nc-ident__focus {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 12px;
+  border: 1px solid var(--nc-border);
+  border-left: 2px solid var(--nc-lime-line);
+  border-radius: var(--nc-r-2);
+  background: linear-gradient(120deg, rgba(182, 255, 0, 0.05), rgba(12, 14, 17, 0.62) 40%);
+  text-align: left;
+  transition: border-color var(--nc-dur-quick) var(--nc-ease-standard), transform var(--nc-dur-quick) var(--nc-ease-out), opacity var(--nc-dur-focus) var(--nc-ease-standard);
+}
+.nc-ident__focus:hover { border-color: var(--nc-border-2); border-left-color: var(--nc-lime); transform: translateX(2px); }
+.nc-ident__focus-icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--nc-lime);
+  background: rgba(182, 255, 0, 0.08);
+  border: 1px solid var(--nc-lime-line);
+}
+.nc-ident__focus-copy { display: flex; flex-direction: column; gap: 2px; }
+.nc-ident__focus-label { font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--nc-text-4); }
+.nc-ident__focus-value { font-size: 12.5px; font-weight: 620; }
+.nc-ident__focus-chev { color: var(--nc-text-4); display: flex; }
+
+/* ── Key: the narrative and the status legend, at instrument weight ────── */
+.nc-room__key {
+  position: absolute;
+  left: 30px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 46%;
+  animation: nc-reveal var(--nc-dur-spatial) var(--nc-ease-out) both;
+  transition: opacity var(--nc-dur-focus) var(--nc-ease-standard);
+}
+.nc-room__key-line { font-size: 11.5px; color: var(--nc-text-3); }
+.nc-room__legend { display: flex; flex-wrap: wrap; gap: 12px; }
+.nc-room__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+.nc-room__legend-dot { width: 5px; height: 5px; border-radius: 50%; }
+.nc-room[data-level="department"] .nc-room__key { opacity: 0.34; }
+
+/* ── Controls: the reading switcher, bottom-right, low-key ─────────────── */
+.nc-room__controls {
+  position: absolute;
+  right: 30px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.nc-room__summary { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--nc-text-4); }
+
+.nc-viewswitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-border);
+  background: rgba(10, 12, 15, 0.72);
+  backdrop-filter: blur(8px);
+}
+.nc-viewswitch__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: var(--nc-r-pill);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--nc-text-4);
+  transition: color var(--nc-dur-micro) var(--nc-ease-standard), background-color var(--nc-dur-quick) var(--nc-ease-standard);
+}
+.nc-viewswitch__btn:hover { color: var(--nc-text); }
+.nc-viewswitch__btn[data-active="true"] { color: var(--nc-text); background: rgba(255, 255, 255, 0.07); }
+
+/* ── The table readings keep a real panel, because a table needs one ───── */
+.nc-room__panel {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding: 22px 30px 82px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+.nc-room__panel-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.nc-room__panel-title { font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
+.nc-room__panel-note { font-size: 11.5px; color: var(--nc-text-4); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   8 · FOCUS BAR — "where am I / take me back"
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-focusbar {
+  position: absolute;
+  left: 30px;
+  top: 26px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px 8px 8px;
+  border: 1px solid var(--nc-border-2);
+  border-left: 2px solid var(--nc-accent);
+  border-radius: var(--nc-r-2);
+  background: linear-gradient(180deg, rgba(21, 25, 31, 0.96), rgba(9, 10, 13, 0.96));
+  box-shadow: var(--nc-shadow-3);
+  animation: nc-reveal var(--nc-dur-spatial) var(--nc-ease-out) both;
+}
+.nc-focusbar__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--nc-r-1);
+  border: 1px solid var(--nc-border);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--nc-text-2);
+  transition: color var(--nc-dur-micro) var(--nc-ease-standard), border-color var(--nc-dur-micro) var(--nc-ease-standard), background-color var(--nc-dur-micro) var(--nc-ease-standard), transform var(--nc-dur-micro) var(--nc-ease-out);
+}
+.nc-focusbar__back:hover { color: var(--nc-lime); border-color: var(--nc-lime-line); background: var(--nc-lime-soft); transform: translateX(-2px); }
+.nc-focusbar__divider { width: 1px; height: 24px; background: var(--nc-border-2); }
+.nc-focusbar__text { display: flex; flex-direction: column; gap: 1px; }
+.nc-focusbar__space { font-size: 8.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--nc-accent); }
+.nc-focusbar__name { font-size: 13px; font-weight: 640; }
+.nc-focusbar__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nc-text-3);
+}
+.nc-focusbar__led { width: 5px; height: 5px; border-radius: 50%; background: var(--nc-accent); box-shadow: 0 0 7px color-mix(in srgb, var(--nc-accent) 70%, transparent); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   9 · COMMAND SURFACE — the near edge of the room
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-surface {
+  --nc-surface-accent: var(--nc-lime);
+  width: 100%;
+  display: flex;
+  align-items: stretch;
+  min-height: var(--nc-surface-h);
+  border-top: 1px solid var(--nc-border-2);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--nc-surface-accent) 5%, transparent), transparent 34%),
+    linear-gradient(180deg, rgba(15, 18, 22, 0.96), rgba(7, 8, 10, 0.99));
+  box-shadow: 0 -30px 60px -40px rgba(0, 0, 0, 0.95);
+}
+/* The lit seam: where the room's floor meets its console. */
+.nc-surface::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--nc-surface-accent) 34%, transparent) 22%, color-mix(in srgb, var(--nc-surface-accent) 34%, transparent) 78%, transparent);
+}
+.nc-rail-bottom { position: relative; }
+
+/* ── The lead: Executive instrument cluster — the cockpit's central meter ── */
+.nc-surface__lead {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-right: 1px solid var(--nc-border);
+  background: linear-gradient(180deg, rgba(20, 24, 29, 0.65), rgba(8, 10, 13, 0.35));
+}
+.nc-exec-lead { display: flex; align-items: center; gap: 10px; }
+/* Executive orb: a small instrument gauge, not a large disc */
+.nc-exec-lead__orb {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 40% 30%, rgba(255, 255, 255, 0.2), transparent 42%),
+    radial-gradient(circle at 50% 56%, #8cc903 0%, #557304 54%, #131a09 100%);
+  border: 1px solid var(--nc-lime-line);
+  box-shadow:
+    0 0 24px -8px var(--nc-lime-glow),
+    inset 0 -7px 16px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: transform var(--nc-dur-quick) var(--nc-ease-out), box-shadow var(--nc-dur-spatial) var(--nc-ease-out);
+}
+.nc-exec-lead__orb:hover { transform: scale(1.07); box-shadow: 0 0 38px -6px var(--nc-lime-glow), inset 0 -7px 16px rgba(0, 0, 0, 0.4); }
+.nc-exec-lead__orb:active { transform: scale(0.95); }
+.nc-exec-lead__orb[data-open="true"] { animation: nc-ring var(--nc-dur-breath) var(--nc-ease-out) infinite; }
+/* Orb rim highlight: machined edge */
+.nc-exec-lead__orb::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+/* Orb base: the housing under the lens */
+.nc-exec-lead__orb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 72%, rgba(0, 0, 0, 0.42), transparent 60%);
+  pointer-events: none;
+}
+.nc-exec-lead__wave { display: flex; align-items: center; gap: 2px; height: 18px; }
+.nc-exec-lead__wave i {
+  display: block;
+  width: 2.5px;
+  border-radius: 2px;
+  background: rgba(9, 13, 5, 0.74);
+  animation: nc-wave calc(1000ms * var(--nc-speed)) var(--nc-ease-standard) infinite;
+}
+.nc-exec-lead__wave i:nth-child(1) { height: 7px; animation-delay: 0ms; }
+.nc-exec-lead__wave i:nth-child(2) { height: 14px; animation-delay: 100ms; }
+.nc-exec-lead__wave i:nth-child(3) { height: 18px; animation-delay: 200ms; }
+.nc-exec-lead__wave i:nth-child(4) { height: 11px; animation-delay: 300ms; }
+.nc-exec-lead__wave i:nth-child(5) { height: 6px; animation-delay: 400ms; }
+.nc-exec-lead__text { display: flex; flex-direction: column; gap: 1px; }
+.nc-exec-lead__title { font-size: 12px; font-weight: 640; letter-spacing: -0.01em; color: var(--nc-text); }
+.nc-exec-lead__hint { font-size: 9px; color: var(--nc-text-4); letter-spacing: 0.02em; }
+
+/* Workspace indicator: where the surface is acting */
+.nc-surface__level { display: flex; flex-direction: column; gap: 1px; min-width: 124px; padding: 4px 0; border-left: 1px solid var(--nc-border); }
+.nc-surface__level-kicker { font-size: 7.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--nc-text-4); }
+.nc-surface__level-name {
+  font-size: 12px;
+  font-weight: 640;
+  color: var(--nc-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.005em;
+}
+.nc-surface[data-level="department"] .nc-surface__level-name { color: var(--nc-surface-accent); }
+.nc-surface__level-back {
+  font-size: 8.5px;
+  font-weight: 550;
+  color: var(--nc-text-4);
+  transition: color var(--nc-dur-micro) var(--nc-ease-standard);
+  margin-top: 2px;
+}
+.nc-surface__level-back:hover { color: var(--nc-lime); }
+
+/* ── The cells: cockpit control panel, asymmetric hierarchy ──────────────── */
+.nc-surface__cells { flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+/* Primary cluster: the two main controls, wider, grouped */
+.nc-surface__primary {
+  display: flex;
+  gap: 0;  flex: 1.5 1 0;
+}
+
+/* Utility cluster: secondary controls, narrower, separated by a machined divider */
+.nc-surface__utility {
+  display: flex;
+  gap: 0;
+  flex: 1 1 0;
+  border-left: 1px solid var(--nc-border-2);
+  border-top: 1px solid rgba(0, 0, 0, 0.35);
+}
+
+.nc-surface__cell {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 13px;
+  border-left: 1px solid var(--nc-border);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  text-align: left;
+  transition: background-color var(--nc-dur-quick) var(--nc-ease-standard), transform var(--nc-dur-quick) var(--nc-ease-out);
+}
+
+/* Cell top seam: the lit indicator that activates on hover */
+.nc-surface__cell::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: var(--nc-surface-accent);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  opacity: 0.7;
+  transition: transform var(--nc-dur-spatial) var(--nc-ease-out);
+}
+
+.nc-surface__cell:hover { background: rgba(255, 255, 255, 0.028); }
+.nc-surface__cell:hover::before { transform: none; }
+.nc-surface__cell:active { transform: translateY(1px); }
+.nc-surface__cell:focus-visible { outline: none; background: rgba(255, 255, 255, 0.04); }
+
+/* PRIMARY cells: stronger accent presence, always-lit seam */
+.nc-surface__cell[data-primary="true"] {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--nc-surface-accent) 7%, transparent) 0%,
+    color-mix(in srgb, var(--nc-surface-accent) 3%, transparent) 45%,
+    transparent 70%);
+  border-left-color: color-mix(in srgb, var(--nc-surface-accent) 28%, transparent);
+}
+nc-surface__cell[data-primary="true"]::before { transform: none; opacity: 0.9; }
+nc-surface__cell[data-primary="true"]:hover {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--nc-surface-accent) 10%, transparent) 0%,
+    color-mix(in srgb, var(--nc-surface-accent) 5%, transparent) 45%,
+    transparent 70%);
+}
+nc-surface__cell[data-primary="true"]:active {
+  transform: translateY(1px);
+}
+nc-surface__cell[data-primary="true"]:focus-visible {
+  outline: none;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--nc-surface-accent) 12%, transparent) 0%,
+    color-mix(in srgb, var(--nc-surface-accent) 6%, transparent) 45%,
+    transparent 70%);
+}
+.nc-surface__cell-icon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--nc-text-2);
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--nc-border);
+  transition: color var(--nc-dur-micro) var(--nc-ease-standard), background-color var(--nc-dur-micro) var(--nc-ease-standard), border-color var(--nc-dur-micro) var(--nc-ease-standard);
+}
+.nc-surface__cell:hover .nc-surface__cell-icon,
+.nc-surface__cell[data-primary="true"] .nc-surface__cell-icon {
+  color: var(--nc-surface-accent);
+  background: color-mix(in srgb, var(--nc-surface-accent) 8%, transparent);
+  border-color: color-mix(in srgb, var(--nc-surface-accent) 24%, transparent);
+}
+nc-surface__cell[data-primary="true"] .nc-surface__cell-icon {
+  background: color-mix(in srgb, var(--nc-surface-accent) 11%, transparent);
+  border-color: color-mix(in srgb, var(--nc-surface-accent) 34%, transparent);
+  box-shadow: 0 0 12px -4px color-mix(in srgb, var(--nc-surface-accent) 30%, transparent);
+}
+.nc-surface__cell-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.nc-surface__cell-label {
+  font-size: 12px;
+  font-weight: 620;
+  letter-spacing: -0.008em;
+  color: var(--nc-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nc-surface__cell-hint {
+  font-size: 10.5px;
+  color: var(--nc-text-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   10 · ACTOR PRESENCE — one component, two materials
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-actors { display: flex; flex-direction: column; gap: 6px; }
+.nc-actor {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 9px;
+  border: 1px solid var(--nc-border);
+  border-radius: var(--nc-r-2);
+  background: rgba(255, 255, 255, 0.016);
+  transition: border-color var(--nc-dur-quick) var(--nc-ease-standard), background-color var(--nc-dur-quick) var(--nc-ease-standard);
+}
+.nc-actor:hover { border-color: var(--nc-border-2); background: rgba(255, 255, 255, 0.036); }
+.nc-actor__mark {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--nc-actor-accent);
+  background: color-mix(in srgb, var(--nc-actor-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--nc-actor-accent) 30%, transparent);
+}
+/* A human is a warm ivory person; an agent is a lime-outlined machine. */
+.nc-actor[data-kind="human"] .nc-actor__mark {
+  color: #101208;
+  background: linear-gradient(150deg, #f4f1ea, #cdc7ba);
+  border-color: rgba(255, 255, 255, 0.24);
+  border-radius: 50%;
+}
+.nc-actor[data-kind="ai"] .nc-actor__mark { border-radius: 9px; }
+.nc-actor__text { min-width: 0; }
+.nc-actor__name { font-size: 12px; font-weight: 600; }
+.nc-actor__role { font-size: 9.5px; color: var(--nc-text-4); margin-top: 1px; }
+.nc-actor__kind { margin-left: auto; flex: none; color: var(--nc-text-3); display: flex; }
+.nc-actor[data-kind="ai"] .nc-actor__kind { color: var(--nc-lime); }
+.nc-actors__more { font-size: 10.5px; color: var(--nc-text-3); }
+
+.nc-actor-cluster { display: inline-flex; align-items: center; }
+.nc-actor-cluster__dot {
+  width: 25px;
+  height: 25px;
+  margin-left: -8px;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--nc-actor-accent);
+  background: linear-gradient(150deg, #2a303a, #171b21);
+  border: 1.5px solid rgba(11, 13, 16, 0.95);
+  border-radius: 9px;
+  transition: transform var(--nc-dur-quick) var(--nc-ease-settle), box-shadow var(--nc-dur-quick) var(--nc-ease-out);
+}
+.nc-actor-cluster__dot:first-child { margin-left: 0; }
+.nc-actor-cluster__dot[data-kind="human"] {
+  color: #101208;
+  background: linear-gradient(150deg, #f4f1ea, #cdc7ba);
+  border-radius: 50%;
+}
+.nc-actor-cluster__dot[data-kind="ai"] { color: var(--nc-lime); border-color: rgba(182, 255, 0, 0.34); }
+.nc-actor-cluster__more { margin-left: 6px; font-size: 10px; color: var(--nc-text-3); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   11 · CONTEXT RAIL — the two modes, and the system list
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-context__hint { font-size: 10px; color: var(--nc-text-4); line-height: 1.5; }
+
+.nc-context__level {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 13px 14px;
+  border: 1px solid var(--nc-border-2);
+  border-left: 2px solid var(--nc-accent);
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--nc-accent) 12%, transparent), transparent 62%),
+    linear-gradient(160deg, rgba(24, 28, 34, 0.8), rgba(12, 14, 17, 0.7));
+  animation: nc-reveal var(--nc-dur-spatial) var(--nc-ease-out) both;
+}
+.nc-context__level-kicker { font-size: 8.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--nc-accent); }
+.nc-context__level-name { font-size: 15px; font-weight: 650; letter-spacing: -0.015em; }
+.nc-context__level-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--nc-text-3);
+  transition: color var(--nc-dur-micro) var(--nc-ease-standard);
+}
+.nc-context__level-back:hover { color: var(--nc-lime); }
+
+.nc-now {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 13px;
+  border: 1px solid var(--nc-border);
+  border-radius: var(--nc-r-3);
+  background: linear-gradient(160deg, rgba(24, 28, 34, 0.7), rgba(12, 14, 17, 0.6));
+}
+.nc-now__line { font-size: 12px; color: var(--nc-text-2); line-height: 1.5; }
+.nc-now__meta { font-size: 10px; color: var(--nc-text-4); }
+
+.nc-attention-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 107, 107, 0.28);
+  border-radius: var(--nc-r-2);
+  background: linear-gradient(160deg, rgba(255, 107, 107, 0.06), rgba(255, 255, 255, 0.012) 62%);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--nc-text-2);
+  text-align: left;
+  transition: border-color var(--nc-dur-quick) var(--nc-ease-standard), transform var(--nc-dur-quick) var(--nc-ease-out);
+}
+.nc-attention-row:hover { border-color: rgba(255, 107, 107, 0.5); transform: translateX(2px); }
+.nc-attention-row svg { margin-left: auto; color: var(--nc-text-3); }
+.nc-attention-row__mark { width: 7px; height: 7px; border-radius: 50%; background: var(--nc-blocked); box-shadow: 0 0 8px rgba(255, 107, 107, 0.6); }
+
+.nc-people { display: flex; flex-direction: column; gap: 6px; }
+
+.nc-director {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 12px;
+  border: 1px solid var(--nc-border-2);
+  border-radius: var(--nc-r-3);
+  background: linear-gradient(160deg, rgba(24, 28, 34, 0.78), rgba(12, 14, 17, 0.66));
+}
+.nc-director__mark {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--nc-accent);
+  background: color-mix(in srgb, var(--nc-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--nc-accent) 30%, transparent);
+}
+.nc-director__name { font-size: 12.5px; font-weight: 640; }
+.nc-director__meta { font-size: 10px; color: var(--nc-text-4); margin-top: 2px; line-height: 1.45; }
+
+.nc-bottleneck {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid rgba(240, 180, 41, 0.26);
+  border-radius: var(--nc-r-2);
+  background: linear-gradient(160deg, rgba(240, 180, 41, 0.06), rgba(255, 255, 255, 0.012) 62%);
+}
+.nc-bottleneck__mark {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--nc-approval);
+  box-shadow: 0 0 8px rgba(240, 180, 41, 0.6);
+}
+.nc-bottleneck__title { font-size: 12px; font-weight: 620; }
+.nc-bottleneck__meta { font-size: 10.5px; color: var(--nc-text-3); margin-top: 3px; line-height: 1.45; }
+
+/* ── Connected systems, in list form ───────────────────────────────────── */
+.nc-syslist { display: flex; flex-direction: column; gap: 5px; }
+.nc-sysrow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--nc-border);
+  border-left: 2px solid color-mix(in srgb, var(--nc-accent) 34%, transparent);
+  border-radius: 4px 10px 10px 4px;
+  background: rgba(255, 255, 255, 0.014);
+  text-align: left;
+  transition: border-color var(--nc-dur-quick) var(--nc-ease-standard), background-color var(--nc-dur-quick) var(--nc-ease-standard), transform var(--nc-dur-quick) var(--nc-ease-out);
+}
+.nc-sysrow:hover {
+  border-color: color-mix(in srgb, var(--nc-accent) 40%, transparent);
+  background: rgba(255, 255, 255, 0.04);
+  transform: translateX(2px);
+}
+.nc-sysrow__mark {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: var(--nc-accent);
+  background: color-mix(in srgb, var(--nc-accent) 11%, transparent);
+  border: 1px solid color-mix(in srgb, var(--nc-accent) 28%, transparent);
+}
+.nc-sysrow__text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nc-sysrow__name { font-size: 12px; font-weight: 620; }
+.nc-sysrow__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+.nc-sysrow__meta i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--nc-status-dot, var(--nc-idle));
+  box-shadow: 0 0 7px color-mix(in srgb, var(--nc-status-dot, var(--nc-idle)) 60%, transparent);
+}
+.nc-sysrow[data-kind="online"] { --nc-status-dot: var(--nc-completed); }
+.nc-sysrow[data-kind="running"] { --nc-status-dot: var(--nc-lime); }
+.nc-sysrow[data-kind="connected"] { --nc-status-dot: var(--nc-finance); }
+.nc-sysrow[data-kind="development"] { --nc-status-dot: var(--nc-operations); }
+.nc-sysrow__kind { opacity: 0.72; }
+.nc-sysrow__reached { font-size: 10.5px; color: var(--nc-text-3); }
+.nc-syslist__connect {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 34px;
+  border: 1px dashed var(--nc-border-2);
+  border-radius: var(--nc-r-2);
+  font-size: 11.5px;
+  font-weight: 550;
+  color: var(--nc-text-3);
+  transition: color var(--nc-dur-quick) var(--nc-ease-standard), border-color var(--nc-dur-quick) var(--nc-ease-standard);
+}
+.nc-syslist__connect:hover { color: var(--nc-lime); border-color: var(--nc-lime-line); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   12 · MOTION + RESPONSIVE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The energy centre breathes while the core is working — the only ambient
+   motion the composition allows itself, and it stays inside +-5% scale. */
+@keyframes nc-core-energy {
+  0%, 100% { opacity: 0.78; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+
+/* Reduced motion: spatial state still CHANGES, it just arrives instantly.
+   Removing the transitions entirely would break the mental model of "in / out",
+   which is exactly what the brief asks reduced motion to preserve. */
+.nc-root[data-motion="reduced"] .nc-pod,
+.nc-root[data-motion="reduced"] .nc-pod__signals,
+.nc-root[data-motion="reduced"] .nc-pod__enter,
+.nc-root[data-motion="reduced"] .nc-focusbar,
+.nc-root[data-motion="reduced"] .nc-ws,
+.nc-root[data-motion="reduced"] .nc-ident,
+.nc-root[data-motion="reduced"] .nc-room__key,
+.nc-root[data-motion="reduced"] .nc-sysnode {
+  transition-duration: 1ms !important;
+  animation-duration: 1ms !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nc-pod__signals,
+  .nc-pod__enter { transition-duration: 1ms !important; }
+}
+
+/* Responsive degradation. The room does not switch to a different layout — it
+   keeps one composition and shrinks it, which is what keeps a later tablet/mobile
+   pass possible without a second implementation. */
+@media (max-width: 1500px) {
+  .nc-surface__lead { padding: 12px 14px; gap: 12px; }
+  .nc-surface__cell { padding: 12px 12px; gap: 9px; }
+  .nc-surface__cell-hint { display: none; }
+  .nc-sysnode { width: 124px; }
+}
+@media (max-width: 1240px) {
+  .nc-ident { left: 18px; top: 18px; }
+  .nc-focusbar { left: 18px; top: 18px; }
+  .nc-room__key { left: 18px; max-width: 58%; }
+  .nc-room__controls { right: 18px; }
+  .nc-room__summary { display: none; }
+  .nc-surface__level { display: none; }
+  .nc-exec-lead__hint { display: none; }
+  .nc-surface__cell { padding: 10px; }
+  .nc-surface__cell-label { font-size: 11.5px; }
+  .nc-ws__surface { grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr); }
+  .nc-ws__surface > .nc-ws__panel:last-child { display: none; }
+  .nc-pod__signals { left: 0; right: 0; }
+}
+/* Vertical degradation: the room must FIT the height it is given, otherwise the
+   lower bays (and the lit floors under them) are clipped by the shell. */
+@media (max-height: 940px) {
+  .nc-root { --nc-stage-h: 480px; }
+}
+@media (max-height: 860px) {
+  .nc-root { --nc-stage-h: 452px; --nc-pod-h: 138px; }
+  .nc-surface { --nc-surface-h: 84px; }
+}
+@media (max-height: 780px) {
+  .nc-root { --nc-stage-h: 412px; }
+  .nc-surface__cell-hint { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   13 · CENTRAL COMMAND NETWORK — the presentation layer
+   ───────────────────────────────────────────────────────────────────────────
+   The architecture above is UNCHANGED. Every element it builds — the room
+   shell, the core's deck, the pod floor, the pod core — still exists, is still
+   positioned by the same camera, and is still driven by the same state.
+
+   This section only changes how that architecture is DRAWN. The cinematic
+   room (perspective, translateZ, architectural wings, floating platforms,
+   gantries) is stood down, and the same nodes are re-presented as one calm
+   operational network:
+
+     · the stage becomes a flat plane with a quiet grid — a network diagram,
+       not a place;
+     · EXEC becomes a clean circular hub: one thin lime ring, a translucent
+       core, a small intelligence cell;
+     · a department becomes a uniform translucent glass module, joined to the
+       hub by one precise hairline;
+     · a connected system becomes a quiet glass chip on the perimeter, wired to
+       the hub by a dotted infrastructure line;
+     · cyan carries every connection, lime belongs to EXEC and to the one thing
+       you are working on, amber is reserved for warning and approval, and the
+       department accents are reduced to a single 5px indicator per module.
+
+   The contract is deliberately unchanged: nothing below reads new state, adds
+   a prop, or needs a component to change. Delete this section and the cinematic
+   room returns exactly as it was.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 13.1 · THE PLANE — a network stage, not a room ─────────────────────── */
+
+.nc-scene {
+  perspective: none;
+  perspective-origin: 50% 50%;
+}
+
+/* The room is retired. Its elements remain in the DOM — and remain driven by
+   the camera — but the wings, bays, ceiling, floor plane and console edge are
+   no longer drawn. */
+.nc-room__ceiling,
+.nc-room__ceiling::before,
+.nc-room__ceiling::after,
+.nc-room__void::before,
+.nc-room__wing,
+.nc-room__bay,
+.nc-room__bay i,
+.nc-room__beam,
+.nc-room__floor,
+.nc-room__floor::before,
+.nc-room__floor::after,
+.nc-room__horizon,
+.nc-room__console,
+.nc-room__console::before { display: none; }
+
+/* The far plane: graphite, a faint intelligence light behind the hub, and one
+   quiet grid. No vignette, no equipment silhouettes, no horizon. */
+.nc-room__void {
+  background-color: var(--nc-base);
+  background-image:
+    radial-gradient(34% 40% at 50% 45%, rgba(182, 255, 0, 0.045), transparent 72%),
+    radial-gradient(64% 52% at 50% 6%, rgba(77, 163, 255, 0.03), transparent 74%),
+    linear-gradient(rgba(255, 255, 255, 0.016) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.016) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 68px 68px, 68px 68px;
+}
+
+/* Entering a space lowers the plane's own light so the workspace is the only
+   bright object — the level change the architecture already implements. */
+.nc-scene[data-level="department"] .nc-room__void {
+  background-image:
+    radial-gradient(30% 34% at 24% 34%, rgba(182, 255, 0, 0.03), transparent 72%),
+    linear-gradient(rgba(255, 255, 255, 0.01) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.01) 1px, transparent 1px);
+  background-size: 100% 100%, 68px 68px, 68px 68px;
+}
+
+/* Flat planes: the stage and its canvas stop being a 3D context, so every
+   transform below is 2D and every depth token is inert. */
+.nc-scene__stage,
+.nc-scene__canvas { transform-style: flat; }
+.nc-root[data-motion="full"] .nc-scene__canvas { transition: none; }
+
+/* ── 13.2 · THE HUB — EXEC / Central Command ─────────────────────────────
+   The instrument becomes an instrument PANEL: one circular glass hub, a thin
+   lime orbit ring, and a small intelligence cell at its centre. The deck,
+   gantry, pillars, vents and gauge ellipses are not drawn. */
+
+.nc-root { --nc-hub-size: clamp(146px, 10.6vw, 186px); }
+
+.nc-core {
+  width: var(--nc-hub-size);
+  height: var(--nc-hub-size);
+  transform: translate(-50%, -50%);
+  transform-style: flat;
+  border-radius: 50%;
+}
+.nc-core__deck,
+.nc-core__deck-ring,
+.nc-core__gantry,
+.nc-core__pillar,
+.nc-core__gantry-arc,
+.nc-core__rings,
+.nc-core__vent,
+.nc-core__housing,
+.nc-core__band::before,
+.nc-core__casing::before,
+.nc-core__casing::after,
+.nc-core__identity::before { display: none; }
+
+.nc-core__body {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: 0 34px 70px -34px rgba(0, 0, 0, 0.9);
+}
+
+/* The hub surface: translucent glass, lit from behind by the core's own state. */
+.nc-core__casing {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid var(--nc-border-2);
+  background:
+    radial-gradient(circle at 50% 38%, rgba(182, 255, 0, 0.1), transparent 64%),
+    linear-gradient(180deg, rgba(30, 35, 42, 0.72), rgba(12, 14, 18, 0.74));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -18px 36px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px) saturate(1.06);
+}
+
+/* The orbit ring: the one precise lime line that says "this is the centre". */
+.nc-core__band {
+  position: absolute;
+  inset: -13px;
+  border-radius: 50%;
+  border: 1px solid var(--nc-lime-line);
+  background: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.015);
+}
+.nc-core__band::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 50%;
+  background: var(--nc-lime);
+  box-shadow: 0 0 9px rgba(182, 255, 0, 0.5);
+}
+
+/* The intelligence cell: a small lime source, recessed, never a glow bloom. */
+.nc-core__lens {
+  width: 38%;
+  height: 38%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%, rgba(182, 255, 0, 0.1), rgba(6, 8, 10, 0.85) 72%);
+  border: 1px solid var(--nc-lime-line);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+.nc-core__lens::before { display: none; }
+.nc-core__energy {
+  border-radius: 50%;
+  background: radial-gradient(circle at 48% 42%, #f4ffc0 0%, var(--nc-lime) 44%, rgba(182, 255, 0, 0) 74%);
+}
+.nc-core__energy[data-energy="rest"] { opacity: 0.5; box-shadow: none; }
+.nc-core__energy[data-energy="live"] { box-shadow: 0 0 12px rgba(182, 255, 0, 0.32); }
+
+/* The agent mark sits inside the hub, not bolted to a chassis. */
+.nc-core__mark {
+  right: 11%;
+  bottom: 11%;
+  border-radius: 8px;
+}
+
+/* State is read from the hub's own edge, not from a machine readout plate. */
+.nc-core__readout {
+  bottom: -30px;
+  padding: 3px 10px 3px 8px;
+  border: 1px solid var(--nc-border);
+  border-radius: var(--nc-r-pill);
+  background: rgba(10, 12, 15, 0.82);
+  backdrop-filter: blur(8px);
+  box-shadow: none;
+}
+.nc-core__readout::before,
+.nc-core__readout::after { display: none; }
+
+.nc-core__identity { top: calc(100% + 14px); }
+.nc-core__title { font-size: 13px; }
+
+/* Four phases, four presences — carried by the ring, quietly. */
+.nc-core[data-phase="ready"] .nc-core__band { border-color: var(--nc-border-3); }
+.nc-core[data-phase="thinking"] .nc-core__band { border-color: rgba(125, 211, 252, 0.42); }
+.nc-core[data-phase="waiting"] .nc-core__band { border-color: rgba(240, 180, 41, 0.5); }
+.nc-core[data-phase="running"] .nc-core__band {
+  border-color: var(--nc-lime-line);
+  box-shadow: 0 0 26px -8px rgba(182, 255, 0, 0.28);
+}
+.nc-core[data-phase="running"] .nc-core__casing,
+.nc-core[data-phase="thinking"] .nc-core__casing {
+  border-color: rgba(182, 255, 0, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -18px 36px rgba(0, 0, 0, 0.45);
+}
+.nc-core:focus-visible .nc-core__body { box-shadow: 0 0 0 4px rgba(182, 255, 0, 0.16); }
+
+/* ── 13.3 · THE MODULES — departments as glass panels ────────────────────
+   One uniform module, five instances. The floor, bay, strut and console rib
+   are not drawn, so the same node reads as a panel in a network rather than a
+   platform in a room. No rule below names a department: a sixth renders
+   identically. */
+
+.nc-root { --nc-module-w: clamp(196px, 15vw, 268px); --nc-module-h: 140px; }
+
+.nc-pod {
+  width: var(--nc-module-w);
+  height: var(--nc-module-h);
+  transform: translate(-50%, -50%);
+  transform-style: flat;
+}
+.nc-pod[data-focused="true"] {
+  width: min(700px, 52vw);
+  height: min(404px, 48vh);
+}
+
+.nc-pod__floor,
+.nc-pod__floor::before,
+.nc-pod__floor::after,
+.nc-pod__bay,
+.nc-pod__bay::before,
+.nc-pod__bay::after,
+.nc-pod__strut,
+.nc-pod__strut::before,
+.nc-pod__strut::after,
+.nc-pod__rib { display: none; }
+
+/* The module: translucent glass, one hairline border, no chamfer. */
+.nc-pod__plate {
+  clip-path: none;
+  border: 1px solid var(--nc-border-2);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(26, 31, 38, 0.66), rgba(11, 13, 16, 0.72));
+  backdrop-filter: blur(10px) saturate(1.05);
+  box-shadow:
+    0 22px 48px -30px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+.nc-pod__plate::before,
+.nc-pod__plate::after { display: none; }
+.nc-pod__plate:focus-visible {
+  --nc-pod-wash: 0%;
+  border-color: var(--nc-border-2);
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 3px rgba(182, 255, 0, 0.14),
+    0 22px 48px -30px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
+/* The single accent: one hairline along the top edge of the module. */
+.nc-pod__ledge {
+  left: 16px;
+  right: 16px;
+  top: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--nc-accent) 50%, transparent);
+  box-shadow: none;
+  opacity: 0.45;
+}
+.nc-pod__spine {
+  left: 0;
+  top: 26px;
+  width: 2px;
+  height: 20px;
+  border-radius: 0 2px 2px 0;
+  box-shadow: none;
+  opacity: 0.7;
+}
+
+.nc-pod__kicker { color: var(--nc-text-4); }
+.nc-pod__meter { left: 17px; right: 17px; bottom: 9px; }
+.nc-pod__meter i { background: var(--nc-accent); }
+
+/* Status reaches the module as a border tint, because the lit floor is gone. */
+.nc-pod[data-status="ACTIVE"] .nc-pod__plate,
+.nc-pod[data-status="THINKING"] .nc-pod__plate,
+.nc-pod[data-status="HANDOFF"] .nc-pod__plate {
+  border-color: color-mix(in srgb, var(--nc-accent) 34%, transparent);
+}
+.nc-pod[data-status="APPROVAL_REQUIRED"] .nc-pod__plate,
+.nc-pod[data-status="BLOCKED"] .nc-pod__plate,
+.nc-pod[data-status="ERROR"] .nc-pod__plate {
+  border-color: rgba(240, 180, 41, 0.38);
+  box-shadow:
+    0 22px 48px -30px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 0 30px -18px rgba(240, 180, 41, 0.4);
+}
+.nc-pod[data-hovered="true"] .nc-pod__plate { border-color: var(--nc-border-3); }
+.nc-pod[data-focused="true"] .nc-pod__plate { border-color: color-mix(in srgb, var(--nc-accent) 26%, transparent); }
+
+/* The three signals: the same glass, as a strip under the module. */
+.nc-pod__signals {
+  left: 0;
+  right: 0;
+  top: calc(100% + 12px);
+  padding: 8px 13px;
+  border: 1px solid var(--nc-border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(20, 24, 30, 0.92), rgba(10, 12, 15, 0.92));
+  backdrop-filter: blur(10px);
+  box-shadow: 0 20px 44px -28px rgba(0, 0, 0, 0.95);
+}
+
+/* ── 13.4 · THE NETWORK — connections carry the meaning ──────────────────
+   Cyan is data, lime is the one thing you are working on, and the
+   infrastructure lines are dotted hairlines so the perimeter never competes
+   with the organization. */
+
+.nc-field { transform: none; }
+
+.nc-wire {
+  stroke: rgba(77, 163, 255, 0.26);
+  stroke-width: 1;
+}
+.nc-wire[data-live="true"] {
+  stroke: rgba(77, 163, 255, 0.62);
+  stroke-opacity: 1;
+  stroke-width: 1.25;
+}
+.nc-wire[data-focus="true"] {
+  stroke: rgba(182, 255, 0, 0.75);
+  stroke-opacity: 1;
+  stroke-width: 1.5;
+}
+.nc-field[data-quiet="true"] .nc-wire[data-receded="true"] { stroke-opacity: 0.16; }
+
+.nc-field .nc-wire--spine {
+  stroke: rgba(255, 255, 255, 0.085);
+  stroke-dasharray: 1 6;
+}
+.nc-field .nc-wire--spine[data-live="true"] {
+  stroke: rgba(77, 163, 255, 0.5);
+  stroke-dasharray: 2 5;
+}
+.nc-field .nc-wire--feed {
+  stroke: rgba(77, 163, 255, 0.5);
+  stroke-width: 1.2;
+  stroke-dasharray: 5 7;
+}
+.nc-wire--handoff {
+  stroke: rgba(77, 163, 255, 0.7);
+  stroke-width: 1.25;
+  stroke-dasharray: 4 7;
+}
+.nc-pulse {
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  background: #7dd3fc;
+  box-shadow: 0 0 12px rgba(125, 211, 252, 0.5);
+}
+
+/* ── 13.5 · CONNECTED SYSTEMS — quiet chips on the perimeter ───────────── */
+
+.nc-sysnode {
+  width: 138px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--nc-border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(20, 24, 30, 0.6), rgba(10, 12, 15, 0.62));
+  backdrop-filter: blur(8px);
+  opacity: 0.58;
+  filter: none;
+}
+.nc-sysnode[data-role="base"] { width: 148px; }
+.nc-sysnode[data-state="relevant"] {
+  opacity: 1;
+  border-color: rgba(77, 163, 255, 0.4);
+  background: linear-gradient(180deg, rgba(24, 30, 38, 0.78), rgba(11, 13, 16, 0.8));
+  box-shadow:
+    0 22px 48px -30px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.nc-sysnode[data-state="fallback"] { opacity: 0.2; filter: none; }
+.nc-sysnode:hover { opacity: 1; }
+.nc-sysnode__hatch { display: none; }
+.nc-sysnode__mark {
+  color: var(--nc-text-2);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--nc-border);
+}
+.nc-sysnode[data-state="relevant"] .nc-sysnode__mark {
+  color: #7dd3fc;
+  background: rgba(77, 163, 255, 0.1);
+  border-color: rgba(77, 163, 255, 0.28);
+}
+
+/* ── 13.6 · THE ENTERED SPACE — the same glass, opened ─────────────────── */
+
+.nc-ws {
+  border-radius: 18px;
+  border: 1px solid var(--nc-border-2);
+  background: linear-gradient(168deg, rgba(22, 26, 32, 0.88), rgba(9, 10, 13, 0.92));
+  backdrop-filter: blur(12px);
+  box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.95);
+}
+.nc-ws::before {
+  left: 18px;
+  right: 18px;
+  width: auto;
+  background: linear-gradient(90deg, transparent, var(--nc-accent), transparent);
+  opacity: 0.6;
+}
+.nc-ws__mark { border-radius: 9px; }
+.nc-ws__mode[data-current="true"] { color: #0e1008; }
+.nc-ws__surface { background: var(--nc-border); }
+
+/* ── 13.7 · NARROW STAGES ─────────────────────────────────────────────── */
+
+@media (max-width: 1240px) {
+  .nc-root { --nc-module-w: 206px; --nc-module-h: 134px; }
+  .nc-sysnode,
+  .nc-sysnode[data-role="base"] { width: 122px; }
+}
+@media (max-width: 1000px) {
+  .nc-root { --nc-module-w: 186px; }
+  .nc-sysnode,
+  .nc-sysnode[data-role="base"] { width: 112px; }
+}
+@media (max-height: 860px) {
+  .nc-root { --nc-module-h: 128px; --nc-hub-size: 152px; }
+}
+

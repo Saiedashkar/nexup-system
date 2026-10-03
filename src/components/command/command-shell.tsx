@@ -3,9 +3,9 @@
 import { useCommand } from "./state/command-store";
 import { GlobalNav } from "./global-nav";
 import { GlobalCommandBar } from "./global-command-bar";
-import { CommandDock } from "./command-dock";
+import { AdaptiveCommandDeck } from "./adaptive-command-deck";
 import { ExecutiveSurface } from "./executive-dock";
-import { RightContext } from "./right-context";
+import { ContextRail } from "./context-rail";
 import { MotionDemoController } from "./motion-demo-controller";
 import { cssVars } from "./ui/css-vars";
 
@@ -39,10 +39,11 @@ export function CommandShell({ children }: { children: React.ReactNode }) {
       data-motion={motionMode}
       style={cssVars({ "--nc-speed": speed })}
     >
+      {/* Environment, not scene: the shell supplies light (a warm window and
+          four static blurred lights). The floor and horizon belong to the
+          spatial scene itself, so they moved in Phase UI-02.1. */}
       <div className="nc-ambient" aria-hidden="true">
         <span className="nc-ambient__window" />
-        <span className="nc-ambient__floor" />
-        <span className="nc-ambient__grid" />
         <span className="nc-ambient__bokeh">
           <i />
           <i />
@@ -70,11 +71,11 @@ export function CommandShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="nc-rail-bottom">
-            <CommandDock />
+            <AdaptiveCommandDeck />
           </div>
         </main>
 
-        <RightContext />
+        <ContextRail />
       </div>
 
       {/* The condition is the build-time-inlined `process.env.NODE_ENV` check,

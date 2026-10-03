@@ -340,3 +340,103 @@ export const DEPARTMENT_ICONS = {
   product: IconDeptProduct,
   finance: IconDeptFinance,
 } as const;
+
+/* ── Actors (Phase UI-02.1) — the human/AI presence vocabulary ────────────
+   Two shapes, one meaning each: a person is a figure, an agent is a bounded
+   spark. Nothing in the UI branches on department, only on kind.          */
+
+export const IconHuman = (p: IconProps = {}) =>
+  svg(
+    <>
+      <circle cx="12" cy="8.2" r="3.4" />
+      <path d="M5.4 20.2c0-3.5 3-6.1 6.6-6.1s6.6 2.6 6.6 6.1" />
+    </>,
+    p,
+  );
+
+export const IconAgent = (p: IconProps = {}) =>
+  svg(
+    <>
+      <rect x="4.6" y="6.6" width="14.8" height="11.8" rx="3.4" />
+      <circle cx="9.4" cy="12.5" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="14.6" cy="12.5" r="1.5" fill="currentColor" stroke="none" />
+      <path d="M12 3.4v3.2" />
+    </>,
+    p,
+  );
+
+/* ── Adaptive deck icon keys ───────────────────────────────────────────── */
+
+export const IconMission = (p: IconProps = {}) =>
+  svg(
+    <>
+      <circle cx="12" cy="12" r="8.4" />
+      <circle cx="12" cy="12" r="4.4" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+    </>,
+    p,
+  );
+
+export const IconBuild = (p: IconProps = {}) =>
+  svg(
+    <>
+      <path d="M4.4 8.6l7.6-4.4 7.6 4.4v6.8l-7.6 4.4-7.6-4.4z" />
+      <path d="M12 4.2v15.6M4.4 8.6l7.6 4.4 7.6-4.4" />
+    </>,
+    p,
+  );
+
+export const IconReview = (p: IconProps = {}) =>
+  svg(
+    <>
+      <path d="M11.4 4.4a6.6 6.6 0 1 0 0 13.2 6.6 6.6 0 0 0 0-13.2z" />
+      <path d="M16.4 16.4l3.6 3.6" />
+      <path d="M8.8 11l2 2 3.6-4" />
+    </>,
+    p,
+  );
+
+export const IconLab = (p: IconProps = {}) =>
+  svg(
+    <>
+      <path d="M9.4 3.6v5.8L5.2 17.2a2.2 2.2 0 0 0 1.9 3.2h9.8a2.2 2.2 0 0 0 1.9-3.2l-4.2-7.8V3.6" />
+      <path d="M8.2 3.6h7.6M7.4 14.6h9.2" />
+    </>,
+    p,
+  );
+
+export const IconStack = (p: IconProps = {}) =>
+  svg(
+    <>
+      <path d="M12 3.4l8.4 4.2-8.4 4.2L3.6 7.6z" />
+      <path d="M3.6 12.4l8.4 4.2 8.4-4.2" />
+      <path d="M3.6 16.8l8.4 4.2 8.4-4.2" />
+    </>
+  , p);
+
+export const IconPhone = (p: IconProps = {}) =>
+  svg(
+    <path d="M5 4.8a1.7 1.7 0 0 1 1.7-1.7h2.7l1.6 3.9-2 1.6a9.6 9.6 0 0 0 4.7 4.7l1.6-2 3.9 1.6v2.7a1.7 1.7 0 0 1-1.7 1.7C10.6 18.9 5 13.3 5 4.8z" />,
+    p,
+  );
+
+/**
+ * Deck icon keys → components. The deck stores a *key*, never a component, so
+ * department configuration stays plain serialisable data.
+ */
+export const DECK_ICONS = {
+  mission: IconMission,
+  warroom: IconWarRoom,
+  call: IconPhone,
+  systems: IconSystems,
+  control: IconControl,
+  build: IconBuild,
+  review: IconReview,
+  workflow: IconWorkflow,
+  lab: IconLab,
+  run: IconRun,
+  tool: IconTool,
+  more: IconMore,
+  map: IconMap,
+  stack: IconStack,
+} as const;

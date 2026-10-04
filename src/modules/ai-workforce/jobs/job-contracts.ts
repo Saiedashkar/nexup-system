@@ -1,5 +1,7 @@
 import type { AiWorkforceErrorCode } from "../core/errors";
 import type { AutonomyLevel, Clock, IdFactory, JsonObject, TriggerType } from "../core/types";
+// Phase 2A — leaf identifier aliases (no runtime dependency, no cycle).
+import type { ActorId, CapabilityId, MissionId, RuntimeId } from "@/modules/workforce/core/refs";
 import type { ExecutionContext } from "../core/execution-context";
 import type { ExecutionContextSnapshot } from "../core/context-snapshot";
 import type { RunRecord } from "../audit/run-recorder";
@@ -63,12 +65,27 @@ export type Job = {
    * Permission tokens are never stored — they are re-derived on load.
    */
   contextSnapshot?: ExecutionContextSnapshot;
+
+  /* ── Phase 2A ownership references (all optional, purely additive) ──
+     A legacy Phase-1 job carries none of these and behaves exactly as before.
+     When present they are REFERENCES (ids), never embedded definitions, and
+     they never carry credentials. The runner's behaviour is unchanged by
+     them — they record WHO/WHAT/FOR-WHAT owns the job, not how it runs. */
+  actorId?: ActorId;
+  runtimeId?: RuntimeId;
+  capabilityId?: CapabilityId;
+  missionId?: MissionId;
 };
 
 export type JobRequest = {
   capability: string;
   input?: JsonObject;
   context: ExecutionContext;
+  /** Phase 2A ownership references — optional, backward compatible. */
+  actorId?: ActorId;
+  runtimeId?: RuntimeId;
+  capabilityId?: CapabilityId;
+  missionId?: MissionId;
 };
 
 export type JobOutcome = {

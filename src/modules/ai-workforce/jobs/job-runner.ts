@@ -64,6 +64,14 @@ export class JobRunner {
     const at = this.deps.now().toISOString();
     const id = this.deps.ids.next("job");
 
+    // Phase 2A ownership references. Present only when the caller supplied
+    // them, so a legacy job's shape is byte-identical to Phase 1.
+    const refs: Pick<Job, "actorId" | "runtimeId" | "capabilityId" | "missionId"> = {};
+    if (request.actorId) refs.actorId = request.actorId;
+    if (request.runtimeId) refs.runtimeId = request.runtimeId;
+    if (request.capabilityId) refs.capabilityId = request.capabilityId;
+    if (request.missionId) refs.missionId = request.missionId;
+
     const job: Job = {
       id,
       status: "CREATED",
@@ -78,6 +86,7 @@ export class JobRunner {
       updatedAt: at,
       history: [],
       contextSnapshot: toContextSnapshot({ ...request.context, jobId: id }),
+      ...refs,
     };
 
     const stored = await this.deps.jobs.insert(job);

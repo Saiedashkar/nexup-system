@@ -7,7 +7,7 @@ import { InMemoryAuditEventRepository, type AuditEventRepository } from "../audi
 import { InMemoryRunRepository, type RunRepository } from "../audit/run-repository";
 import { RepositoryRunRecorder } from "../audit/run-recorder";
 import { InMemoryJobRepository, type JobRepository } from "../jobs/job-repository";
-import { JobRunner } from "../jobs/job-runner";
+import { JobRunner, type AgentJobDispatcher } from "../jobs/job-runner";
 import { PermissionPolicy } from "../policies/permission-policy";
 import { ToolRegistry } from "../registry/tool-registry";
 import { LocalRuntimeAdapter } from "../runtime/local-runtime-adapter";
@@ -50,6 +50,12 @@ export type CreateControlCoreOptions = {
   /** Reported by `runtime.describe()` — never inferred from the storage itself. */
   persistence?: PersistenceKind;
   requireDistinctApprover?: boolean;
+  /**
+   * Phase 2B — optional agent-runtime dispatch seam. When provided, a job that
+   * carries a `runtimeId` is handed to this dispatcher instead of the local
+   * tool path. Absent by default, so legacy behaviour is unchanged.
+   */
+  dispatchAgent?: AgentJobDispatcher;
 };
 
 export type ControlCore = {
@@ -114,7 +120,16 @@ export function createControlCore(options: CreateControlCoreOptions): ControlCor
     persistence,
   });
 
-  const jobs = new JobRunner({ runtime, recorder, approvals, jobs: repositories.jobs, ids, now });
+  const jobs = new JobRunner({
+    runtime,
+    recorder,
+    approvals,
+    permissions,
+    jobs: repositories.jobs,
+    ids,
+    now,
+    dispatchAgent: options.dispatchAgent,
+  });
 
   const approvalService = new ApprovalService({
     approvals,

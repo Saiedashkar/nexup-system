@@ -63,6 +63,13 @@ export const AGENT_EXECUTION_STATUSES = [
   "SUCCEEDED",
   "FAILED",
   "CANCELLED",
+  /**
+   * A real provider may report a state this neutral vocabulary does not know.
+   * Adding UNKNOWN (Phase 2B adapter seam) lets an adapter be HONEST about an
+   * unrecognized status instead of inventing SUCCEEDED/FAILED or mirroring a
+   * provider's private terminology. The deterministic adapter never emits it.
+   */
+  "UNKNOWN",
 ] as const;
 export type AgentExecutionStatus = (typeof AGENT_EXECUTION_STATUSES)[number];
 

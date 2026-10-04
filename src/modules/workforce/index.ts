@@ -111,6 +111,11 @@ export { InMemoryRuntimeRegistry } from "./runtimes/runtime-registry";
 export type { RuntimeRegistry } from "./runtimes/runtime-registry";
 export { DeterministicRuntimeAdapter, isTerminalExecutionStatus } from "./runtimes/deterministic-runtime-adapter";
 
+/* ── Phase 2B — agent-runtime dispatch seam + Hermes adapter ── */
+export * from "./runtimes/agent-runtime-dispatcher";
+export { toJobRunnerDispatcher } from "./runtimes/agent-job-dispatcher-binding";
+export * from "./runtimes/hermes";
+
 export * from "./missions/mission-contracts";
 export { InMemoryMissionRepository } from "./missions/mission-repository";
 export type { MissionRepository } from "./missions/mission-repository";

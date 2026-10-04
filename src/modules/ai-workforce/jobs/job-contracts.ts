@@ -75,6 +75,12 @@ export type Job = {
   runtimeId?: RuntimeId;
   capabilityId?: CapabilityId;
   missionId?: MissionId;
+  /**
+   * Phase 2B — the handle an agent runtime returned for this job (e.g. a
+   * Hermes execution id). Present only when the job was dispatched to an
+   * agent runtime; absent for local/tool jobs.
+   */
+  runtimeHandleId?: string;
 };
 
 export type JobRequest = {

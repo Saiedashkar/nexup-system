@@ -4,6 +4,8 @@ import type { ExecutionContext } from "../core/execution-context";
 import { fromContextSnapshot, toContextSnapshot, type ExecutionContextSnapshot } from "../core/context-snapshot";
 import type { RunRecorder } from "../audit/run-recorder";
 import type { ApprovalGate } from "../approvals/approval-gate";
+import type { PermissionPolicy } from "../policies/permission-policy";
+import { RUNTIME_DISPATCH_DEFINITION } from "../runtime/runtime-dispatch-guard";
 import type { RuntimeAdapter } from "../runtime/runtime-adapter";
 import type { Job, JobOutcome, JobRequest, JobStatus } from "./job-contracts";
 import type { JobRepository } from "./job-repository";
@@ -37,10 +39,40 @@ export type JobRunnerDeps = {
   runtime: RuntimeAdapter;
   recorder: RunRecorder;
   approvals: ApprovalGate;
+  /** Used to authorize a runtime dispatch BEFORE it reaches an agent runtime. */
+  permissions: PermissionPolicy;
   jobs: JobRepository;
   ids: IdFactory;
   now: Clock;
+  /**
+   * Phase 2B — optional dispatch seam for RUNTIME-BOUND jobs.
+   *
+   * When a job carries a `runtimeId` AND a dispatcher is configured, the runner
+   * hands the job to the agent-runtime path instead of the in-process tool
+   * path. Jobs without a `runtimeId` (every legacy job) are completely
+   * unaffected: the seam is never consulted. */
+  dispatchAgent?: AgentJobDispatcher;
 };
+
+/**
+ * Neutral execution status vocabulary for a dispatched agent job (mirrors the
+ * Phase 2A runtime states without importing them — the runner stays decoupled
+ * from any runtime module).
+ */
+export type AgentDispatchStatus = "ACCEPTED" | "RUNNING" | "WAITING" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "UNKNOWN";
+
+/** Result of handing a job to an agent runtime. */
+export type AgentDispatchResult = {
+  dispatched: boolean;
+  reason?: string;
+  status?: AgentDispatchStatus;
+  output?: unknown;
+  handleId?: string;
+  error?: { code: AiWorkforceErrorCode; message: string };
+};
+
+/** The seam itself: a function, so the runner never depends on a runtime module. */
+export type AgentJobDispatcher = (input: { job: Job; context: ExecutionContext }) => Promise<AgentDispatchResult>;
 
 /** Statuses that mean "this job got past whatever blocked it" — a stale error
  *  from a parked/failed attempt must not survive them. */
@@ -128,6 +160,13 @@ export class JobRunner {
     }
 
     const context = this.resolveContext(job, options);
+
+    /* ── 0. Runtime-bound jobs dispatch to an agent runtime ──
+       Guarded by an explicit runtime reference AND a configured dispatcher, so
+       every legacy/local job takes the original path below, unchanged. */
+    if (job.runtimeId && this.deps.dispatchAgent) {
+      return this.dispatchToRuntime(job, context);
+    }
 
     /* ── 1. Plan: resolve the capability and check the request ── */
     const preflight = await this.deps.runtime.preflight({ capability: job.capability, input: job.input, context });
@@ -285,6 +324,126 @@ export class JobRunner {
     if (job.status === "BLOCKED") return job;
     if (isTerminal(job.status)) return job;
     return this.maybeTransition(job, "BLOCKED", reason);
+  }
+
+  /* ═══════════════════════════════════════════════════
+     Agent-runtime dispatch (Phase 2B seam)
+     ═══════════════════════════════════════════════════ */
+
+  /**
+   * Hands a runtime-bound job to the agent runtime through the dispatcher.
+   *
+   * The runner OWNS the job's state machine here just as it does on the local
+   * path: it advances the job to RUNNING, applies the runtime's normalized
+   * outcome, and records the runtime handle. It never executes a tool. */
+  private async dispatchToRuntime(job: Job, context: ExecutionContext): Promise<JobOutcome> {
+    let current = job;
+    if (current.status === "CREATED") current = await this.maybeTransition(current, "PLANNED", "runtime-bound job accepted");
+
+    /* ── AUTHORIZATION BEFORE DISPATCH ──
+       Hermes one-shot auto-bypasses its own approvals, so NEXUP makes the
+       decision here, using the SAME policies as the local path. A dispatch is
+       a HIGH-risk external side effect: permission must be granted and the
+       approval gate satisfied before anything reaches a runtime. */
+    const permission = this.deps.permissions.evaluate(RUNTIME_DISPATCH_DEFINITION, context);
+    if (!permission.allowed) {
+      const code: AiWorkforceErrorCode =
+        permission.reason === "SCOPE_MISSING" ? "SCOPE_MISSING" : permission.reason === "SCOPE_DENIED" ? "SCOPE_DENIED" : "PERMISSION_DENIED";
+      const message = permission.detail ?? "Permission denied for runtime dispatch";
+      const blocked = await this.maybeTransition(current, "BLOCKED", `${code}: ${message}`);
+      const stored = await this.save({ ...blocked, error: { code, message } }, [blocked.status]);
+      return { job: stored, run: null, status: stored.status, error: { code, message } };
+    }
+
+    const approval = await this.deps.approvals.evaluate(RUNTIME_DISPATCH_DEFINITION, context);
+    if (!approval.satisfied) {
+      if (approval.reason === "CRITICAL_FORBIDDEN_AUTONOMOUS" || approval.reason === "APPROVAL_REJECTED") {
+        const code: AiWorkforceErrorCode =
+          approval.reason === "APPROVAL_REJECTED" ? "APPROVAL_REJECTED" : "CRITICAL_AUTONOMY_FORBIDDEN";
+        const message = `Runtime dispatch blocked (${approval.reason})`;
+        const blocked = await this.maybeTransition(current, "BLOCKED", `${code}: ${message}`);
+        const stored = await this.save({ ...blocked, error: { code, message } }, [blocked.status]);
+        return { job: stored, run: null, status: stored.status, error: { code, message } };
+      }
+
+      // Mirror the local path: park for approval, one PENDING request per job.
+      const waiting = await this.maybeTransition(current, "WAITING_APPROVAL", "runtime dispatch requires approval");
+      let parked = waiting;
+      const existing = await this.deps.approvals.find(current.approvalId);
+      if (existing && existing.status === "PENDING") {
+        parked = await this.save({ ...waiting, approvalId: existing.id }, [waiting.status]);
+      } else {
+        const request = await this.deps.approvals.request({
+          tool: RUNTIME_DISPATCH_DEFINITION,
+          context,
+          reason: "Runtime dispatch requires a human decision before execution",
+        });
+        parked = await this.save({ ...waiting, approvalId: request.id, approvalReason: request.requestReason }, [waiting.status]);
+        await this.deps.recorder.record({
+          type: "approval.requested",
+          jobId: current.id,
+          toolId: RUNTIME_DISPATCH_DEFINITION.id,
+          actorUserId: current.actorUserId,
+          businessId: current.businessId,
+          correlationId: current.correlationId,
+          payload: { approvalId: request.id, riskLevel: request.riskLevel },
+        });
+      }
+      const code: AiWorkforceErrorCode = "APPROVAL_REQUIRED";
+      const message = "Runtime dispatch requires approval";
+      parked = await this.save({ ...parked, error: { code, message } }, [parked.status]);
+      return { job: parked, run: null, status: parked.status, error: { code, message } };
+    }
+
+    if (current.status === "PLANNED" || current.status === "WAITING_HUMAN") {
+      current = await this.maybeTransition(current, "READY", "ready for agent runtime");
+    }
+    if (current.status === "WAITING_APPROVAL") {
+      current = await this.maybeTransition(current, "READY", "approval satisfied");
+    }
+    current = await this.maybeTransition(current, "RUNNING", "handing to agent runtime");
+
+    const result = await this.deps.dispatchAgent!({ job: current, context });
+
+    if (!result.dispatched) {
+      const code: AiWorkforceErrorCode = result.error?.code ?? "RUNTIME_UNAVAILABLE";
+      const message = result.error?.message ?? `Runtime-bound job was not dispatched (${result.reason ?? "unknown"})`;
+      const failed = await this.maybeTransition(current, "FAILED", `${code}: ${message}`);
+      const stored = await this.save({ ...failed, error: { code, message } }, [failed.status]);
+      return { job: stored, run: null, status: stored.status, error: { code, message } };
+    }
+
+    if (result.status === "WAITING") {
+      const waiting = await this.maybeTransition(current, "WAITING_HUMAN", "agent runtime is waiting");
+      const stored = await this.save({ ...waiting, runtimeHandleId: result.handleId }, [waiting.status]);
+      return { job: stored, run: null, status: stored.status };
+    }
+
+    if (result.status === "FAILED") {
+      const code: AiWorkforceErrorCode = result.error?.code ?? "RUNTIME_UNAVAILABLE";
+      const message = result.error?.message ?? "agent runtime reported a failed execution";
+      const failed = await this.maybeTransition(current, "FAILED", message);
+      const stored = await this.save({ ...failed, error: { code, message } }, [failed.status]);
+      return { job: stored, run: null, status: stored.status, error: { code, message } };
+    }
+
+    if (result.status === "CANCELLED") {
+      const cancelled = await this.maybeTransition(current, "CANCELLED", "agent runtime cancelled the execution");
+      const stored = await this.save({ ...cancelled, runtimeHandleId: result.handleId }, [cancelled.status]);
+      return { job: stored, run: null, status: stored.status };
+    }
+
+    // Async acceptance: the runtime owns the execution from here. An ASYNC
+    // runtime returns ACCEPTED/RUNNING/UNKNOWN and the job stays RUNNING —
+    // polling a long-running runtime is explicitly out of scope for Phase 2B.
+    if (result.status && result.status !== "SUCCEEDED") {
+      const stored = await this.save({ ...current, runtimeHandleId: result.handleId }, [current.status]);
+      return { job: stored, run: null, status: stored.status };
+    }
+
+    const finished = await this.maybeTransition(current, "COMPLETED", "agent runtime completed");
+    const stored = await this.save({ ...finished, runtimeHandleId: result.handleId }, [finished.status]);
+    return { job: stored, run: null, status: stored.status, output: result.output };
   }
 
   /* ═══════════════════════════════════════════════════

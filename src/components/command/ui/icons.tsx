@@ -420,6 +420,38 @@ export const IconPhone = (p: IconProps = {}) =>
     p,
   );
 
+/* ── EXEC (Phase UI-05) — the organization's central intelligence ─────────
+   EXEC is deliberately NOT a person and NOT a robot mascot. Its symbol is a
+   built object: a hexagonal field holding a bright nucleus, with four lines
+   reaching out to the organization. It is recognisable at 16px and stays the
+   same on every surface EXEC appears on.                                    */
+
+export const IconExec = (p: IconProps = {}) =>
+  svg(
+    <>
+      <path d="M12 2.7l7.8 4.5v9.6L12 21.3 4.2 16.8V7.2z" />
+      <circle cx="12" cy="12" r="3.1" />
+      <circle cx="12" cy="12" r="1.15" fill="currentColor" stroke="none" />
+      <path d="M12 5v3.8M12 15.2V19M5.6 9.1l3.3 1.9M15.1 12.9l3.3 1.9" />
+    </>
+    ,
+    p,
+  );
+
+export const IconRepeat = (p: IconProps = {}) =>
+  svg(
+    <>
+      <path d="M4.6 10.4a7.4 7.4 0 0 1 12.7-4.1l2 2" />
+      <path d="M19.4 13.6a7.4 7.4 0 0 1-12.7 4.1l-2-2" />
+      <path d="M19.3 4.6v3.7h-3.7M4.7 19.4v-3.7h3.7" />
+    </>
+    ,
+    p,
+  );
+
+export const IconActivity = (p: IconProps = {}) =>
+  svg(<path d="M3.4 12h3.9l2.2-6 3.4 12 2.4-7.2 1.6 3.2h3.7" />, p);
+
 /**
  * Deck icon keys → components. The deck stores a *key*, never a component, so
  * department configuration stays plain serialisable data.
@@ -439,4 +471,19 @@ export const DECK_ICONS = {
   more: IconMore,
   map: IconMap,
   stack: IconStack,
+} as const;
+
+/**
+ * EXEC area icon keys → components. Same rule as DECK_ICONS: configuration
+ * carries a string key so `exec-model.ts` stays plain serialisable data.
+ */
+export const EXEC_ICONS = {
+  exec: IconExec,
+  spark: IconSpark,
+  call: IconCallTeam,
+  warroom: IconWarRoom,
+  graph: IconGraph,
+  repeat: IconRepeat,
+  stack: IconStack,
+  activity: IconActivity,
 } as const;

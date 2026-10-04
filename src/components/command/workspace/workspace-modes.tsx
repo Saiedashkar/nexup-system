@@ -1,14 +1,18 @@
 "use client";
 
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useCommand } from "../state/command-store";
 import {
   teamByKind,
   type Capability,
   type CapabilityKind,
   type DepartmentWorkspaceConfig,
+  type FlowStage,
   type WorkspaceModeId,
 } from "../state/department-workspace";
-import { IconAgent, IconHuman } from "../ui/icons";
+import { actorHref, actorSlugForWorkspaceActor } from "../state/actor-workspace";
+import { IconAgent, IconChevronRight, IconHuman } from "../ui/icons";
 
 /**
  * DEPARTMENT WORKSPACE — the eight modes (Phase UI-03)
@@ -241,6 +245,16 @@ function WorkMode({ config }: ModeProps) {
 function TeamMode({ config, departmentName = "this department" }: ModeProps) {
   const { humans, agents } = teamByKind(config);
   const { notify } = useCommand();
+  const router = useRouter();
+
+  /* Phase UI-04: every Team item opens the actor's workspace route. The slug is
+     resolved through the actor configuration, so this list stays data-driven; a
+     member without an actor workspace still degrades to a notice. */
+  const openActor = (workspaceActorId: string, name: string) => {
+    const slug = actorSlugForWorkspaceActor(workspaceActorId);
+    if (slug) router.push(actorHref(slug));
+    else notify(`${name} — no actor workspace is configured yet.`);
+  };
 
   const groups: Array<{ id: string; label: string; note: string; members: typeof config.team }> = [
     { id: "humans", label: "Humans", note: "Hold authority and final calls.", members: humans },
@@ -268,9 +282,7 @@ function TeamMode({ config, departmentName = "this department" }: ModeProps) {
                 className="nc-dw-actor"
                 data-kind={actor.kind}
                 data-actor-id={actor.id}
-                onClick={() =>
-                  notify(`${actor.name} — the actor workspace (role, skills, memory, direct command) is a later phase.`)
-                }
+                onClick={() => openActor(actor.id, actor.name)}
               >
                 <span className="nc-dw-actor__top">
                   <span className="nc-dw-actor__avatar" aria-hidden="true">
@@ -303,8 +315,8 @@ function TeamMode({ config, departmentName = "this department" }: ModeProps) {
       ))}
 
       <p className="nc-dw-note">
-        Identities are role-based. Opening an actor — {departmentName} agents included — is the next phase; these
-        items are already wired to receive it.
+        Identities are role-based. Every item opens that actor&apos;s workspace — role, skills, tools, memory and a
+        direct command surface — where {departmentName} humans and agents are treated the same.
       </p>
     </div>
   );
@@ -315,96 +327,234 @@ function TeamMode({ config, departmentName = "this department" }: ModeProps) {
    Systems. Thin cyan lines, no 3D. Left as a visual foundation for the real
    internal department network.                                            */
 
-type MapNode = {
-  x: number;
-  y: number;
-  label: string;
-  sub: string;
-  tone: "human" | "ai" | "cap" | "system";
-};
+type MapTone = "human" | "ai" | "cap" | "system";
+/** The six relationship states shared with `.nc-net` (system.css). */
+type NetState = "idle" | "active" | "routing" | "handoff" | "attention" | "completed";
+type MapNode = { id: string; label: string; sub: string; tone: MapTone };
+type MapLayer = { id: string; label: string; note: string; tone: MapTone; nodes: MapNode[] };
 
-const MAP_W = 1060;
-const MAP_H = 340;
-const MAP_PAD = 44;
-const MAP_XS = [96, 320, 548, 772, 980];
-const MAP_NODE_W = 154;
+const MAP_W = 1120;
+const MAP_H = 380;
+const MAP_NODE_W = 176;
+const MAP_NODE_H = 48;
 
-function MapMode({ config }: ModeProps) {
+/** Relationship meaning by boundary, in the order work actually flows. */
+const MAP_BOUNDARY_STATES: NetState[] = ["active", "routing", "handoff", "completed"];
+
+function truncate(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+}
+
+/**
+ * The department's internal network, as the chain work moves along:
+ * Authority (human lead) → Direction (AI director) → Specialists →
+ * Capabilities (skills/tools/workflows) → Systems & missions.
+ */
+function buildMapLayers(config: DepartmentWorkspaceConfig): MapLayer[] {
   const { humans, agents } = teamByKind(config);
   const director = agents.find((actor) => /director/i.test(actor.role)) ?? agents[0];
   const specialists = agents.filter((actor) => actor.id !== director?.id);
-  const caps = config.capabilities.slice(0, 5);
-  const ends: Array<{ label: string; sub: string }> = [
-    ...config.systems.map((system) => ({ label: system.name, sub: system.kind })),
-    { label: "Missions", sub: "Active work" },
+
+  const layers: MapLayer[] = [
+    {
+      id: "authority",
+      label: "Authority",
+      note: "Holds the mandate and the final call.",
+      tone: "human",
+      nodes: humans.map((actor) => ({ id: `human:${actor.id}`, label: actor.name, sub: actor.role, tone: "human" })),
+    },
+    {
+      id: "direction",
+      label: "Direction",
+      note: "Sets intent and routes the work.",
+      tone: "ai",
+      nodes: director
+        ? [{ id: `ai:${director.id}`, label: director.name, sub: director.role, tone: "ai" }]
+        : [],
+    },
+    {
+      id: "specialists",
+      label: "Specialists",
+      note: "Carry the throughput.",
+      tone: "ai",
+      nodes: specialists.map((actor) => ({ id: `ai:${actor.id}`, label: actor.name, sub: actor.role, tone: "ai" })),
+    },
+    {
+      id: "capabilities",
+      label: "Capabilities",
+      note: "Skills, tools and workflows they draw on.",
+      tone: "cap",
+      nodes: config.capabilities.slice(0, 5).map((capability) => ({
+        id: `cap:${capability.id}`,
+        label: capability.name,
+        sub: capability.kind,
+        tone: "cap",
+      })),
+    },
+    {
+      id: "systems",
+      label: "Systems & work",
+      note: "Where the output lands.",
+      tone: "system",
+      nodes: [
+        ...config.systems.map((system) => ({ id: `sys:${system.id}`, label: system.name, sub: system.kind, tone: "system" as const })),
+        { id: "sys:missions", label: "Missions", sub: "Active work", tone: "system" as const },
+      ],
+    },
   ];
 
-  const columns: MapNode[][] = [
-    humans.map((actor) => ({ x: 0, y: 0, label: actor.name, sub: actor.role, tone: "human" })),
-    director ? [{ x: 0, y: 0, label: director.name, sub: director.role, tone: "ai" }] : [],
-    specialists.map((actor) => ({ x: 0, y: 0, label: actor.name, sub: actor.role, tone: "ai" })),
-    caps.map((capability) => ({ x: 0, y: 0, label: capability.name, sub: capability.kind, tone: "cap" })),
-    ends.map((end) => ({ x: 0, y: 0, label: end.label, sub: end.sub, tone: "system" })),
-  ];
+  return layers.filter((layer) => layer.nodes.length > 0);
+}
 
-  /* Lay out each column, then wire every node to exactly one node in the next
-     column (index modulo). A branched tree, not a mesh — that is what keeps the
-     wiring clean and readable instead of noisy. */
-  columns.forEach((nodes, colIndex) => {
-    const x = MAP_XS[colIndex];
-    const usable = MAP_H - MAP_PAD * 2;
-    nodes.forEach((node, i) => {
-      node.x = x;
-      node.y = MAP_PAD + (usable * (i + 0.5)) / Math.max(nodes.length, 1);
+function MapMode({ config }: ModeProps) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const layers = useMemo(() => buildMapLayers(config), [config]);
+
+  /* Node coordinates are derived, never hand-placed, so adding a member or a
+     capability stays a data change. */
+  const layout = useMemo(() => {
+    const xs = layers.map((_, index) => 70 + ((index + 0.5) * (MAP_W - 140)) / layers.length);
+    const coords = new Map<string, { x: number; y: number }>();
+    const pad = 46;
+    layers.forEach((layer, column) => {
+      const usable = MAP_H - pad * 2;
+      layer.nodes.forEach((node, index) => {
+        coords.set(node.id, {
+          x: xs[column],
+          y: pad + (usable * (index + 0.5)) / Math.max(layer.nodes.length, 1),
+        });
+      });
     });
-  });
 
-  const edges: Array<{ from: MapNode; to: MapNode }> = [];
-  for (let c = 0; c < columns.length - 1; c += 1) {
-    const from = columns[c];
-    const to = columns[c + 1];
-    if (to.length === 0) continue;
-    from.forEach((node, i) => edges.push({ from: node, to: to[i % to.length] }));
-  }
+    /* Each node wires to exactly one node in the next layer (index modulo): a
+       branched chain, not a mesh, which is what keeps the wiring readable. */
+    const edges: Array<{ id: string; from: string; to: string; state: NetState }> = [];
+    for (let c = 0; c < layers.length - 1; c += 1) {
+      const from = layers[c].nodes;
+      const to = layers[c + 1].nodes;
+      if (to.length === 0) continue;
+      from.forEach((node, index) => {
+        const target = to[index % to.length];
+        edges.push({
+          id: `${node.id}->${target.id}`,
+          from: node.id,
+          to: target.id,
+          state: MAP_BOUNDARY_STATES[Math.min(c, MAP_BOUNDARY_STATES.length - 1)],
+        });
+      });
+    }
+
+    return { xs, coords, edges };
+  }, [layers]);
+
+  /* Selecting a node dims everything it does not touch, so one click answers
+     "what is this connected to?". */
+  const connected = useMemo(() => {
+    if (!selected) return null;
+    const set = new Set<string>([selected]);
+    layout.edges.forEach((edge) => {
+      if (edge.from === selected) set.add(edge.to);
+      if (edge.to === selected) set.add(edge.from);
+    });
+    return set;
+  }, [layout.edges, selected]);
+
+  const path = (from: string, to: string) => {
+    const a = layout.coords.get(from);
+    const b = layout.coords.get(to);
+    if (!a || !b) return "";
+    const mx = (a.x + b.x) / 2;
+    return `M ${a.x + MAP_NODE_W / 2} ${a.y} C ${mx} ${a.y}, ${mx} ${b.y}, ${b.x - MAP_NODE_W / 2} ${b.y}`;
+  };
+
+  const toggle = (id: string) => setSelected((current) => (current === id ? null : id));
 
   return (
-    <div className="nc-dw-map">
-      <svg
-        className="nc-dw-map__svg"
-        viewBox={`0 0 ${MAP_W} ${MAP_H}`}
-        role="img"
-        aria-label={`Internal network for ${config.departmentId}`}
-      >
-        <g className="nc-dw-map__edges">
-          {edges.map((edge, i) => (
+    <div className="nc-dw-map nc-glass" data-selected={selected ? "true" : "false"}>
+      <div className="nc-dw-map__canvas">
+        <svg
+          className="nc-net nc-dw-map__net"
+          viewBox={`0 0 ${MAP_W} ${MAP_H}`}
+          preserveAspectRatio="xMidYMid meet"
+          aria-hidden="true"
+        >
+          {layout.edges.map((edge) => (
             <path
-              key={i}
-              d={`M ${edge.from.x + MAP_NODE_W / 2} ${edge.from.y} L ${edge.to.x - MAP_NODE_W / 2} ${edge.to.y}`}
+              key={edge.id}
+              className="nc-net__line"
+              data-state={edge.state}
+              data-dim={connected && !(connected.has(edge.from) && connected.has(edge.to)) ? "true" : undefined}
+              d={path(edge.from, edge.to)}
             />
           ))}
-        </g>
+          {layout.edges
+            .filter((edge) => edge.state === "active" && (!connected || (connected.has(edge.from) && connected.has(edge.to))))
+            .map((edge) => (
+              <path key={`flow-${edge.id}`} className="nc-net__flow" d={path(edge.from, edge.to)} />
+            ))}
+        </svg>
 
-        {columns.map((nodes, colIndex) =>
-          nodes.map((node) => (
-            <g key={`${colIndex}-${node.label}`} className="nc-dw-map__node" data-tone={node.tone}>
-              <rect
-                x={node.x - MAP_NODE_W / 2}
-                y={node.y - 21}
-                width={MAP_NODE_W}
-                height={42}
-                rx={11}
-              />
-              <circle cx={node.x - MAP_NODE_W / 2 + 15} cy={node.y} r={3.4} className="nc-dw-map__dot" />
-              <text x={node.x - MAP_NODE_W / 2 + 28} y={node.y - 3} className="nc-dw-map__label">
-                {node.label.length > 19 ? `${node.label.slice(0, 18)}…` : node.label}
-              </text>
-              <text x={node.x - MAP_NODE_W / 2 + 28} y={node.y + 11} className="nc-dw-map__sub">
-                {node.sub.length > 24 ? `${node.sub.slice(0, 23)}…` : node.sub}
-              </text>
-            </g>
-          )),
-        )}
-      </svg>
+        <svg
+          className="nc-dw-map__nodes"
+          viewBox={`0 0 ${MAP_W} ${MAP_H}`}
+          preserveAspectRatio="xMidYMid meet"
+          role="group"
+          aria-label={`Internal network for ${config.departmentId}`}
+        >
+          {layers.map((layer) =>
+            layer.nodes.map((node) => {
+              const at = layout.coords.get(node.id);
+              if (!at) return null;
+              const active = selected === node.id;
+              const dim = connected ? !connected.has(node.id) : false;
+              return (
+                <g
+                  key={node.id}
+                  className="nc-dw-map__node"
+                  data-tone={node.tone}
+                  data-active={active ? "true" : undefined}
+                  data-dim={dim ? "true" : undefined}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${node.label}, ${node.sub}`}
+                  aria-pressed={active}
+                  onClick={() => toggle(node.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      toggle(node.id);
+                    }
+                  }}
+                >
+                  <rect
+                    className="nc-dw-map__plate"
+                    x={at.x - MAP_NODE_W / 2}
+                    y={at.y - MAP_NODE_H / 2}
+                    width={MAP_NODE_W}
+                    height={MAP_NODE_H}
+                    rx={12}
+                  />
+                  <rect
+                    className="nc-dw-map__bar"
+                    x={at.x - MAP_NODE_W / 2}
+                    y={at.y - MAP_NODE_H / 2}
+                    width={3}
+                    height={MAP_NODE_H}
+                    rx={1.5}
+                  />
+                  <circle className="nc-dw-map__dot" cx={at.x - MAP_NODE_W / 2 + 17} cy={at.y} r={3.6} />
+                  <text className="nc-dw-map__label" x={at.x - MAP_NODE_W / 2 + 30} y={at.y - 3}>
+                    {truncate(node.label, 20)}
+                  </text>
+                  <text className="nc-dw-map__sub" x={at.x - MAP_NODE_W / 2 + 30} y={at.y + 11}>
+                    {truncate(node.sub, 24)}
+                  </text>
+                </g>
+              );
+            }),
+          )}
+        </svg>
+      </div>
 
       <div className="nc-dw-map__legend">
         <span data-tone="human">Human</span>
@@ -412,8 +562,40 @@ function MapMode({ config }: ModeProps) {
         <span data-tone="cap">Capability</span>
         <span data-tone="system">System / work</span>
       </div>
+
+      {/* Mobile recomposition: the same network as a vertical chain, so a phone
+          reads the layers top-to-bottom instead of a shrunk diagram. */}
+      <div className="nc-dw-map__stack">
+        {layers.map((layer, index) => (
+          <div key={layer.id} className="nc-dw-map__layer" data-tone={layer.tone}>
+            {index > 0 ? (
+              <svg className="nc-net nc-dw-map__spine" viewBox="0 0 8 26" preserveAspectRatio="none" aria-hidden="true">
+                <path
+                  className="nc-net__line"
+                  data-state={MAP_BOUNDARY_STATES[Math.min(index - 1, MAP_BOUNDARY_STATES.length - 1)]}
+                  d="M4 0 V26"
+                />
+              </svg>
+            ) : null}
+            <div className="nc-dw-map__layer-head">
+              <span className="nc-eyebrow">{layer.label}</span>
+              <span className="nc-dw-map__layer-note">{layer.note}</span>
+            </div>
+            <div className="nc-dw-map__layer-nodes">
+              {layer.nodes.map((node) => (
+                <span key={node.id} className="nc-dw-map__chip" data-tone={node.tone}>
+                  <i aria-hidden="true" />
+                  {node.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
       <p className="nc-dw-note">
-        A visual foundation for the department&apos;s internal network. Relationships are illustrative in this phase.
+        A visual foundation for the department&apos;s internal network. Select a node to trace what it touches; every line
+        carries its relationship state. Relationships are illustrative in this phase.
       </p>
     </div>
   );
@@ -421,23 +603,91 @@ function MapMode({ config }: ModeProps) {
 
 /* ── Flow ──────────────────────────────────────────────────────────────── */
 
+/** How work leaves one stage and arrives at the next. */
+function flowEdgeState(previous: FlowStage["state"], next: FlowStage["state"]): NetState {
+  if (previous === "done" && next === "done") return "completed";
+  if (previous === "done" && next === "active") return "active";
+  if (previous === "active" && next === "active") return "handoff";
+  if (previous === "active" && next === "next") return "routing";
+  if (previous === "done" && next === "next") return "routing";
+  return "idle";
+}
+
+const FLOW_STATUS: Record<FlowStage["state"], string> = {
+  done: "Done",
+  active: "In progress",
+  next: "Next",
+};
+
 function FlowMode({ config }: ModeProps) {
+  const activeLabels = config.flow.filter((stage) => stage.state === "active").map((stage) => stage.label);
+  const doneCount = config.flow.filter((stage) => stage.state === "done").length;
+  const links = config.flow.slice(1).map((stage, index) => flowEdgeState(config.flow[index].state, stage.state));
+  const handoffs = links.filter((state) => state === "handoff").length;
+
   return (
     <div className="nc-dw-flow">
-      <ol className="nc-dw-flow__track">
-        {config.flow.map((stage) => (
-          <li key={stage.id} className="nc-dw-stage" data-state={stage.state}>
-            <span className="nc-dw-stage__head">
-              <span className="nc-dw-stage__dot" aria-hidden="true" />
-              <span className="nc-dw-stage__label">{stage.label}</span>
+      <div className="nc-dw-flow__bar nc-glass nc-glass--lit">
+        <span className="nc-dw-flow__dir">
+          <IconChevronRight size={14} />
+          {config.purpose}
+        </span>
+        <span className="nc-dw-flow__meta">
+          <span className="nc-dw-flow__stat" data-tone="completed">
+            {doneCount} completed
+          </span>
+          <span className="nc-dw-flow__stat" data-tone="active">
+            {activeLabels.length > 0 ? `In progress: ${activeLabels.join(" · ")}` : "Nothing running"}
+          </span>
+          {config.attention.length > 0 ? (
+            <span className="nc-dw-flow__stat" data-tone="attention">
+              {config.attention.length} blocker{config.attention.length === 1 ? "" : "s"}
             </span>
-            <span className="nc-dw-stage__note">{stage.note}</span>
-          </li>
-        ))}
+          ) : null}
+          <span className="nc-dw-flow__stat" data-tone="handoff">
+            {handoffs} handoff{handoffs === 1 ? "" : "s"}
+          </span>
+        </span>
+      </div>
+
+      <ol className="nc-dw-flow__track">
+        {config.flow.map((stage, index) => {
+          const linkState = index > 0 ? flowEdgeState(config.flow[index - 1].state, stage.state) : null;
+          const isActive = stage.state === "active";
+          return (
+            <li
+              key={stage.id}
+              className="nc-dw-stage"
+              data-state={stage.state}
+              data-active={isActive ? "true" : undefined}
+            >
+              {linkState ? (
+                <svg className="nc-net nc-dw-flow__link" viewBox="0 0 34 8" preserveAspectRatio="none" aria-hidden="true">
+                  <path className="nc-net__line" data-state={linkState} d="M0 4 H34" />
+                  {linkState === "active" ? <path className="nc-net__flow" d="M0 4 H34" /> : null}
+                </svg>
+              ) : null}
+
+              <span className="nc-dw-stage__top">
+                <span className="nc-dw-stage__num" aria-hidden="true">
+                  {index + 1}
+                </span>
+                <span className="nc-dw-stage__label">{stage.label}</span>
+                <span className="nc-dw-stage__status" data-state={stage.state}>
+                  <i aria-hidden="true" />
+                  {FLOW_STATUS[stage.state]}
+                </span>
+              </span>
+              <span className="nc-dw-stage__note">{stage.note}</span>
+            </li>
+          );
+        })}
       </ol>
+
       <p className="nc-dw-note">
-        The production pipeline this department will run on. Stages are illustrative; no workflow executes in this
-        phase.
+        The production pipeline this department will run on. Direction reads left to right and each line&apos;s state
+        shows where the work is — the active step carries the signal a live run would animate. No workflow executes in
+        this phase.
       </p>
     </div>
   );

@@ -229,10 +229,9 @@
   flex-direction: column;
   gap: 9px;
   padding: 14px 16px;
-  border: 1px solid var(--nc-border);
+  border: 1px solid var(--nc-hairline);
   border-radius: var(--nc-r-3);
-  background: linear-gradient(180deg, rgba(23, 26, 32, 0.6), rgba(13, 15, 18, 0.5));
-  backdrop-filter: blur(10px);
+  background: var(--nc-glass-1);
 }
 .nc-dw-card--attention { border-color: rgba(240, 180, 41, 0.28); }
 .nc-dw-card--attention[data-empty="true"] { border-color: var(--nc-border); }
@@ -325,9 +324,9 @@
   flex-direction: column;
   gap: 5px;
   padding: 10px 11px;
-  border: 1px solid var(--nc-border);
+  border: 1px solid var(--nc-hairline);
   border-radius: var(--nc-r-2);
-  background: rgba(255, 255, 255, 0.016);
+  background: var(--nc-glass-1);
 }
 .nc-dw-row__top { display: flex; align-items: center; gap: 8px; }
 .nc-dw-row__title { font-size: 12.5px; font-weight: 600; }
@@ -380,7 +379,7 @@
   border: 1px solid var(--nc-border);
   border-left: 2px solid var(--nc-border-2);
   border-radius: var(--nc-r-3);
-  background: linear-gradient(180deg, rgba(23, 26, 32, 0.66), rgba(13, 15, 18, 0.5));
+  background: var(--nc-glass-plate);
   transition:
     border-color var(--nc-dur-quick) var(--nc-ease-standard),
     background-color var(--nc-dur-quick) var(--nc-ease-standard),
@@ -442,25 +441,57 @@
 .nc-dw-map {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   padding: 16px;
-  border: 1px solid var(--nc-border);
-  border-radius: var(--nc-r-3);
-  background: linear-gradient(180deg, rgba(18, 21, 26, 0.7), rgba(11, 12, 15, 0.6));
 }
-.nc-dw-map__svg { width: 100%; height: auto; display: block; }
-.nc-dw-map__edges path { fill: none; stroke: rgba(125, 211, 252, 0.22); stroke-width: 1; }
-.nc-dw-map__node rect { fill: rgba(255, 255, 255, 0.02); stroke: var(--nc-border-2); stroke-width: 1; }
-.nc-dw-map__node[data-tone="human"] rect { stroke: rgba(243, 240, 233, 0.28); }
-.nc-dw-map__node[data-tone="ai"] rect { stroke: rgba(182, 255, 0, 0.3); }
-.nc-dw-map__node[data-tone="cap"] rect { stroke: rgba(125, 211, 252, 0.26); }
+
+/* Two stacked SVG layers — relationships under, nodes over — share ONE viewBox,
+   so `preserveAspectRatio` keeps the wiring perfectly aligned with the nodes. */
+.nc-dw-map__canvas { position: relative; width: 100%; aspect-ratio: 1120 / 380; }
+.nc-dw-map__net,
+.nc-dw-map__nodes { position: absolute; inset: 0; width: 100%; height: 100%; }
+.nc-dw-map__nodes { overflow: visible; }
+
+/* Lines carry their relationship STATE (system.css). Selecting a node fades the
+   relationships it is not part of. */
+.nc-dw-map .nc-net__line[data-dim="true"] { opacity: 0.12; }
+
+.nc-dw-map__node {
+  cursor: pointer;
+  transition: opacity var(--nc-dur-quick) var(--nc-ease-standard);
+}
+.nc-dw-map__node:focus-visible { outline: none; }
+.nc-dw-map__plate {
+  fill: rgba(255, 255, 255, 0.025);
+  stroke: var(--nc-hairline-2);
+  stroke-width: 1;
+  transition:
+    fill var(--nc-dur-quick) var(--nc-ease-standard),
+    stroke var(--nc-dur-quick) var(--nc-ease-standard);
+}
+.nc-dw-map__node[data-tone="human"] .nc-dw-map__plate { stroke: rgba(243, 240, 233, 0.3); }
+.nc-dw-map__node[data-tone="ai"] .nc-dw-map__plate { stroke: rgba(182, 255, 0, 0.3); }
+.nc-dw-map__node[data-tone="cap"] .nc-dw-map__plate { stroke: rgba(167, 139, 250, 0.32); }
+.nc-dw-map__node[data-tone="system"] .nc-dw-map__plate { stroke: color-mix(in srgb, var(--nc-dw-accent) 34%, transparent); }
+
+.nc-dw-map__bar { fill: var(--nc-text-3); }
+.nc-dw-map__node[data-tone="human"] .nc-dw-map__bar { fill: var(--nc-human); }
+.nc-dw-map__node[data-tone="ai"] .nc-dw-map__bar { fill: var(--nc-lime); }
+.nc-dw-map__node[data-tone="cap"] .nc-dw-map__bar { fill: var(--nc-tone-capability); }
+.nc-dw-map__node[data-tone="system"] .nc-dw-map__bar { fill: var(--nc-dw-accent); }
+
 .nc-dw-map__dot { fill: var(--nc-text-3); }
 .nc-dw-map__node[data-tone="human"] .nc-dw-map__dot { fill: var(--nc-human); }
 .nc-dw-map__node[data-tone="ai"] .nc-dw-map__dot { fill: var(--nc-lime); }
-.nc-dw-map__node[data-tone="cap"] .nc-dw-map__dot { fill: var(--nc-thinking); }
+.nc-dw-map__node[data-tone="cap"] .nc-dw-map__dot { fill: var(--nc-tone-capability); }
 .nc-dw-map__node[data-tone="system"] .nc-dw-map__dot { fill: var(--nc-dw-accent); }
-.nc-dw-map__label { fill: var(--nc-text); font-size: 11px; font-weight: 600; }
-.nc-dw-map__sub { fill: var(--nc-text-4); font-size: 9px; }
+
+.nc-dw-map__node:hover .nc-dw-map__plate { fill: rgba(255, 255, 255, 0.055); }
+.nc-dw-map__node[data-active="true"] .nc-dw-map__plate { fill: rgba(255, 255, 255, 0.07); stroke: var(--nc-lime); }
+.nc-dw-map__node[data-dim="true"] { opacity: 0.4; }
+
+.nc-dw-map__label { fill: var(--nc-text); font-size: 11.5px; font-weight: 650; }
+.nc-dw-map__sub { fill: var(--nc-text-4); font-size: 9.5px; }
 
 .nc-dw-map__legend {
   display: flex;
@@ -475,33 +506,101 @@
 .nc-dw-map__legend span::before { content: ""; width: 8px; height: 8px; border-radius: 3px; background: var(--nc-text-3); }
 .nc-dw-map__legend [data-tone="human"]::before { background: var(--nc-human); }
 .nc-dw-map__legend [data-tone="ai"]::before { background: var(--nc-lime); }
-.nc-dw-map__legend [data-tone="cap"]::before { background: var(--nc-thinking); }
+.nc-dw-map__legend [data-tone="cap"]::before { background: var(--nc-tone-capability); }
 .nc-dw-map__legend [data-tone="system"]::before { background: var(--nc-dw-accent); }
+
+/* The mobile recomposition renders only at ≤760px (see the responsive block). */
+.nc-dw-map__stack { display: none; }
 
 /* ── Flow ──────────────────────────────────────────────────────────────── */
 
 .nc-dw-flow { display: flex; flex-direction: column; gap: 12px; }
-.nc-dw-flow__track { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* The summary bar states direction and the current operating position — it is
+   what makes the pipeline read as a run, not a set of columns. */
+.nc-dw-flow__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 12px 15px; }
+.nc-dw-flow__dir { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 650; color: var(--nc-text); }
+.nc-dw-flow__dir svg { flex: none; color: var(--nc-dw-accent); }
+.nc-dw-flow__meta { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-left: auto; }
+.nc-dw-flow__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nc-text-3);
+}
+.nc-dw-flow__stat::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--nc-text-4); }
+.nc-dw-flow__stat[data-tone="completed"]::before { background: var(--nc-completed); }
+.nc-dw-flow__stat[data-tone="active"]::before { background: var(--nc-lime); box-shadow: 0 0 8px var(--nc-lime-glow); }
+.nc-dw-flow__stat[data-tone="attention"]::before { background: var(--nc-approval); }
+.nc-dw-flow__stat[data-tone="handoff"]::before { background: var(--nc-handoff); }
+
+/* One row, one direction. Stages scroll rather than wrap, so the pipeline never
+   reads as a grid of columns. */
+.nc-dw-flow__track {
+  display: flex;
+  gap: 18px;
+  margin: 0;
+  padding: 6px 6px 14px;
+  list-style: none;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .nc-dw-stage {
   position: relative;
-  flex: 1 1 128px;
-  min-width: 128px;
+  flex: 1 0 156px;
+  min-width: 156px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 12px 14px;
-  border: 1px solid var(--nc-border);
-  border-radius: var(--nc-r-2);
-  background: rgba(255, 255, 255, 0.016);
+  gap: 7px;
+  padding: 13px 14px;
+  border: 1px solid var(--nc-hairline-2);
+  border-radius: var(--nc-r-3);
+  background: var(--nc-glass-1);
+  transition:
+    border-color var(--nc-dur-quick) var(--nc-ease-standard),
+    background var(--nc-dur-quick) var(--nc-ease-standard);
 }
-.nc-dw-stage__head { display: flex; align-items: center; gap: 7px; }
-.nc-dw-stage__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--nc-text-4); }
+/* The connector lives in the stage, so the DOM stays a clean list. */
+.nc-dw-flow__link { position: absolute; left: -18px; top: 25px; width: 18px; height: 8px; transform: translateY(-50%); }
+.nc-dw-stage__top { display: flex; align-items: center; gap: 8px; }
+.nc-dw-stage__num {
+  flex: none;
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--nc-hairline-2);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--nc-text-3);
+}
 .nc-dw-stage__label { font-size: 12.5px; font-weight: 650; }
-.nc-dw-stage__note { font-size: 10.5px; line-height: 1.45; color: var(--nc-text-4); }
-.nc-dw-stage[data-state="done"] { border-color: rgba(125, 211, 252, 0.22); }
-.nc-dw-stage[data-state="done"] .nc-dw-stage__dot { background: var(--nc-thinking); }
-.nc-dw-stage[data-state="active"] { border-color: var(--nc-lime-line); background: var(--nc-lime-soft); }
-.nc-dw-stage[data-state="active"] .nc-dw-stage__dot { background: var(--nc-lime); box-shadow: 0 0 8px var(--nc-lime-glow); }
+.nc-dw-stage__status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+.nc-dw-stage__status i { width: 6px; height: 6px; border-radius: 50%; background: var(--nc-text-4); }
+.nc-dw-stage__status[data-state="done"] { color: var(--nc-completed); }
+.nc-dw-stage__status[data-state="done"] i { background: var(--nc-completed); }
+.nc-dw-stage__status[data-state="active"] { color: var(--nc-lime); }
+.nc-dw-stage__status[data-state="active"] i { background: var(--nc-lime); box-shadow: 0 0 8px var(--nc-lime-glow); }
+.nc-dw-stage__note { font-size: 10.5px; line-height: 1.5; color: var(--nc-text-4); }
+.nc-dw-stage[data-state="done"] { border-color: rgba(74, 222, 128, 0.24); }
+.nc-dw-stage[data-state="active"] {
+  border-color: var(--nc-lime-line);
+  background: linear-gradient(180deg, rgba(182, 255, 0, 0.09), rgba(255, 255, 255, 0.022) 62%);
+  box-shadow: var(--nc-shadow-2), var(--nc-inner-light);
+}
 
 /* ── Systems ───────────────────────────────────────────────────────────── */
 
@@ -512,9 +611,9 @@
   align-items: center;
   gap: 13px;
   padding: 12px 14px;
-  border: 1px solid var(--nc-border);
+  border: 1px solid var(--nc-hairline);
   border-radius: var(--nc-r-3);
-  background: linear-gradient(180deg, rgba(23, 26, 32, 0.62), rgba(13, 15, 18, 0.5));
+  background: var(--nc-glass-1);
 }
 .nc-dw-sys__mark {
   flex: none;
@@ -589,4 +688,73 @@
   .nc-dw__facts { grid-template-columns: minmax(0, 1fr); }
   .nc-dw-sys { flex-wrap: wrap; }
   .nc-dw-sys__status { margin-left: 0; }
+}
+
+/* ── Mobile recomposition (~390px) ───────────────────────────────────────
+   Below 760px the workspace is RECOMPOSED, not shrunk: the map becomes a
+   vertical chain, the flow a vertical run, the mode tabs a single scrollable
+   line, and the facts pair up so identity and current mission stay above the
+   fold. The shell reserves bottom space for the fixed mobile bar and EXEC tab
+   (system.css), so nothing is trapped behind the navigation.               */
+
+@media (max-width: 760px) {
+  .nc-dw { gap: 14px; }
+
+  /* Tighter identity block so status and facts clear the fold. */
+  .nc-dw__head { padding: 14px 14px; }
+  .nc-dw__name { font-size: 19px; }
+  .nc-dw__purpose { margin-top: 8px; font-size: 14px; }
+  .nc-dw__facts { margin-top: 10px; gap: 8px; }
+  .nc-dw__fact { padding: 7px 10px; }
+  .nc-dw__fact dd { font-size: 12.5px; }
+
+  .nc-dw__modes {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin: 0 -12px;
+    padding: 2px 12px 6px;
+    scrollbar-width: none;
+  }
+  .nc-dw__modes::-webkit-scrollbar { display: none; }
+  .nc-dw__mode { flex: none; height: 36px; }
+
+  .nc-dw__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nc-dw__fact { padding: 8px 10px; }
+
+  .nc-dw__exec { border-radius: var(--nc-r-3); }
+  .nc-dw__exec-lead { border-right: none; padding-right: 0; }
+  .nc-dw__exec-btn { height: 34px; }
+
+  /* Map — the wide diagram stands down and the vertical chain takes over. */
+  .nc-dw-map { padding: 13px; }
+  .nc-dw-map__canvas { display: none; }
+  .nc-dw-map__stack { display: flex; flex-direction: column; }
+  .nc-dw-map__layer { display: flex; flex-direction: column; gap: 8px; }
+  .nc-dw-map__spine { width: 100%; height: 24px; }
+  .nc-dw-map__layer-head { display: flex; flex-direction: column; gap: 2px; }
+  .nc-dw-map__layer-note { font-size: 10.5px; color: var(--nc-text-4); }
+  .nc-dw-map__layer-nodes { display: flex; flex-wrap: wrap; gap: 7px; }
+  .nc-dw-map__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 11px;
+    border-radius: var(--nc-r-pill);
+    border: 1px solid var(--nc-hairline-2);
+    background: var(--nc-glass-1);
+    font-size: 12px;
+    color: var(--nc-text-2);
+  }
+  .nc-dw-map__chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--nc-text-3); }
+  .nc-dw-map__chip[data-tone="human"] i { background: var(--nc-human); }
+  .nc-dw-map__chip[data-tone="ai"] i { background: var(--nc-lime); }
+  .nc-dw-map__chip[data-tone="cap"] i { background: var(--nc-tone-capability); }
+  .nc-dw-map__chip[data-tone="system"] i { background: var(--nc-dw-accent); }
+
+  /* Flow — the run stacks and each connector turns with it. */
+  .nc-dw-flow__bar { padding: 12px 13px; }
+  .nc-dw-flow__meta { margin-left: 0; }
+  .nc-dw-flow__track { flex-direction: column; overflow: visible; gap: 26px; padding: 6px 2px 12px; }
+  .nc-dw-stage { flex: 1 1 auto; min-width: 0; }
+  .nc-dw-flow__link { left: 50%; top: -20px; width: 20px; height: 8px; transform: translateX(-50%) rotate(90deg); }
 }

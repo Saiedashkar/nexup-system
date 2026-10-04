@@ -1,0 +1,484 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEXUP COMMAND — SYSTEM LAYER (Phase UI-05 · product-quality pass)
+   ───────────────────────────────────────────────────────────────────────────
+   Imported LAST by src/app/command/layout.tsx, after command.css, spatial.css,
+   workspace.css and actor.css. Like every layer before it, every rule is scoped
+   under `.nc-root`, it redefines NO existing token, and it touches no legacy
+   NEXUP surface.
+
+   This layer gives the whole environment ONE shared language so Command, the
+   Department Workspaces, the Actor Workspaces and EXEC read as a single
+   product:
+
+     1. GLASS HIERARCHY — four explicit material levels, so a surface can never
+        be ambiguous about how important it is:
+            L0 base        the plate everything sits on (solid, no blur)
+            L1 container   a glass region that groups content
+            L2 data        the readable surface inside a container
+            L3 signal      the active / attention surface
+        Glass is deliberately restrained: low opacity, a controlled blur, a
+        hairline border and one inner highlight. It is NEVER applied everywhere.
+
+     2. CONNECTION NETWORK — `.nc-net*`, the product language for every
+        relationship line (EXEC→department, department→actor, actor→tool,
+        mission→actor, handoff, …). Six states, one lightweight animated
+        "traveler" for the active case, and a reduced-motion fallback.
+
+     3. MOBILE SHELL — the ~390px adaptations and the bottom navigation, so
+        mobile is a deliberate composition rather than a squeezed desktop.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1 · GLASS HIERARCHY
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root {
+  /* Materials — additive tokens only. Nothing above this layer is redefined. */
+  --nc-glass-1: rgba(255, 255, 255, 0.024);   /* container fill          */
+  --nc-glass-2: rgba(255, 255, 255, 0.04);    /* data surface fill       */
+  --nc-glass-3: rgba(255, 255, 255, 0.062);   /* raised / active fill    */
+
+  --nc-glass-plate: linear-gradient(180deg, rgba(24, 28, 35, 0.58), rgba(10, 12, 15, 0.46));
+  --nc-glass-plate-strong: linear-gradient(180deg, rgba(27, 31, 39, 0.72), rgba(11, 13, 17, 0.62));
+
+  --nc-hairline: rgba(255, 255, 255, 0.075);
+  --nc-hairline-2: rgba(255, 255, 255, 0.12);
+  --nc-inner-light: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  --nc-blur-1: 10px;
+  --nc-blur-2: 16px;
+  --nc-blur-3: 24px;
+
+  --nc-tone-command: var(--nc-lime);
+  --nc-tone-network: #7dd3fc;
+  --nc-tone-capability: #a78bfa;
+}
+
+/* L1 · container — a glass region that groups content. */
+.nc-glass {
+  position: relative;
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-3);
+  background: var(--nc-glass-plate);
+  backdrop-filter: blur(var(--nc-blur-2));
+  box-shadow: var(--nc-shadow-2), var(--nc-inner-light);
+}
+
+/* L2 · data — the readable surface inside a container. Solid enough to read,
+   never another layer of blur (that is how glass turns into mud). */
+.nc-glass-data {
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-2);
+  background: var(--nc-glass-2);
+  box-shadow: var(--nc-inner-light);
+}
+
+/* L3 · signal — the active / attention surface. One per view. */
+.nc-glass-signal {
+  border-color: var(--nc-lime-line);
+  background:
+    linear-gradient(180deg, rgba(182, 255, 0, 0.07), rgba(255, 255, 255, 0.022) 62%),
+    var(--nc-glass-plate-strong);
+  box-shadow: var(--nc-shadow-3), var(--nc-inner-light);
+}
+
+/* A short top-light that reads as a reflection on the material, not a glow. */
+.nc-glass--lit::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  pointer-events: none;
+}
+
+/* Section headings shared by every workspace, so hierarchy stops drifting. */
+.nc-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--nc-text-3);
+}
+.nc-eyebrow::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  background: var(--nc-lime);
+  box-shadow: 0 0 8px var(--nc-lime-glow);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2 · CONNECTION NETWORK — one language for every relationship line
+   ───────────────────────────────────────────────────────────────────────────
+   Usage: an <svg class="nc-net"> holds one or more <path class="nc-net__line"
+   data-state="…">. A state sets both the meaning colour and the dash rhythm,
+   so a line's STATE is legible without reading a legend. `.nc-net__flow` is an
+   optional second path that draws a travelling packet along the same `d` for
+   the `active` state only.
+
+   The whole thing is SVG + CSS: no canvas, no WebGL, no rAF loop.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-net {
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.nc-net__line {
+  fill: none;
+  stroke: var(--nc-net-color, var(--nc-idle));
+  stroke-width: 1.25;
+  /* Lines are drawn in a normalised viewBox in several views, so the stroke
+     must not stretch with the canvas. */
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition:
+    stroke var(--nc-dur-quick) var(--nc-ease-standard),
+    opacity var(--nc-dur-quick) var(--nc-ease-standard),
+    stroke-width var(--nc-dur-quick) var(--nc-ease-standard);
+}
+
+/* idle — a relationship that exists but is quiet: faint, fine-dotted. */
+.nc-net__line[data-state="idle"] {
+  --nc-net-color: var(--nc-idle);
+  opacity: 0.3;
+  stroke-dasharray: 2 5;
+}
+/* active — work moving along this relationship right now. */
+.nc-net__line[data-state="active"] {
+  --nc-net-color: var(--nc-lime);
+  opacity: 0.9;
+  stroke-width: 1.5;
+}
+/* routing — intelligence deciding where a job goes (cyan, network/data). */
+.nc-net__line[data-state="routing"] {
+  --nc-net-color: var(--nc-tone-network);
+  opacity: 0.85;
+  stroke-dasharray: 7 7;
+  animation: nc-net-flow 1.5s linear infinite;
+}
+/* handoff — work passing to another owner. */
+.nc-net__line[data-state="handoff"] {
+  --nc-net-color: var(--nc-handoff);
+  opacity: 0.85;
+}
+/* attention — blocked, waiting on you, or breaching policy. */
+.nc-net__line[data-state="attention"] {
+  --nc-net-color: var(--nc-approval);
+  opacity: 0.9;
+  stroke-dasharray: 3 4;
+  animation: nc-net-flow 2.4s linear infinite;
+}
+/* completed — the relationship did its job and settled. */
+.nc-net__line[data-state="completed"] {
+  --nc-net-color: var(--nc-completed);
+  opacity: 0.62;
+}
+
+/* The travelling packet. Only ever mounted for `active` lines. */
+.nc-net__flow {
+  fill: none;
+  stroke: var(--nc-net-color, var(--nc-lime));
+  stroke-width: 2.4;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-dasharray: 5 130;
+  opacity: 0;
+  animation: nc-net-travel 2.6s var(--nc-ease-standard) infinite;
+}
+
+/* Endpoint node — the little plate a line lands on. */
+.nc-net__node {
+  fill: var(--nc-base);
+  stroke: var(--nc-net-color, var(--nc-idle));
+  stroke-width: 1.25;
+}
+.nc-net__node[data-hub="true"] {
+  fill: var(--nc-lime-soft);
+  stroke: var(--nc-lime);
+}
+
+@keyframes nc-net-flow { to { stroke-dashoffset: -28; } }
+@keyframes nc-net-travel {
+  0%   { stroke-dashoffset: 10; opacity: 0; }
+  14%  { opacity: 0.95; }
+  72%  { opacity: 0.95; }
+  100% { stroke-dashoffset: -140; opacity: 0; }
+}
+
+/* Reduced motion: keep the state COLOUR (meaning) and drop the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .nc-net__flow { display: none; }
+  .nc-net__line[data-state="routing"],
+  .nc-net__line[data-state="attention"] { animation: none; }
+}
+.nc-root[data-motion="reduced"] .nc-net__flow { display: none; }
+.nc-root[data-motion="reduced"] .nc-net__line[data-state="routing"],
+.nc-root[data-motion="reduced"] .nc-net__line[data-state="attention"] { animation: none; }
+
+/* ── The rail's EXEC entry ───────────────────────────────────────────────
+   The one nav item that is an ENTITY rather than an area: EXEC gets a lime
+   edge so it reads as the central intelligence, above the six areas.        */
+
+.nc-rail__exec {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 42px;
+  padding: 0 11px;
+  border-radius: 10px;
+  border: 1px solid var(--nc-lime-line);
+  background: linear-gradient(180deg, rgba(182, 255, 0, 0.1), rgba(182, 255, 0, 0.03));
+  color: var(--nc-lime);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  transition:
+    background-color var(--nc-dur-micro) var(--nc-ease-standard),
+    transform var(--nc-dur-micro) var(--nc-ease-out),
+    box-shadow var(--nc-dur-quick) var(--nc-ease-standard);
+}
+.nc-rail__exec:hover { transform: translateY(-1px); box-shadow: var(--nc-shadow-1), 0 0 0 3px rgba(182, 255, 0, 0.06); }
+.nc-rail__exec-glyph { display: grid; place-items: center; }
+
+@media (max-width: 1240px) {
+  .nc-rail__exec { justify-content: center; padding: 0; }
+  .nc-rail__exec-label { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3 · MOBILE SHELL — bottom navigation + adaptive composition (~390px first)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The mobile bar is inert on desktop: it is only ever displayed at ≤760px. */
+.nc-mobilebar { display: none; }
+
+/* Mobile Command overview — the deliberate phone composition. Hidden on
+   desktop, where the room is the product. */
+.nc-mobile-command { display: none; }
+.nc-mobile-command__head { display: flex; align-items: center; gap: 11px; }
+.nc-mobile-command__id { display: flex; flex-direction: column; gap: 2px; }
+.nc-mobile-command__hi { font-size: 15px; font-weight: 700; }
+.nc-mobile-command__meta { font-size: 11px; color: var(--nc-text-4); }
+
+.nc-mobile-command__exec {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 15px 16px;
+  border-radius: var(--nc-r-3);
+  border: 1px solid var(--nc-lime-line);
+  background: linear-gradient(180deg, rgba(182, 255, 0, 0.1), rgba(255, 255, 255, 0.022) 62%);
+  text-align: left;
+  box-shadow: var(--nc-shadow-2), var(--nc-inner-light);
+}
+.nc-mobile-command__exec-orb {
+  flex: none;
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  border-radius: 14px;
+  color: var(--nc-lime);
+  background: radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.12), transparent 54%), rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--nc-lime-line);
+}
+.nc-mobile-command__exec-text { display: flex; flex-direction: column; gap: 2px; }
+.nc-mobile-command__exec-title { font-size: 15px; font-weight: 700; color: var(--nc-text); }
+.nc-mobile-command__exec-hint { font-size: 11.5px; color: var(--nc-text-3); }
+
+.nc-mobile-command__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.nc-mobile-command__action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px;
+  border-radius: var(--nc-r-2);
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-1);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--nc-text-2);
+  text-align: left;
+}
+.nc-mobile-command__action:active { background: var(--nc-glass-2); }
+
+.nc-mobile-command__section { display: flex; flex-direction: column; gap: 9px; }
+.nc-mobile-command__needs { display: flex; flex-direction: column; gap: 7px; }
+.nc-mobile-command__need {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 13px;
+  border-radius: var(--nc-r-2);
+  border: 1px solid rgba(240, 180, 41, 0.34);
+  background: linear-gradient(160deg, rgba(240, 180, 41, 0.08), rgba(255, 255, 255, 0.012) 62%);
+  color: var(--nc-text);
+  font-size: 13px;
+  text-decoration: none;
+}
+.nc-mobile-command__need-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.nc-mobile-command__need-meta { margin-left: auto; font-size: 10px; color: var(--nc-text-4); }
+
+.nc-mobile-command__depts { display: flex; flex-direction: column; gap: 8px; }
+.nc-mobile-command__dept {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 13px 13px;
+  border-radius: var(--nc-r-2);
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-plate);
+  text-decoration: none;
+}
+.nc-mobile-command__dept:active { background: var(--nc-glass-2); }
+.nc-mobile-command__dept-icon {
+  flex: none;
+  width: 38px; height: 38px;
+  display: grid; place-items: center;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--nc-hairline);
+}
+.nc-mobile-command__dept-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.nc-mobile-command__dept-name { font-size: 13.5px; font-weight: 650; color: var(--nc-text); }
+.nc-mobile-command__dept-cap { font-size: 10.5px; color: var(--nc-text-4); }
+.nc-mobile-command__dept-status { display: inline-flex; align-items: center; gap: 6px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.nc-mobile-command__dept-status i { width: 6px; height: 6px; border-radius: 50%; }
+
+.nc-mobilebar__item {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 52px;
+  color: var(--nc-text-3);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.nc-mobilebar__item[aria-current="page"] { color: var(--nc-text); }
+.nc-mobilebar__item[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--nc-lime);
+  box-shadow: 0 0 10px var(--nc-lime-glow);
+}
+.nc-mobilebar__item[data-soon="true"] { opacity: 0.55; }
+
+/* Floating EXEC access — always reachable, one thumb away, on mobile. */
+.nc-exectab {
+  position: absolute;
+  right: 16px;
+  bottom: 86px;
+  z-index: 55;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--nc-lime-line);
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.14), transparent 46%),
+    linear-gradient(160deg, rgba(182, 255, 0, 0.24), rgba(12, 14, 17, 0.86));
+  color: var(--nc-lime);
+  box-shadow: var(--nc-shadow-3), 0 0 0 6px rgba(182, 255, 0, 0.05);
+  backdrop-filter: blur(var(--nc-blur-1));
+}
+.nc-exectab:active { transform: scale(0.96); }
+.nc-exectab__label {
+  position: absolute;
+  bottom: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--nc-text-3);
+}
+
+@media (max-width: 760px) {
+  .nc-root {
+    --nc-rail-w: 0px;
+    --nc-context-w: 0px;
+    /* One column, one row: the room owns the whole small screen. */
+    --nc-surface-h: 0px;
+  }
+
+  .nc-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  /* Navigation moves from the rail to the bottom bar on mobile. */
+  .nc-rail,
+  .nc-context { display: none; }
+
+  .nc-topbar { padding: 12px 12px; min-height: 62px; }
+  .nc-cmdbar__chip--voice,
+  .nc-cmdbar__wave { display: none; }
+
+  /* The tall adaptive deck stands down; the mobile bar owns navigation and the
+     floating EXEC tab owns the executive. Pages still keep their own controls. */
+  .nc-rail-bottom { display: none; }
+
+  /* Reserve room under everything for the fixed bottom bar. */
+  .nc-main__scroll { padding-bottom: 76px; }
+
+  .nc-mobilebar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 56;
+    display: flex;
+    align-items: stretch;
+    height: 64px;
+    padding: 4px 6px calc(4px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--nc-hairline);
+    background: linear-gradient(180deg, rgba(16, 19, 24, 0.86), rgba(7, 8, 10, 0.94));
+    backdrop-filter: blur(var(--nc-blur-3));
+    box-shadow: 0 -18px 40px -24px rgba(0, 0, 0, 0.8);
+  }
+
+  .nc-exec-surface { left: 8px; right: 8px; bottom: 74px; max-height: min(72vh, 620px); }
+  .nc-toast { bottom: 88px; max-width: 92vw; }
+
+  /* Mobile gets its OWN Command composition; the desktop room stands down. */
+  .nc-room { display: none; }
+  .nc-mobile-command {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 6px 4px 8px;
+  }
+}
+
+/* Narrow-phone tuning: single-column facts, tighter chrome, no forced tables. */
+@media (max-width: 560px) {
+  .nc-aw { padding: 12px 12px 92px; }
+  .nc-aw__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nc-aw__head-top { flex-wrap: wrap; }
+  .nc-aw__state { margin-left: 0; }
+
+  .nc-aw__cmd { flex-wrap: wrap; }
+  .nc-aw__cmd-actions { width: 100%; overflow-x: auto; }
+}
+
+/* Tablet: the context column returns before the rail does. */
+@media (min-width: 761px) and (max-width: 1240px) {
+  .nc-mobilebar { display: none; }
+}

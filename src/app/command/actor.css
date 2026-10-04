@@ -1,0 +1,680 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEXUP COMMAND — ACTOR WORKSPACE (Phase UI-04)
+   ───────────────────────────────────────────────────────────────────────────
+   One more additive layer, imported by src/app/command/layout.tsx alongside
+   command.css, spatial.css and workspace.css. Like those, every rule is scoped
+   under `.nc-root`, so no legacy NEXUP surface can be affected and no Tailwind
+   is involved.
+
+   It redefines no token: the actor's identity arrives as `--nc-aw-accent` (set
+   by the workspace component from the department accent), and everything here
+   reads the Phase UI-01 tokens for colour, depth, radius and motion.
+
+   Class namespace is `.nc-aw*` — the Department Workspace owns `.nc-dw*` and
+   the in-scene focused workspace owns `.nc-ws*`, so the three never collide.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Page ──────────────────────────────────────────────────────────────── */
+
+.nc-aw {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+  padding: 18px 26px 44px;
+  --nc-aw-accent: var(--nc-lime);
+}
+
+/* ── Header ────────────────────────────────────────────────────────────── */
+
+.nc-aw__head {
+  padding: 18px 20px;
+  border: 1px solid var(--nc-border);
+  border-left: 2px solid var(--nc-aw-accent);
+  border-radius: var(--nc-r-4);
+  background: linear-gradient(180deg, rgba(23, 26, 32, 0.72), rgba(12, 14, 17, 0.58));
+  backdrop-filter: blur(12px);
+}
+
+.nc-aw__head-top { display: flex; align-items: center; gap: 14px; }
+
+.nc-aw__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 13px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-border-2);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--nc-text-2);
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    color var(--nc-dur-micro) var(--nc-ease-standard),
+    border-color var(--nc-dur-micro) var(--nc-ease-standard),
+    background-color var(--nc-dur-micro) var(--nc-ease-standard);
+}
+.nc-aw__back:hover { color: var(--nc-text); border-color: var(--nc-border-3); background: rgba(255, 255, 255, 0.05); }
+
+.nc-aw__avatar {
+  flex: none;
+  width: 42px; height: 42px;
+  display: grid; place-items: center;
+  border-radius: 13px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0e1008;
+}
+.nc-aw[data-type="ai-agent"] .nc-aw__avatar { background: linear-gradient(150deg, #d8ff6a, #94d400); }
+.nc-aw[data-type="human"] .nc-aw__avatar { background: linear-gradient(150deg, #f3f0e9, #b7b2a5); }
+
+.nc-aw__titles { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.nc-aw__kicker {
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+.nc-aw__name { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+
+.nc-aw__type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-border);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nc-text-2);
+}
+.nc-aw__type[data-type="ai-agent"] { color: var(--nc-lime); border-color: var(--nc-lime-line); background: var(--nc-lime-soft); }
+
+.nc-aw__state {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-border);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nc-text-2);
+}
+.nc-aw__state i { width: 6px; height: 6px; border-radius: 50%; background: var(--nc-active); }
+
+.nc-aw__responsibility { margin-top: 12px; font-size: 15px; line-height: 1.5; color: var(--nc-text); }
+
+.nc-aw__facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 0;
+}
+.nc-aw__fact {
+  padding: 9px 12px;
+  border-radius: var(--nc-r-2);
+  border: 1px solid var(--nc-border);
+  background: rgba(255, 255, 255, 0.016);
+}
+.nc-aw__fact dt {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+.nc-aw__fact dd { margin: 3px 0 0; font-size: 13px; font-weight: 600; }
+.nc-aw__fact[data-attention="true"] dd { color: var(--nc-approval); }
+
+/* ── Actor Command Surface ─────────────────────────────────────────────── */
+
+.nc-aw__cmd {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--nc-border);
+  border-radius: var(--nc-r-3);
+  background: linear-gradient(180deg, rgba(31, 35, 43, 0.72), rgba(16, 18, 22, 0.72));
+  backdrop-filter: blur(10px);
+}
+.nc-aw__cmd-lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 11px;
+  border-right: 1px solid var(--nc-border);
+}
+.nc-aw__cmd-orb {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 32%, #d8ff72, #8fc400 58%, #1a2404 100%);
+  border: 1px solid var(--nc-lime-line);
+  box-shadow: 0 0 12px var(--nc-lime-glow);
+}
+.nc-aw__cmd-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--nc-text-3);
+}
+
+.nc-aw__cmd-inputwrap {
+  flex: 1 1 260px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 200px;
+  height: 34px;
+  padding: 0 6px 0 13px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-border-2);
+  background: rgba(0, 0, 0, 0.28);
+}
+.nc-aw__cmd-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--nc-text);
+  font-size: 12.5px;
+  font-family: inherit;
+}
+.nc-aw__cmd-input::placeholder { color: var(--nc-text-4); }
+.nc-aw__cmd-input:focus { outline: none; }
+.nc-aw__cmd-inputwrap:focus-within { border-color: var(--nc-lime-line); }
+.nc-aw__cmd-send {
+  flex: none;
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--nc-lime-line);
+  background: var(--nc-lime-soft);
+  color: var(--nc-lime);
+  transition: background-color var(--nc-dur-micro) var(--nc-ease-standard);
+}
+.nc-aw__cmd-send:hover { background: rgba(182, 255, 0, 0.18); }
+
+.nc-aw__cmd-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.nc-aw__cmd-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-border-2);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--nc-text-2);
+  transition:
+    color var(--nc-dur-micro) var(--nc-ease-standard),
+    border-color var(--nc-dur-micro) var(--nc-ease-standard),
+    background-color var(--nc-dur-micro) var(--nc-ease-standard);
+}
+.nc-aw__cmd-btn:hover { color: var(--nc-text); border-color: var(--nc-border-3); background: rgba(255, 255, 255, 0.05); }
+.nc-aw__cmd-btn--exec { color: var(--nc-lime); border-color: var(--nc-lime-line); background: var(--nc-lime-soft); }
+.nc-aw__cmd-btn--exec:hover { background: rgba(182, 255, 0, 0.18); }
+.nc-aw__cmd-note { margin-left: auto; font-size: 10px; letter-spacing: 0.05em; color: var(--nc-text-4); }
+
+/* ── Mode navigation ───────────────────────────────────────────────────── */
+
+.nc-aw__modes { display: flex; flex-wrap: wrap; gap: 6px; }
+.nc-aw__mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-border);
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--nc-text-3);
+  transition:
+    color var(--nc-dur-micro) var(--nc-ease-standard),
+    border-color var(--nc-dur-micro) var(--nc-ease-standard),
+    background-color var(--nc-dur-micro) var(--nc-ease-standard);
+}
+.nc-aw__mode:hover { color: var(--nc-text); border-color: var(--nc-border-2); background: rgba(255, 255, 255, 0.05); }
+.nc-aw__mode[data-current="true"] {
+  color: var(--nc-text);
+  border-color: color-mix(in srgb, var(--nc-aw-accent) 42%, transparent);
+  background: color-mix(in srgb, var(--nc-aw-accent) 12%, transparent);
+}
+.nc-aw__mode[data-current="true"] svg { color: var(--nc-aw-accent); }
+
+/* ── Mode body ─────────────────────────────────────────────────────────── */
+
+.nc-aw__body { display: flex; flex-direction: column; gap: 14px; }
+.nc-aw__modehead { display: flex; align-items: baseline; gap: 10px; }
+.nc-aw__modehead-title { font-size: 13px; font-weight: 700; }
+.nc-aw__modehead-hint { font-size: 11px; color: var(--nc-text-4); }
+
+.nc-aw-note { font-size: 11.5px; line-height: 1.6; color: var(--nc-text-4); max-width: 860px; }
+.nc-aw-none { font-size: 12px; color: var(--nc-text-4); }
+
+/* ── Grids & cards ─────────────────────────────────────────────────────── */
+
+.nc-aw-stack { display: flex; flex-direction: column; gap: 12px; }
+.nc-aw-grid { display: grid; gap: 12px; }
+.nc-aw-grid--overview { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.nc-aw-grid--overview .nc-aw-card--wide { grid-column: span 2; }
+.nc-aw-grid--work { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.nc-aw-grid--workflows { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.nc-aw-grid--memory { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.nc-aw-grid--perm { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.nc-aw-grid--perf { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+
+.nc-aw-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 14px 16px;
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-3);
+  background: var(--nc-glass-1);
+}
+.nc-aw-card--attention { border-color: rgba(240, 180, 41, 0.28); }
+.nc-aw-card--attention[data-empty="true"] { border-color: var(--nc-border); }
+.nc-aw-card--memory[data-empty="true"] { opacity: 0.72; }
+
+.nc-aw-card__kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--nc-text-3);
+}
+.nc-aw-card__kicker i { font-style: normal; color: var(--nc-text-4); }
+.nc-aw-card__lead { font-size: 14.5px; line-height: 1.55; color: var(--nc-text); }
+.nc-aw-card__sub { font-size: 11.5px; line-height: 1.55; color: var(--nc-text-3); }
+.nc-aw-card__row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: auto;
+  padding-top: 9px;
+  border-top: 1px solid var(--nc-border);
+}
+.nc-aw-card__label { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--nc-text-4); }
+.nc-aw-card__value { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--nc-text-2); }
+
+/* Flags */
+.nc-aw-flags { display: flex; flex-direction: column; gap: 6px; }
+.nc-aw-flags__item { position: relative; padding-left: 16px; font-size: 12.5px; line-height: 1.45; color: var(--nc-text-2); }
+.nc-aw-flags__item::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 6px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--nc-approval);
+}
+
+/* Identity list */
+.nc-aw-ident { display: flex; flex-direction: column; gap: 7px; margin: 0; }
+.nc-aw-ident__row { display: flex; align-items: baseline; gap: 10px; }
+.nc-aw-ident__row dt { flex: none; width: 120px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--nc-text-4); }
+.nc-aw-ident__row dd { margin: 0; font-size: 12.5px; color: var(--nc-text-2); }
+
+/* Chips */
+.nc-aw-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.nc-aw-chip {
+  padding: 4px 10px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-border);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 11.5px;
+  color: var(--nc-text-2);
+}
+.nc-aw-chips--mono .nc-aw-chip { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 11px; }
+
+/* Badges */
+.nc-aw-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-border);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nc-text-2);
+}
+.nc-aw-badge[data-type="ai-agent"] { color: var(--nc-lime); border-color: var(--nc-lime-line); }
+.nc-aw-policy {
+  padding: 2px 8px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-thinking);
+  color: var(--nc-thinking);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+/* ── Work rows ─────────────────────────────────────────────────────────── */
+
+.nc-aw-rows { display: flex; flex-direction: column; gap: 8px; }
+.nc-aw-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 11px;
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-2);
+  background: var(--nc-glass-1);
+}
+.nc-aw-row__top { display: flex; align-items: center; gap: 8px; }
+.nc-aw-row__title { font-size: 12.5px; font-weight: 600; }
+.nc-aw-row__state {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+.nc-aw-row[data-state="Needs you"] .nc-aw-row__state,
+.nc-aw-row[data-state="Flagged"] .nc-aw-row__state { color: var(--nc-approval); }
+.nc-aw-row__note { font-size: 11px; line-height: 1.45; color: var(--nc-text-4); }
+
+/* ── Item lists (skills / tools) ───────────────────────────────────────── */
+
+.nc-aw-list { display: flex; flex-direction: column; gap: 8px; }
+.nc-aw-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-3);
+  background: var(--nc-glass-1);
+}
+.nc-aw-item[data-available="false"] { opacity: 0.62; }
+.nc-aw-item__main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.nc-aw-item__top { display: flex; align-items: center; gap: 9px; }
+.nc-aw-item__name { font-size: 13px; font-weight: 650; }
+.nc-aw-mono { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 12.5px; }
+.nc-aw-item__meta { font-size: 10.5px; color: var(--nc-text-4); }
+.nc-aw-item__source { color: var(--nc-text-4); }
+.nc-aw-item__side { flex: none; display: flex; flex-direction: column; gap: 2px; text-align: right; }
+.nc-aw-item__label { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--nc-text-4); }
+.nc-aw-item__value { font-size: 12px; color: var(--nc-text-2); }
+.nc-aw-item__flag {
+  flex: none;
+  padding: 3px 9px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-border);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+.nc-aw-item__flag[data-available="true"] { color: var(--nc-active); border-color: rgba(182, 255, 0, 0.3); }
+.nc-aw-item__action {
+  flex: none;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-border-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--nc-text-3);
+  transition:
+    color var(--nc-dur-micro) var(--nc-ease-standard),
+    border-color var(--nc-dur-micro) var(--nc-ease-standard),
+    background-color var(--nc-dur-micro) var(--nc-ease-standard);
+}
+.nc-aw-item__action:hover { color: var(--nc-text); border-color: var(--nc-border-3); background: rgba(255, 255, 255, 0.05); }
+
+/* Skill level + tool permission chips */
+.nc-aw-level, .nc-aw-perm {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-border);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nc-text-3);
+}
+.nc-aw-level[data-level="Mastered"] { color: var(--nc-lime); border-color: var(--nc-lime-line); }
+.nc-aw-level[data-level="Proficient"] { color: var(--nc-thinking); border-color: rgba(125, 211, 252, 0.32); }
+.nc-aw-level[data-level="Learning"] { color: var(--nc-waiting); }
+.nc-aw-level[data-level="Dormant"] { color: var(--nc-text-4); }
+
+.nc-aw-perm[data-perm="Allowed"] { color: var(--nc-active); border-color: rgba(182, 255, 0, 0.3); }
+.nc-aw-perm[data-perm="Approval"] { color: var(--nc-approval); border-color: rgba(240, 180, 41, 0.34); }
+.nc-aw-perm[data-perm="Read-only"] { color: var(--nc-thinking); border-color: rgba(125, 211, 252, 0.3); }
+.nc-aw-perm[data-perm="Blocked"] { color: var(--nc-text-4); }
+
+.nc-aw-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--nc-text-4); }
+.nc-aw-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.nc-aw-legend span::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--nc-text-4); }
+.nc-aw-legend [data-level="Mastered"]::before { background: var(--nc-lime); }
+.nc-aw-legend [data-level="Proficient"]::before { background: var(--nc-thinking); }
+.nc-aw-legend [data-level="Learning"]::before { background: var(--nc-waiting); }
+.nc-aw-legend [data-level="Dormant"]::before { background: var(--nc-text-4); }
+
+/* ── Workflows ─────────────────────────────────────────────────────────── */
+
+.nc-aw-wfstate {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-border);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--nc-text-3);
+}
+.nc-aw-wfstate[data-state="Ready"] { color: var(--nc-active); border-color: rgba(182, 255, 0, 0.3); }
+.nc-aw-wfstate[data-state="Draft"] { color: var(--nc-thinking); border-color: rgba(125, 211, 252, 0.3); }
+.nc-aw-wfstate[data-state="Paused"] { color: var(--nc-approval); border-color: rgba(240, 180, 41, 0.3); }
+
+.nc-aw-steps { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.nc-aw-step { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--nc-text-2); }
+.nc-aw-step__num {
+  flex: none;
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--nc-border-2);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--nc-text-3);
+}
+
+/* ── Memory ────────────────────────────────────────────────────────────── */
+
+.nc-aw-mem { display: flex; flex-direction: column; gap: 7px; }
+.nc-aw-mem__item { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: var(--nc-r-2); border: 1px solid var(--nc-hairline); background: var(--nc-glass-1); }
+.nc-aw-mem__title { font-size: 12px; font-weight: 600; }
+.nc-aw-mem__note { font-size: 10.5px; line-height: 1.45; color: var(--nc-text-4); }
+
+/* ── Permissions ───────────────────────────────────────────────────────── */
+
+.nc-aw-autonomy {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--nc-lime);
+}
+
+/* ── Performance ───────────────────────────────────────────────────────── */
+
+.nc-aw-card--metric { gap: 4px; }
+.nc-aw-metric__value { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+
+/* ── History ───────────────────────────────────────────────────────────── */
+
+.nc-aw-timeline { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.nc-aw-event { display: flex; gap: 12px; }
+.nc-aw-event__rail { flex: none; width: 16px; display: flex; flex-direction: column; align-items: center; }
+.nc-aw-event__dot { width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--nc-text-4); }
+.nc-aw-event:not(:last-child) .nc-aw-event__rail::after { content: ""; flex: 1; width: 1px; background: var(--nc-border-2); }
+.nc-aw-event__body { flex: 1; display: flex; flex-direction: column; gap: 2px; padding-bottom: 14px; }
+.nc-aw-event__top { display: flex; align-items: center; gap: 9px; }
+.nc-aw-event__kind {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+.nc-aw-event__at { margin-left: auto; font-size: 10px; color: var(--nc-text-4); }
+.nc-aw-event__title { font-size: 12.5px; color: var(--nc-text-2); }
+.nc-aw-event[data-kind="warning"] .nc-aw-event__dot,
+.nc-aw-event[data-kind="approval"] .nc-aw-event__dot { background: var(--nc-approval); }
+.nc-aw-event[data-kind="mission"] .nc-aw-event__dot,
+.nc-aw-event[data-kind="command"] .nc-aw-event__dot { background: var(--nc-lime); }
+.nc-aw-event[data-kind="output"] .nc-aw-event__dot { background: var(--nc-thinking); }
+.nc-aw-event[data-kind="skill"] .nc-aw-event__dot,
+.nc-aw-event[data-kind="tool"] .nc-aw-event__dot { background: var(--nc-waiting); }
+
+/* ── Overview — worker console (Phase UI-05P) ───────────────────────────
+   The Overview is two columns of glass, not a wall of profile cards: the
+   mission leads, the relationship is drawn as a network, and authority sits
+   with capability.                                                       */
+
+.nc-aw-dash { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.nc-aw-dash__main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.nc-aw-dash__side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.nc-aw-panel { display: flex; flex-direction: column; gap: 10px; padding: 15px 16px; }
+.nc-aw-panel__lead { font-size: 13.5px; line-height: 1.5; color: var(--nc-text); }
+
+/* The one signal surface: the mission the whole console exists for. */
+.nc-aw-mission { display: flex; flex-direction: column; gap: 9px; padding: 17px 18px; }
+.nc-aw-mission__title { font-size: 20px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.25; }
+.nc-aw-mission__priority { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; color: var(--nc-text-2); }
+.nc-aw-mission__priority-label { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--nc-text-4); }
+.nc-aw-mission__flags { display: flex; flex-direction: column; gap: 6px; margin: 2px 0 0; padding: 0; list-style: none; }
+.nc-aw-mission__flag { position: relative; padding-left: 16px; font-size: 12.5px; line-height: 1.45; color: var(--nc-text-2); }
+.nc-aw-mission__flag::before { content: ""; position: absolute; left: 0; top: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--nc-approval); }
+.nc-aw-mission__clear { font-size: 12px; color: var(--nc-text-4); }
+
+/* Authority rows: one label column, one value column, one rhythm. */
+.nc-aw-facts { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.nc-aw-facts__row { display: flex; align-items: baseline; gap: 12px; }
+.nc-aw-facts__row dt { flex: none; width: 96px; font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--nc-text-4); }
+.nc-aw-facts__row dd { margin: 0; font-size: 12.5px; color: var(--nc-text-2); }
+.nc-aw-empower { color: var(--nc-lime) !important; font-weight: 650; }
+
+/* Relationship network — reports-to → this actor → collaborators. */
+.nc-aw-relmap { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.nc-aw-relmap__label { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--nc-text-4); }
+.nc-aw-relmap__node { padding: 7px 12px; font-size: 12.5px; color: var(--nc-text-2); }
+.nc-aw-relmap__node--peer { font-size: 11.5px; color: var(--nc-text-3); }
+.nc-aw-relmap__line { width: 8px; height: 22px; }
+.nc-aw-relmap__peers { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; }
+.nc-aw-relmap__self {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px 9px 10px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-hairline-2);
+  background: var(--nc-glass-plate-strong);
+  box-shadow: var(--nc-shadow-2), var(--nc-inner-light);
+}
+.nc-aw-relmap__self[data-type="ai-agent"] { border-color: var(--nc-lime-line); }
+.nc-aw-relmap__avatar { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; font-size: 11px; font-weight: 700; color: #0e1008; }
+.nc-aw-relmap__self[data-type="ai-agent"] .nc-aw-relmap__avatar { background: linear-gradient(150deg, #d8ff6a, #94d400); }
+.nc-aw-relmap__self[data-type="human"] .nc-aw-relmap__avatar { background: linear-gradient(150deg, #f3f0e9, #b7b2a5); }
+.nc-aw-relmap__self-text { display: flex; flex-direction: column; text-align: left; }
+.nc-aw-relmap__self-role { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--nc-text-4); }
+.nc-aw-relmap__self-name { font-size: 13px; font-weight: 650; }
+
+/* Model route chain (AI only). */
+.nc-aw-route { display: flex; align-items: center; gap: 8px; }
+.nc-aw-route__node { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 9px 11px; min-width: 0; }
+.nc-aw-route__node[data-role="preferred"] { border-color: var(--nc-hairline-2); }
+.nc-aw-route__tier { font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--nc-text-4); }
+.nc-aw-route__name { font-size: 12px; color: var(--nc-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nc-aw-route__line { flex: none; width: 26px; height: 8px; }
+
+/* ── Responsive degradation ─────────────────────────────────────────────
+   Desktop first. The structure folds rather than breaks.                  */
+
+@media (max-width: 1500px) {
+  .nc-aw-grid--overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nc-aw-grid--overview .nc-aw-card--wide { grid-column: span 2; }
+}
+
+@media (max-width: 1240px) {
+  .nc-aw { padding: 16px 18px 40px; }
+  .nc-aw__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nc-aw__cmd-note { display: none; }
+}
+
+@media (max-width: 900px) {
+  .nc-aw-grid--overview,
+  .nc-aw-grid { grid-template-columns: minmax(0, 1fr); }
+  .nc-aw-grid--overview .nc-aw-card--wide { grid-column: span 1; }
+  .nc-aw__facts { grid-template-columns: minmax(0, 1fr); }
+  .nc-aw__head-top { flex-wrap: wrap; }
+  .nc-aw-item__side { display: none; }
+  .nc-aw-item { flex-wrap: wrap; }
+}
+
+/* ── Mobile recomposition (~390px) ───────────────────────────────────────
+   The console is recomposed, not shrunk: mode tabs scroll in one line, the
+   Direct Command surface takes the full width with thumb-sized controls, and
+   the Overview becomes a single column so mission and authority both read
+   without pinch-zoom. The shell keeps EXEC and the bottom bar reachable
+   (system.css), and the page reserves room for them.                     */
+
+@media (max-width: 760px) {
+  .nc-aw { gap: 14px; }
+
+  /* Tighter identity block so current mission and status clear the fold. */
+  .nc-aw__head { padding: 14px 14px; }
+  .nc-aw__name { font-size: 19px; }
+  .nc-aw__responsibility { margin-top: 8px; font-size: 13.5px; line-height: 1.45; }
+  .nc-aw__facts { margin-top: 10px; gap: 8px; }
+  .nc-aw__fact { padding: 7px 10px; }
+  .nc-aw__fact dd { font-size: 12.5px; }
+
+  .nc-aw__modes {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin: 0 -12px;
+    padding: 2px 12px 6px;
+    scrollbar-width: none;
+  }
+  .nc-aw__modes::-webkit-scrollbar { display: none; }
+  .nc-aw__mode { flex: none; height: 36px; }
+
+  .nc-aw__cmd { border-radius: var(--nc-r-3); }
+  .nc-aw__cmd-lead { border-right: none; padding-right: 0; }
+  .nc-aw__cmd-inputwrap { flex: 1 1 100%; min-width: 0; height: 40px; }
+  .nc-aw__cmd-btn { height: 36px; }
+  .nc-aw__cmd-note { display: none; }
+
+  .nc-aw__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .nc-aw-dash { grid-template-columns: minmax(0, 1fr); }
+  .nc-aw-relmap { align-items: stretch; }
+  .nc-aw-relmap__self { justify-content: flex-start; }
+  .nc-aw-relmap__peers { justify-content: flex-start; }
+}

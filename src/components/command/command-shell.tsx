@@ -7,6 +7,7 @@ import { AdaptiveCommandDeck } from "./adaptive-command-deck";
 import { ExecutiveSurface } from "./executive-dock";
 import { ContextRail } from "./context-rail";
 import { MotionDemoController } from "./motion-demo-controller";
+import { MobileNav } from "./mobile-nav";
 import { cssVars } from "./ui/css-vars";
 
 /**
@@ -83,6 +84,10 @@ export function CommandShell({ children }: { children: React.ReactNode }) {
           JSX is dropped and the Motion Lab module with it. It is a review
           instrument, never a shipped control. */}
       {process.env.NODE_ENV !== "production" && <MotionDemoController />}
+
+      {/* Mobile-only navigation. Inert on desktop: system.css only displays it
+          below 760px, where the rail and context column stand down. */}
+      <MobileNav />
 
       {toast && (
         <div className="nc-toast" role="status">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useCommand } from "./state/command-store";
 import { FOUNDER } from "./state/organization-model";
 import { EXEC_INTENTS, executiveGreeting, executiveReply } from "./state/mock-intent";
@@ -100,6 +101,11 @@ export function ExecutiveSurface() {
             <span className="nc-exec-surface__kicker">{snapshot.scenario.replace(/-/g, " ")}</span>
           </span>
           <span style={{ flex: 1 }} />
+          {/* EXEC is a first-class entity: the console can hand off to its page. */}
+          <Link className="nc-btn nc-btn--sm" href="/command/exec" onClick={() => setExecOpen(false)}>
+            <IconSpark size={13} />
+            Open EXEC
+          </Link>
           <span className="nc-badge-mock">no AI provider</span>
           <button
             type="button"

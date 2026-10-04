@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCommand } from "./state/command-store";
 import { FOUNDER } from "./state/organization-model";
 import {
@@ -7,6 +8,7 @@ import {
   IconCommand,
   IconControl,
   IconCreate,
+  IconExec,
   IconGear,
   IconSystems,
   IconWork,
@@ -39,6 +41,15 @@ export function GlobalNav() {
         <span className="nc-rail__wordmark">NEXUP</span>
         <span className="nc-rail__sub">Command</span>
       </div>
+
+      {/* EXEC sits ABOVE the six areas: it is the central intelligence, not one
+          area among them. Phase UI-05 gives it its own route. */}
+      <Link className="nc-rail__exec" href="/command/exec">
+        <span className="nc-rail__exec-glyph">
+          <IconExec size={17} />
+        </span>
+        <span className="nc-rail__exec-label">EXEC</span>
+      </Link>
 
       <div className="nc-rail__nav">
         {AREAS.map(({ id, label, Icon, ready }) => (

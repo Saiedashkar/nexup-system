@@ -9,6 +9,15 @@ import "./spatial.css";
 /* Phase UI-03 adds one more additive layer: the Department Workspace. Like the
    two above it, it redefines no token and overrides no shell rule. */
 import "./workspace.css";
+/* Phase UI-04 adds the Actor Workspace layer. Same rule again: it redefines no
+   token and overrides no shell rule. */
+import "./actor.css";
+/* Phase UI-05 adds the SYSTEM layer, imported LAST on purpose: the shared design
+   language (glass hierarchy + the connection-network vocabulary) and the mobile
+   shell. It redefines no token and overrides no shell rule. */
+import "./system.css";
+/* Phase UI-05 also adds EXEC's own layer. Same rule again. */
+import "./exec.css";
 
 /**
  * NEXUP COMMAND — route layout (Phase UI-01)

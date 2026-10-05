@@ -30,7 +30,7 @@ export const DEFAULT_HERMES_MAX_OUTPUT_BYTES = 262_144;
  * contract on `/api/ws`. `CLI_ONESHOT` is a VERIFIED fallback/diagnostic.
  * `HTTP` and `CLI` are PROVISIONAL, quarantined scaffolding — never defaults.
  */
-export type HermesTransportKind = "RPC" | "HTTP" | "CLI" | "CLI_ONESHOT";
+export type HermesTransportKind = "RPC" | "HTTP" | "CLI" | "CLI_ONESHOT" | "BRIDGE";
 
 /** The transport used when `HERMES_RUNTIME_TRANSPORT` is not set. */
 export const DEFAULT_HERMES_TRANSPORT: HermesTransportKind = "RPC";
@@ -65,6 +65,15 @@ export type HermesRuntimeConfig = {
   rpcEndpoint?: string;
   /** Executable path (transport = CLI / CLI_ONESHOT). */
   executablePath?: string;
+  /**
+   * Base URL of the authenticated NEXUP VPS bridge (transport = BRIDGE). The
+   * bridge is the only production path to a loopback-only Hermes.
+   */
+  bridgeEndpoint?: string;
+  /** Key id the bridge client signs with (transport = BRIDGE). */
+  bridgeKeyId?: string;
+  /** Reported, never returned: whether a bridge HMAC secret was provided. */
+  bridgeSecretPresent?: boolean;
   timeoutMs: number;
   maxOutputBytes: number;
   capabilities: HermesRuntimeCapabilities;
@@ -218,10 +227,16 @@ export function resolveHermesConfig(
 
   const transport = ((env.HERMES_RUNTIME_TRANSPORT?.trim().toUpperCase() as HermesTransportKind | undefined) ??
     DEFAULT_HERMES_TRANSPORT) as HermesTransportKind;
-  if (transport !== "RPC" && transport !== "HTTP" && transport !== "CLI" && transport !== "CLI_ONESHOT") {
+  if (
+    transport !== "RPC" &&
+    transport !== "HTTP" &&
+    transport !== "CLI" &&
+    transport !== "CLI_ONESHOT" &&
+    transport !== "BRIDGE"
+  ) {
     return {
       enabled: false,
-      reason: `Unsupported HERMES_RUNTIME_TRANSPORT "${transport}" (expected RPC, CLI_ONESHOT, HTTP or CLI)`,
+      reason: `Unsupported HERMES_RUNTIME_TRANSPORT "${transport}" (expected RPC, BRIDGE, CLI_ONESHOT, HTTP or CLI)`,
     };
   }
 
@@ -229,6 +244,8 @@ export function resolveHermesConfig(
   const executablePath = env.HERMES_RUNTIME_EXECUTABLE?.trim();
   // RPC endpoint: dedicated var first, then the generic endpoint var.
   const rpcEndpointRaw = env.HERMES_RUNTIME_RPC_URL?.trim() || env.HERMES_RUNTIME_ENDPOINT?.trim();
+  // Bridge endpoint (transport = BRIDGE).
+  const bridgeUrl = env.HERMES_RUNTIME_BRIDGE_URL?.trim();
 
   if (transport === "RPC") {
     if (!rpcEndpointRaw) return { enabled: false, reason: "HERMES_RUNTIME_RPC_URL is required for the RPC transport" };
@@ -242,6 +259,13 @@ export function resolveHermesConfig(
   }
   if ((transport === "CLI" || transport === "CLI_ONESHOT") && !executablePath) {
     return { enabled: false, reason: "HERMES_RUNTIME_EXECUTABLE is required for the CLI transports" };
+  }
+  if (transport === "BRIDGE") {
+    if (!bridgeUrl) return { enabled: false, reason: "HERMES_RUNTIME_BRIDGE_URL is required for the BRIDGE transport" };
+    if (!isHttpUrl(bridgeUrl)) return { enabled: false, reason: "HERMES_RUNTIME_BRIDGE_URL must be an http(s) URL" };
+    if (!env.HERMES_RUNTIME_BRIDGE_SECRET) {
+      return { enabled: false, reason: "HERMES_RUNTIME_BRIDGE_SECRET is required for the BRIDGE transport" };
+    }
   }
 
   const config: HermesRuntimeConfig = {
@@ -257,17 +281,19 @@ export function resolveHermesConfig(
       submit: true,
       status: transport !== "CLI_ONESHOT",
       health: transport !== "CLI_ONESHOT",
-      // Cancellation: RPC maps to the VERIFIED `session.interrupt`; the other
-      // transports only claim it when the environment says so. Never one-shot.
+      // Cancellation: RPC maps to the VERIFIED `session.interrupt`, and the
+      // bridge exposes the same interrupt; the other transports only claim it
+      // when the environment says so. Never one-shot.
       cancel:
-        transport === "RPC"
+        transport === "RPC" || transport === "BRIDGE"
           ? true
           : transport === "CLI_ONESHOT"
             ? false
             : readBool(env.HERMES_RUNTIME_SUPPORTS_CANCEL, false),
-      // Resume is never claimed for RPC (no verified resume method) or one-shot.
+      // Resume is never claimed for RPC (no verified resume method), the bridge
+      // (no resume route) or one-shot.
       resume:
-        transport === "RPC" || transport === "CLI_ONESHOT"
+        transport === "RPC" || transport === "CLI_ONESHOT" || transport === "BRIDGE"
           ? false
           : readBool(env.HERMES_RUNTIME_SUPPORTS_RESUME, false),
     },
@@ -275,11 +301,14 @@ export function resolveHermesConfig(
     authTokenPresent: Boolean(env.HERMES_RUNTIME_TOKEN),
     authHeaderName: env.HERMES_RUNTIME_AUTH_HEADER?.trim() || "Authorization",
     authScheme: env.HERMES_RUNTIME_AUTH_SCHEME?.trim() || "Bearer",
+    bridgeKeyId: env.HERMES_RUNTIME_BRIDGE_KEY_ID?.trim() || "nexup-vercel",
+    bridgeSecretPresent: Boolean(env.HERMES_RUNTIME_BRIDGE_SECRET),
     // adapter-owned: RPC (verified) + quarantined HTTP/CLI + fallback one-shot.
     protocol: resolveHermesProtocol(protocolOverrides).protocol,
   };
   if (transport === "RPC" && rpcEndpointRaw) config.rpcEndpoint = toWebSocketEndpoint(rpcEndpointRaw);
   if (transport === "HTTP" && endpoint) config.endpoint = endpoint;
+  if (transport === "BRIDGE" && bridgeUrl) config.bridgeEndpoint = bridgeUrl;
   if ((transport === "CLI" || transport === "CLI_ONESHOT") && executablePath) config.executablePath = executablePath;
 
   return { enabled: true, config, reason: `Hermes runtime configured for profile "${profile}" via ${transport}` };

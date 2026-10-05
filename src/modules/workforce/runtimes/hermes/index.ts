@@ -17,6 +17,8 @@ export * from "./hermes-transport";
 export * from "./hermes-protocol";
 export * from "./hermes-spawn";
 export * from "./hermes-rpc-transport";
+export * from "./bridge-client";
+export * from "./hermes-bridge-transport";
 export * from "./hermes-transports";
 export * from "./hermes-oneshot-transport";
 export * from "./hermes-mapping";
@@ -73,6 +75,10 @@ export function createHermesRuntimeFromEnv(
   if (options.webSocketFactory) transportOptions.webSocketFactory = options.webSocketFactory;
   const token = env.HERMES_RUNTIME_TOKEN;
   if (token) transportOptions.token = token;
+  // The bridge HMAC secret is read here and handed to the transport; it is
+  // never logged, returned, or placed on the runtime identity.
+  const bridgeSecret = env.HERMES_RUNTIME_BRIDGE_SECRET;
+  if (bridgeSecret) transportOptions.bridgeSecret = bridgeSecret;
 
   const transport = createHermesTransport(resolution.config, transportOptions);
 

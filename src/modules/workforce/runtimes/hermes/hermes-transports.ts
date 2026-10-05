@@ -1,5 +1,7 @@
 import type { HermesRuntimeConfig } from "./hermes-config";
 import { assertSafeProfile } from "./hermes-config";
+import { HermesBridgeClient } from "./bridge-client";
+import { HermesBridgeTransport } from "./hermes-bridge-transport";
 import { HermesCliOneshotTransport } from "./hermes-oneshot-transport";
 import { HermesRpcTransport, type HermesWebSocketFactory } from "./hermes-rpc-transport";
 import {
@@ -390,6 +392,14 @@ export type CreateHermesTransportOptions = {
   webSocketFactory?: HermesWebSocketFactory;
   /** Adapter-owned protocol; defaults to `config.protocol`. */
   protocol?: HermesProtocolConfig;
+  /** HMAC secret for the BRIDGE transport; read from env by the caller, never logged. */
+  bridgeSecret?: string;
+  /** Injected fetch for the bridge client (tests). */
+  bridgeFetch?: typeof fetch;
+  /** Deterministic nonce factory for the bridge client (tests). */
+  bridgeNonceFactory?: () => string;
+  /** Injected clock for the bridge client (tests). */
+  bridgeNow?: () => Date;
 };
 
 export function createHermesTransport(
@@ -397,6 +407,24 @@ export function createHermesTransport(
   options: CreateHermesTransportOptions = {},
 ): HermesTransport {
   const protocol = options.protocol ?? config.protocol;
+  if (config.transport === "BRIDGE") {
+    // The bridge is the ONLY production path to a loopback-only Hermes. The
+    // client signs with the shared HMAC primitive and never sees the Hermes
+    // session token.
+    const client = new HermesBridgeClient({
+      baseUrl: config.bridgeEndpoint ?? "",
+      keyId: config.bridgeKeyId ?? "nexup-vercel",
+      secret: options.bridgeSecret ?? "",
+      ...(options.bridgeFetch ? { fetchImpl: options.bridgeFetch } : {}),
+      ...(options.bridgeNonceFactory ? { nonceFactory: options.bridgeNonceFactory } : {}),
+      ...(options.bridgeNow ? { now: options.bridgeNow } : {}),
+    });
+    return new HermesBridgeTransport({
+      client,
+      profile: config.profile,
+      ...(options.bridgeSecret ? { secrets: [options.bridgeSecret] } : {}),
+    });
+  }
   if (config.transport === "RPC") {
     return new HermesRpcTransport({
       endpoint: config.rpcEndpoint ?? config.endpoint ?? "",

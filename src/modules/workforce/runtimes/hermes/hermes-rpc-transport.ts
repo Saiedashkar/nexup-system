@@ -61,6 +61,18 @@ export type HermesWebSocketFactory = (
   options: { headers?: Record<string, string> },
 ) => HermesWebSocketLike;
 
+/**
+ * A server event observed on the wire, normalized to its public fields. The
+ * bridge uses this to forward streamed deltas without reaching into the
+ * transport's private frame handling. Additive: transports without a subscriber
+ * behave exactly as before.
+ */
+export type HermesRpcEvent = {
+  type?: string;
+  sessionId?: string;
+  payload?: Record<string, unknown>;
+};
+
 const WS_OPEN = 1;
 
 /**
@@ -122,6 +134,18 @@ export type HermesRpcTransportOptions = {
   authScheme?: string;
   /** Extra headers (e.g. an Origin the Hermes host guard expects). */
   headers?: Record<string, string>;
+  /**
+   * Optional sink for every inbound server event. Invoked for notifications
+   * only (never responses). Never throws into the socket loop — a throwing
+   * subscriber is swallowed so it cannot break request correlation.
+   */
+  onEvent?: (event: HermesRpcEvent) => void;
+  /**
+   * Optional sink invoked as soon as `session.create` returns a session id.
+   * Lets a caller (the bridge) learn the session id BEFORE the first event, so
+   * it can interrupt a turn that has not yet streamed anything.
+   */
+  onSession?: (sessionId: string) => void;
   /** Connect timeout; defaults to the request timeout. */
   connectTimeoutMs?: number;
   /** Injected for tests. */
@@ -329,6 +353,13 @@ export class HermesRpcTransport implements HermesTransport {
     if (typeof sessionId !== "string" || sessionId.length === 0) {
       throw new HermesRpcError(undefined, "session.create did not return a session_id");
     }
+    if (this.options.onSession) {
+      try {
+        this.options.onSession(sessionId);
+      } catch {
+        /* a subscriber must never break the request */
+      }
+    }
     return sessionId;
   }
 
@@ -376,6 +407,19 @@ export class HermesRpcTransport implements HermesTransport {
 
     // A server event is a notification (`method:"event"`, no `id`).
     if (frame.method === this.protocol.eventMethod && (frame.id === undefined || frame.id === null)) {
+      // Fan out to the optional event sink BEFORE waiter matching, so a
+      // streaming consumer sees a delta even if it also resolves a waiter.
+      if (this.options.onEvent) {
+        try {
+          this.options.onEvent({
+            type: this.eventType(frame),
+            sessionId: this.eventSessionId(frame),
+            payload: this.eventPayload(frame),
+          });
+        } catch {
+          /* a subscriber must never break the socket loop */
+        }
+      }
       for (const waiter of [...this.waiters]) {
         let matched = false;
         try {

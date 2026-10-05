@@ -169,9 +169,11 @@ export const DEPARTMENTS: Department[] = [
     capability: "People · Process · Support",
     accentVar: "--nc-operations",
     space: "Operations floor",
-    /* Deliberately not a ring: the top space sits slightly right of centre. */
-    x: 54,
-    y: 15,
+    /* The composition puts the spaces on the flanks so the Intelligence Core
+       has room to breathe in the middle — a deliberate repositioning for the
+       command-center reading, not a ring. */
+    x: 22,
+    y: 82,
     depth: 30,
     crew: 8,
     workers: [
@@ -194,8 +196,8 @@ export const DEPARTMENTS: Department[] = [
     capability: "Clients · Projects · QA",
     accentVar: "--nc-client",
     space: "Delivery bay",
-    x: 19,
-    y: 30,
+    x: 17,
+    y: 50,
     /* Furthest back: the quietest space when nothing is at risk. */
     depth: -70,
     crew: 6,
@@ -220,7 +222,7 @@ export const DEPARTMENTS: Department[] = [
     accentVar: "--nc-product",
     space: "Build floor",
     x: 80,
-    y: 37,
+    y: 26,
     depth: 55,
     crew: 7,
     workers: [
@@ -244,8 +246,8 @@ export const DEPARTMENTS: Department[] = [
     capability: "Leads · Sales · Market",
     accentVar: "--nc-growth",
     space: "Growth floor",
-    x: 21,
-    y: 70,
+    x: 20,
+    y: 16,
     /* Nearest the viewer: revenue is the space a founder leans toward. */
     depth: 95,
     crew: 8,
@@ -269,8 +271,8 @@ export const DEPARTMENTS: Department[] = [
     capability: "Money · Margin · Audit",
     accentVar: "--nc-finance",
     space: "Control room",
-    x: 73,
-    y: 67,
+    x: 79,
+    y: 64,
     depth: -95,
     crew: 4,
     workers: [

@@ -22,11 +22,15 @@ import {
 
 const MODEL_POLICIES = ["AUTO", "FAST", "DEEP", "CODE"] as const;
 
+/** Business scope — mocked selector, same four contexts the rail used to offer. */
+const BUSINESS_CONTEXTS = ["All Companies", "NEXUP System", "REBOUND", "Abomazen"] as const;
+
 export function GlobalCommandBar() {
   const { notify } = useCommand();
   const [value, setValue] = useState("");
   const [policy, setPolicy] = useState(0);
   const [listening, setListening] = useState(false);
+  const [scope, setScope] = useState(0);
   const [result, setResult] = useState<{ input: string; mock: MockInterpretation } | null>(null);
 
   const submit = () => {
@@ -82,6 +86,16 @@ export function GlobalCommandBar() {
           title="Model policy — mocked. A real Model Router arrives in a later phase."
         >
           <b>{MODEL_POLICIES[policy]}</b>
+          <IconChevronDown size={14} />
+        </button>
+
+        <button
+          type="button"
+          className="nc-cmdbar__scope"
+          onClick={() => setScope((s) => (s + 1) % BUSINESS_CONTEXTS.length)}
+          title="Business context — mocked selector."
+        >
+          {BUSINESS_CONTEXTS[scope]}
           <IconChevronDown size={14} />
         </button>
 

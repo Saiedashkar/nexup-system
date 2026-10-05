@@ -1,19 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useCommand } from "./state/command-store";
-import { workspaceHref } from "./state/department-workspace";
 import { MOCK_PROJECTS } from "./state/demo-scenarios";
 import { ACTORS, describeActors } from "./state/actors";
 import { ActorChip } from "./scene/actor-presence";
+import { RecentActivity } from "./organization/command-center";
 import { DEPARTMENT_BY_ID, FOUNDER, SYSTEMS } from "./state/organization-model";
 import {
   DEPARTMENT_ICONS,
   IconArrowLeft,
   IconBell,
-  IconCheck,
-  IconChevronDown,
   IconChevronRight,
   IconGear,
   IconPanel,
@@ -23,71 +20,45 @@ import {
 import { cssVars } from "./ui/css-vars";
 import { STATUS_LABEL, workerLevel, workerState } from "./state/visual-state";
 
-/** Worker rows use the collapsed five-state vocabulary. */
-const WORKER_STATE_LABEL: Record<string, string> = {
-  IDLE: "Idle",
-  WORKING: "Working",
-  ACTIVE: "Active",
-  WAITING: "Waiting",
-  APPROVAL_REQUIRED: "Needs approval",
-};
-
 /**
- * CONTEXT RAIL (Phase UI-02.1)
- * ────────────────────────────
- * The rail answers "what should I know right now" — and it answers it
- * *differently depending on where the camera is*, which is the point of a
- * spatial environment: moving into a space should change everything you're
- * looking at, not just the thing you clicked.
+ * CONTEXT RAIL (visual-direction pass)
+ * ────────────────────────────────────
+ * The reference asks for a quieter rail: who is on the team, what the
+ * organization runs on, and what just happened — in that order, with room to
+ * breathe. So the rail is now three sections rather than five, the label row is
+ * title-case instead of a wall of tiny all-caps, and the department reading
+ * still takes over the rail when a space is open.
  *
- *   overview    →  NOW · NEEDS YOU · PEOPLE · SYSTEM HEALTH
- *   department  →  DIRECTOR · TEAMS · RUNNING MISSIONS · BOTTLENECK
- *
- * Both modes are the same rail, the same blocks and the same live snapshot —
- * only the questions change. Department detail moved here from UI-01.1's modal
- * focus panel, so entering a space never covers the organization.
- *
- * Light by design: it is collapsible, it has no charts, and every number on it
- * is derived from the visual state instead of being typed in twice.
+ * Every figure is derived from the live snapshot; nothing here reads a session,
+ * a runtime or a database.
  */
-
-const BUSINESS_CONTEXTS = ["All Companies", "NEXUP System", "REBOUND", "Abomazen"] as const;
 
 const clockTime = (date: Date) => date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 const clockDate = (date: Date) =>
   date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
-/** Top band of the context column — aligned with the global command bar. */
+/** Top band of the context column — notifications and identity. */
 export function ContextTopbar() {
   const { notify, toggleRight } = useCommand();
-  const [context, setContext] = useState(0);
 
   return (
     <div className="nc-context__topbar">
-      <button
-        type="button"
-        className="nc-cluster-chip"
-        onClick={() => setContext((c) => (c + 1) % BUSINESS_CONTEXTS.length)}
-        title="Business context — mocked selector."
-      >
-        {BUSINESS_CONTEXTS[context]}
-        <IconChevronDown size={14} />
-      </button>
-
-      <span style={{ flex: 1 }} />
-
       <button
         type="button"
         className="nc-cluster-icon"
         aria-label="Notifications"
         onClick={() => notify("Notifications are visual only in this phase.")}
       >
-        <IconBell size={17} />
+        <IconBell size={18} />
         <span className="nc-cluster-icon__dot">2</span>
       </button>
 
       <span className="nc-avatar" style={{ width: 38, height: 38, fontSize: 13 }} aria-hidden="true">
         {FOUNDER.initials}
+      </span>
+      <span className="nc-context__who">
+        <span className="nc-context__who-name">{FOUNDER.name}</span>
+        <span className="nc-context__who-role">Executive</span>
       </span>
 
       <button
@@ -99,6 +70,29 @@ export function ContextTopbar() {
       >
         <IconChevronRight size={15} />
       </button>
+    </div>
+  );
+}
+
+function SectionLabel({
+  children,
+  count,
+  onViewAll,
+}: {
+  children: React.ReactNode;
+  count?: number;
+  onViewAll?: () => void;
+}) {
+  return (
+    <div className="nc-context__label">
+      {children}
+      {count !== undefined && <span className="nc-context__count">{count}</span>}
+      {onViewAll && (
+        <button type="button" className="nc-context__viewall" onClick={onViewAll}>
+          View all
+          <IconChevronRight size={12} />
+        </button>
+      )}
     </div>
   );
 }
@@ -176,20 +170,9 @@ export function ContextRail() {
         )}
 
         <section className="nc-context__block">
-          <div className="nc-context__label">Runtime</div>
-          <div className="nc-project__row" style={{ alignItems: "center" }}>
-            <span className="nc-project__mark" style={cssVars({ "--nc-accent": "var(--nc-completed)" })}>
-              <IconGear size={15} />
-            </span>
-            <span style={{ minWidth: 0 }}>
-              <span className="nc-project__name" style={{ display: "block" }}>
-                Local · no AI provider
-              </span>
-              <span className="nc-project__meta" style={{ display: "block" }}>
-                All state on this screen is mocked and local.
-              </span>
-            </span>
-          </div>
+          <p className="nc-context__hint">
+            <IconGear size={12} /> Local · no AI provider. Everything on this screen is mocked and local.
+          </p>
         </section>
       </div>
     </aside>
@@ -199,128 +182,34 @@ export function ContextRail() {
 /* ── OVERVIEW MODE ─────────────────────────────────────────────────────── */
 
 function OverviewContext() {
-  const { snapshot, selectScenario, notify } = useCommand();
-  const router = useRouter();
-
-  const nodes = [snapshot.visual.executive, ...Object.values(snapshot.visual.departments)];
-  const working = nodes.filter(
-    (node) => node.status === "ACTIVE" || node.status === "THINKING" || node.status === "HANDOFF",
-  ).length;
-  const held = nodes.filter(
-    (node) =>
-      node.needsApproval ||
-      node.status === "APPROVAL_REQUIRED" ||
-      node.status === "BLOCKED" ||
-      node.status === "ERROR",
-  ).length;
-  const failed = nodes.filter((node) => node.status === "ERROR" || node.status === "BLOCKED").length;
-
-  const attention = snapshot.approvals.length + failed;
+  const { notify } = useCommand();
 
   return (
     <>
       <section className="nc-context__block">
-        <div className="nc-context__label">Now</div>
-        <div className="nc-now">
-          <span className="nc-now__line">{snapshot.narrative}</span>
-          <span className="nc-now__meta">
-            {working} of {nodes.length} nodes working · {held} holding for a human
-          </span>
-        </div>
-      </section>
-
-      <section className="nc-context__block">
-        <div className="nc-context__label">
-          Needs you
-          {attention > 0 && (
-            <span className="nc-context__count" style={{ color: "var(--nc-approval)" }}>
-              {attention}
-            </span>
-          )}
-        </div>
-
-        {snapshot.approvals.length === 0 && failed === 0 ? (
-          <p className="nc-empty">Nothing is waiting on you.</p>
-        ) : (
-          <>
-            {snapshot.approvals.map((approval) => (
-              <div key={approval.id} className="nc-approval-row">
-                <span className="nc-approval-row__avatar" aria-hidden="true">
-                  {DEPARTMENT_BY_ID[approval.department]?.short.slice(0, 3) ?? "—"}
-                </span>
-                <button
-                  type="button"
-                  style={{ minWidth: 0, textAlign: "left", flex: 1 }}
-                  onClick={() => {
-                    /* Context stays actionable: show the held state, then walk
-                       straight into the department workspace that is waiting
-                       (Phase UI-03 routes full department work there). */
-                    selectScenario("approval");
-                    router.push(workspaceHref(approval.department));
-                  }}
-                  aria-label={`Open ${approval.title} in context`}
-                >
-                  <span className="nc-approval-row__title" style={{ display: "block" }}>
-                    {approval.title}
-                  </span>
-                  <span className="nc-approval-row__meta" style={{ display: "block" }}>
-                    {DEPARTMENT_BY_ID[approval.department]?.name} · risk {approval.risk}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="nc-approval-row__act"
-                  aria-label={`Approve: ${approval.title}`}
-                  title="Approve (mocked)"
-                  onClick={() =>
-                    notify(
-                      "Approvals are visual in this phase — nothing was executed. The real approval loop is live at /office/ai-workforce.",
-                    )
-                  }
-                >
-                  <IconCheck size={15} />
-                </button>
-              </div>
-            ))}
-
-            {failed > 0 && (
-              <button
-                type="button"
-                className="nc-attention-row"
-                onClick={() => notify(`${failed} node(s) blocked or failed — visible on the wired space, never hidden.`)}
-              >
-                <span className="nc-attention-row__mark" aria-hidden="true" />
-                {failed} blocked or failed
-                <IconChevronRight size={12} />
-              </button>
-            )}
-          </>
-        )}
-      </section>
-
-      <section className="nc-context__block">
-        <div className="nc-context__label">
-          People
-          <span className="nc-context__count">{ACTORS.length}</span>
-        </div>
+        <SectionLabel count={ACTORS.length} onViewAll={() => notify("The full workforce directory arrives with the Workforce area.")}>
+          People &amp; Actors
+        </SectionLabel>
         <div className="nc-people">
           {ACTORS.map((actor) => (
             <ActorChip key={actor.id} actor={actor} />
           ))}
         </div>
-        <p className="nc-context__hint">
-          {describeActors(ACTORS)} — presence is visual only in this phase.
-        </p>
+        <button
+          type="button"
+          className="nc-syslist__connect"
+          onClick={() => notify("Inviting people or agents arrives with the Workforce area.")}
+        >
+          <IconPlus size={14} />
+          Invite people or agents
+        </button>
+        <p className="nc-context__hint">{describeActors(ACTORS)} · presence is visual only in this phase.</p>
       </section>
 
-      {/* The Connected Systems Layer, in list form. The same four endpoints the
-          room mounts on its perimeter, with the one thing a list can say better
-          than a room can: which spaces actually reach them. */}
       <section className="nc-context__block">
-        <div className="nc-context__label">
-          Connected systems
-          <span className="nc-context__count">{SYSTEMS.length}</span>
-        </div>
+        <SectionLabel count={SYSTEMS.length} onViewAll={() => notify("The Systems area arrives in a later phase.")}>
+          Connected Systems
+        </SectionLabel>
         <div className="nc-syslist">
           {SYSTEMS.map((system) => (
             <SystemRow key={system.id} system={system} notify={notify} />
@@ -332,8 +221,15 @@ function OverviewContext() {
           onClick={() => notify("Connecting a real system arrives with the Systems area in a later phase.")}
         >
           <IconPlus size={14} />
-          Connect a system
+          Add a system
         </button>
+      </section>
+
+      <section className="nc-context__block">
+        <SectionLabel onViewAll={() => notify("The activity log arrives with the Work area.")}>
+          Recent Activity
+        </SectionLabel>
+        <RecentActivity />
       </section>
     </>
   );
@@ -414,7 +310,7 @@ function DepartmentContext({
   return (
     <>
       <section className="nc-context__block">
-        <div className="nc-context__label">Director</div>
+        <SectionLabel>Director</SectionLabel>
         <div className="nc-director" style={cssVars({ "--nc-accent": `var(${department.accentVar})` })}>
           <span className="nc-director__mark" aria-hidden="true">
             <IconSpark size={16} />
@@ -431,10 +327,7 @@ function DepartmentContext({
       </section>
 
       <section className="nc-context__block">
-        <div className="nc-context__label">
-          Teams
-          <span className="nc-context__count">{department.workers.length}</span>
-        </div>
+        <SectionLabel count={department.workers.length}>Teams</SectionLabel>
         <div className="nc-focus__grid">
           {department.workers.map((worker) => {
             const level = visual.workerActivity?.[worker.id] ?? 0;
@@ -451,7 +344,7 @@ function DepartmentContext({
                   </span>
                 </span>
                 <span className="nc-worker__spacer" />
-                <span className="nc-worker__status">{WORKER_STATE_LABEL[state] ?? state}</span>
+                <span className="nc-worker__status">{state.replace(/_/g, " ").toLowerCase()}</span>
               </div>
             );
           })}
@@ -459,10 +352,7 @@ function DepartmentContext({
       </section>
 
       <section className="nc-context__block">
-        <div className="nc-context__label">
-          Running missions
-          <span className="nc-context__count">{department.missions}</span>
-        </div>
+        <SectionLabel count={department.missions}>Running missions</SectionLabel>
         {missions.length === 0 ? (
           <p className="nc-empty">No mission in this space is currently tracked.</p>
         ) : (
@@ -498,7 +388,7 @@ function DepartmentContext({
       </section>
 
       <section className="nc-context__block">
-        <div className="nc-context__label">Current bottleneck</div>
+        <SectionLabel>Current bottleneck</SectionLabel>
         <div className="nc-bottleneck">
           <span className="nc-bottleneck__mark" aria-hidden="true" />
           <span style={{ minWidth: 0 }}>

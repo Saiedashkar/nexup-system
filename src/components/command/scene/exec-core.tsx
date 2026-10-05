@@ -3,7 +3,6 @@
 import { EXECUTIVE } from "../state/organization-model";
 import type { Placement } from "../state/spatial-camera";
 import { EXEC_ACTOR } from "../state/actors";
-import { IconAgent } from "../ui/icons";
 import { cssVars } from "../ui/css-vars";
 import { EXEC_PHASE_LABEL, STATUS_LABEL, execPhase, type VisualNodeState } from "../state/visual-state";
 
@@ -15,20 +14,15 @@ import { EXEC_PHASE_LABEL, STATUS_LABEL, execPhase, type VisualNodeState } from 
  * because it was a circle, the second because a glowing ball is the most
  * generic object in this whole visual language.
  *
- * So the body is now an INSTRUMENT rather than an orb. It is assembled the way
- * a piece of equipment is assembled, in four layers the eye can separate:
+ * The approved direction calls for calm, premium central intelligence — not a
+ * glowing green gaming orb. So the body is now a GLOBE: a soft lit sphere with
+ * an internal atmosphere, wrapped in three orbiting rings that turn only while
+ * the core is actually working. Its identity sits beneath it, and its readout is
+ * a quiet plate rather than a floating pill.
  *
- *   · the DECK      — the lit concentric platform the core stands on. This is
- *     what grounds it in the room and ties it to the departments' floors, which
- *     sit on the same plane;
- *   · the GANTRY    — two slim pillars and a top arc: the frame the instrument
- *     hangs in. Nothing in a dashboard has a frame;
- *   · the BODY      — a machined optical housing: a dark dome, an equatorial
- *     band with cut tick marks, a dark lower housing. Geometry, not glow;
- *   · the APERTURE  — a recessed dark chamber with iris blades and a SMALL lime
- *     intelligence source inside it. The only saturated object in the scene,
- *     and it is roughly a seventh of the core's width, because the material
- *     around it is what has to look expensive.
+ * The sphere is deliberately a single, replaceable slot (`.nc-core__globe`):
+ * when the Agent Identity System lands, EXEC can carry a real character/avatar
+ * at the centre without any structural change here.
  *
  * The state contract is untouched: it still receives one `VisualNodeState`, the
  * nine runtime states still collapse into four phases, and it is still a real
@@ -69,22 +63,6 @@ export function ExecCore({
         visual.activeJob ? `. ${visual.activeJob}` : ""
       }. ${EXECUTIVE.level}. Open the Executive console.`}
     >
-      {/* The platform. Concentric rings on the floor plane, plus tick marks, so
-          the core reads as standing IN the room rather than floating in it. */}
-      <span className="nc-core__deck" aria-hidden="true">
-        <span className="nc-core__deck-ring" data-ring="outer" />
-        <span className="nc-core__deck-ring" data-ring="mid" />
-        <span className="nc-core__deck-ring" data-ring="inner" />
-      </span>
-
-      {/* The frame. Two pillars and an arc: the instrument is mounted, the way
-          real equipment is, and the silhouette stops being a circle. */}
-      <span className="nc-core__gantry" aria-hidden="true">
-        <span className="nc-core__pillar" data-side="left" />
-        <span className="nc-core__pillar" data-side="right" />
-        <span className="nc-core__gantry-arc" />
-      </span>
-
       {/* Rings are part of the core's volume: they tilt with the camera and only
           turn while the core is actually working. */}
       <span className="nc-core__rings" aria-hidden="true">
@@ -109,21 +87,29 @@ export function ExecCore({
         </svg>
       </span>
 
+      {/* A second, oblique orbit. The equatorial rings are the core's own gauge;
+          this one crosses them, which is what gives a globe "orbit" instead of
+          "gauge". Static on purpose — only the equatorial band turns. */}
+      <span className="nc-core__orbit" aria-hidden="true">
+        <svg viewBox="0 0 200 200" width="100%" height="100%">
+          <ellipse className="nc-core__orbit-ring" cx="100" cy="100" rx="88" ry="34" />
+        </svg>
+      </span>
+
+      {/* The atmosphere: an outer halo that seats the sphere in the room and
+          gives the centre a light source of its own. */}
+      <span className="nc-core__halo" aria-hidden="true" />
+
+      {/* The body: a calm, intelligent sphere. Deliberately NOT a gamer orb —
+          a soft lit globe whose inner atmosphere is the only saturated thing in
+          the scene. The structure leaves room for a future character/avatar
+          identity to sit at its centre without a rebuild: `.nc-core__nucleus`
+          is that slot, and it is hidden behind the identity until an avatar
+          exists. */}
       <span className="nc-core__body" aria-hidden="true">
-        <span className="nc-core__casing" />
-        <span className="nc-core__band" />
-        <span className="nc-core__housing" />
-        <span className="nc-core__vent" data-side="left" />
-        <span className="nc-core__vent" data-side="right" />
-
-        <span className="nc-core__lens">
-          <span className="nc-core__iris" />
-          <span className="nc-core__energy" data-energy={busy ? "live" : "rest"} />
-        </span>
-
-        <span className="nc-core__mark">
-          <IconAgent size={13} />
-        </span>
+        <span className="nc-core__globe" />
+        <span className="nc-core__grid" />
+        <span className="nc-core__nucleus" />
       </span>
 
       {/* Integrated readout: the machine states its own condition, on itself. */}

@@ -2,15 +2,17 @@
 
 import { useCommand } from "../state/command-store";
 import {
+  DEPARTMENTS,
   WORKSPACE_MODES,
   systemsForDepartment,
   type Department,
   type DepartmentId,
 } from "../state/organization-model";
+import { MOCK_PROJECTS } from "../state/demo-scenarios";
 import type { Placement } from "../state/spatial-camera";
 import { cssVars } from "../ui/css-vars";
-import { DECK_ICONS, DEPARTMENT_ICONS, IconChevronRight } from "../ui/icons";
-import { ActorCluster, ActorList } from "./actor-presence";
+import { DECK_ICONS, DEPARTMENT_ICONS } from "../ui/icons";
+import { ActorList } from "./actor-presence";
 import { STATUS_LABEL, needsHumanStatus, workerLevel, type VisualNodeState } from "../state/visual-state";
 
 /**
@@ -91,15 +93,31 @@ export function DepartmentPod({
   const attention = needsApproval || needsHumanStatus(status) ? 1 : 0;
   const reveal = hovered || focused;
 
+  /* "On track" means the missions this space owns; when it owns none, fall back
+     to how loaded the space is right now. Both come from real state. */
+  const owned = MOCK_PROJECTS.filter((project) => project.department === department.id);
+  const onTrack = owned.length
+    ? Math.round(owned.reduce((sum, project) => sum + project.progress, 0) / owned.length)
+    : Math.round(activityLevel * 100);
+
   /* Bays face the centre of the room. Derived from configuration, applied as one
      rule: a space left of centre turns right, a space right of centre turns
      left. Nothing else about a pod is position-aware. */
   const face = (50 - department.x) * 0.22;
 
+  /* The side of the node the network connects to: the edge facing the core.
+     Purely positional, derived from the same coordinates the routes use. */
+  const side = department.x < 50 ? "right" : "left";
+  /* The node's index in the organization — a stable identity code (D1…Dn) for
+     the hierarchy, derived from configuration order, never invented content. */
+  const code = `D${DEPARTMENTS.findIndex((entry) => entry.id === department.id) + 1}`;
+
   return (
     <div
       className="nc-pod"
+      data-department={department.id}
       data-status={status}
+      data-side={side}
       data-depth={placement.depth > 0 ? "near" : "far"}
       data-dim={receded}
       data-focused={focused}
@@ -119,6 +137,10 @@ export function DepartmentPod({
       <span className="nc-pod__floor" aria-hidden="true" />
       <span className="nc-pod__bay" aria-hidden="true" />
       <span className="nc-pod__strut" aria-hidden="true" />
+      {/* The network port: the physical place the routing field docks. One
+          element, one side, both derived — it is what stops the node reading
+          as a card that merely sits near some lines. */}
+      <span className="nc-pod__port" data-side={side} aria-hidden="true" />
 
       {focused ? (
         <Workspace department={department} visual={visual} signals={signals} attention={attention} insight={insight} />
@@ -132,13 +154,20 @@ export function DepartmentPod({
               insight ? `. ${insight}` : ""
             }${attention ? ". Needs you." : ""}. Enter this space.`}
           >
-            <span className="nc-pod__spine" aria-hidden="true" />
-            <span className="nc-pod__ledge" aria-hidden="true" />
-
-            <span className="nc-pod__kicker">{department.space}</span>
-
-            <span className="nc-pod__head">
-              <span className="nc-pod__name">{department.name}</span>
+            {/* The identity disc. Deliberately a dedicated element with a
+                single initial slot, so the coming Agent Identity System can
+                swap in an avatar/character here without touching structure. */}
+            <span className="nc-pod__top">
+              <span className="nc-pod__badge" aria-hidden="true">
+                {department.short.slice(0, 2)}
+              </span>
+              <span className="nc-pod__head">
+                <span className="nc-pod__name">
+                  <span className="nc-pod__code">{code}</span>
+                  {department.name}
+                </span>
+                <span className="nc-pod__cap">{department.capability}</span>
+              </span>
               <span className="nc-pod__state">
                 <span className="nc-pod__led" aria-hidden="true" />
                 {STATUS_LABEL[status]}
@@ -149,11 +178,18 @@ export function DepartmentPod({
               {insight}
             </span>
 
-            <span className="nc-pod__foot">
-              <ActorCluster ids={department.presence} />
-              <span className="nc-pod__enter">
-                Enter space
-                <IconChevronRight size={13} />
+            <span className="nc-pod__stats">
+              <span className="nc-pod__stat">
+                <b>{signals.missions}</b>
+                <span>Missions</span>
+              </span>
+              <span className="nc-pod__stat">
+                <b>{onTrack}%</b>
+                <span>On Track</span>
+              </span>
+              <span className="nc-pod__stat" data-attention={attention > 0}>
+                <b>{attention}</b>
+                <span>Blocked</span>
               </span>
             </span>
 
@@ -161,14 +197,6 @@ export function DepartmentPod({
               <i style={{ width: `${Math.round(activityLevel * 100)}%` }} />
             </span>
           </button>
-
-          {/* The console lip: three machined readout slots that continue the
-              surface past its own edge. */}
-          <span className="nc-pod__rib" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </span>
         </>
       )}
 

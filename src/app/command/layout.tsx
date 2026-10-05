@@ -18,6 +18,11 @@ import "./actor.css";
 import "./system.css";
 /* Phase UI-05 also adds EXEC's own layer. Same rule again. */
 import "./exec.css";
+/* Visual-direction correction: retunes the palette (graphite/blue glass,
+   restrained lime) and adds the command-center chrome. Imported LAST on
+   purpose — it is the one layer allowed to retune tokens, because the palette
+   itself was the drift. Visuals only; no runtime or domain code. */
+import "./reference.css";
 
 /**
  * NEXUP COMMAND — route layout (Phase UI-01)

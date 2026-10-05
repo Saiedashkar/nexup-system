@@ -1,0 +1,12 @@
+{
+  "name": "nexup-vps-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Secure NEXUP VPS Bridge — the only public surface in front of a loopback-only Hermes runtime.",
+  "scripts": {
+    "typecheck": "npx tsc -p tsconfig.json --noEmit",
+    "build": "npx esbuild src/main.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/main.js --alias:@=../src --log-level=warning",
+    "start": "node dist/main.js",
+    "test": "npx vitest run --config vitest.config.ts"
+  }
+}

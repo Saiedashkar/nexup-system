@@ -1,0 +1,35 @@
+# Caddy reverse proxy for the NEXUP VPS Bridge.
+#
+# Terminates TLS and forwards to the loopback bridge. The bridge binds to
+# 127.0.0.1:9220 and must never be exposed directly.
+
+bridge.hymanna.com {
+	# Compression is deliberately NOT enabled: this site also serves the SSE
+	# run stream (`text/event-stream`), and response compression can buffer
+	# frames and defeat streaming. The payloads here are small anyway.
+
+	# Bound the request body at the edge as well as in the bridge.
+	request_body {
+		max_size 256KB
+	}
+
+	# Streaming: disable response buffering so SSE frames flush immediately.
+	reverse_proxy 127.0.0.1:9220 {
+		flush_interval -1
+		transport http {
+			read_timeout 10m
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/nexup-bridge.log
+		format json
+	}
+}

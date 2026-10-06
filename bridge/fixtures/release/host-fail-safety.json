@@ -1,0 +1,52 @@
+{
+  "label": "linux-vps / FORCED SAFETY FAILURES (Hermes public, profile default, weak secret)",
+  "now": "2026-10-06T00:00:00.000Z",
+  "commands": {
+    "/usr/bin/node --version": { "ran": true, "code": 0, "stdout": "v20.11.1\n", "stderr": "" },
+    "caddy version": { "ran": true, "code": 0, "stdout": "v2.7.6 h1:abc\n", "stderr": "" },
+    "caddy validate --config /etc/caddy/Caddyfile": {
+      "ran": true,
+      "code": 1,
+      "stdout": "",
+      "stderr": "Error: unrecognized directive: request_body\n"
+    },
+    "ss -ltnp": {
+      "ran": true,
+      "code": 0,
+      "stdout": "State  Recv-Q Send-Q Local Address:Port Peer Address:Port Process\nLISTEN 0      128    0.0.0.0:9119         0.0.0.0:*         users:((\"hermes\",pid=421,fd=21))\nLISTEN 0      128    0.0.0.0:9220         0.0.0.0:*         users:((\"node\",pid=900,fd=19))\n",
+      "stderr": ""
+    },
+    "sha256sum /opt/nexup-bridge/dist/main.js": {
+      "ran": true,
+      "code": 0,
+      "stdout": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef  /opt/nexup-bridge/dist/main.js\n",
+      "stderr": ""
+    },
+    "stat -c %a %U:%G /etc/nexup-bridge/bridge.env": { "ran": true, "code": 0, "stdout": "644 root:root\n", "stderr": "" },
+    "df -Pk /": {
+      "ran": true,
+      "code": 0,
+      "stdout": "Filesystem     1024-blocks    Used Available Capacity Mounted on\n/dev/sda1         41153856 41000000    153856       1% /\n",
+      "stderr": ""
+    },
+    "sh -c command -v node": { "ran": true, "code": 0, "stdout": "/usr/bin/node\n", "stderr": "" },
+    "sh -c command -v caddy": { "ran": true, "code": 0, "stdout": "/usr/bin/caddy\n", "stderr": "" },
+    "sh -c command -v systemctl": { "ran": true, "code": 0, "stdout": "/usr/bin/systemctl\n", "stderr": "" },
+    "sh -c command -v ss": { "ran": true, "code": 0, "stdout": "/usr/bin/ss\n", "stderr": "" },
+    "sh -c command -v stat": { "ran": true, "code": 0, "stdout": "/usr/bin/stat\n", "stderr": "" },
+    "sh -c command -v sha256sum": { "ran": true, "code": 1, "stdout": "", "stderr": "" },
+    "sh -c command -v df": { "ran": true, "code": 0, "stdout": "/usr/bin/df\n", "stderr": "" },
+    "sh -c command -v sh": { "ran": true, "code": 0, "stdout": "/usr/bin/sh\n", "stderr": "" },
+    "systemctl --version": { "ran": true, "code": 0, "stdout": "systemd 255 (255.4-1ubuntu8)\n", "stderr": "" },
+    "date -u +%s": { "ran": true, "code": 0, "stdout": "1775433600\n", "stderr": "" },
+    "date -u +%Y-%m-%dT%H:%M:%SZ": { "ran": true, "code": 0, "stdout": "2026-10-06T00:00:00Z\n", "stderr": "" }
+  },
+  "files": {
+    "/etc/nexup-bridge/bridge.env": "NEXUP_BRIDGE_ENABLED=true\nNEXUP_BRIDGE_HOST=127.0.0.1\nNEXUP_BRIDGE_PORT=9220\nNEXUP_BRIDGE_HMAC_SECRET=short-secret\nNEXUP_BRIDGE_ALLOWED_KEY_IDS=some-other-key\nHERMES_SESSION_TOKEN=SENTINEL_session_token_that_must_never_be_printed_abcdef\nHERMES_PROFILE=default\n",
+    "/opt/nexup-bridge/dist/main.js": "// recorded bundle excerpt\nexports.assertAllowedHermesMethod = function (method) {\n  if (!ALLOWED.includes(method)) throw new Error('Hermes method \"' + method + '\" is not permitted by the NEXUP bridge');\n};\n"
+  },
+  "stats": {
+    "/opt/nexup-bridge/dist/main.js": { "exists": true, "mode": "755", "size": 182734 }
+  },
+  "trees": {}
+}

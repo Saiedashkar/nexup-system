@@ -223,6 +223,41 @@ timestamp; the previous bundle digest is recorded.
 looks unhealthy **before** you start → stop. That is a pre-existing condition and
 is not yours to fix in this window.
 
+### Machine-assisted pre-flight
+
+P0–P4 are encoded as a **read-only** checker so the window does not depend on
+hand-typing them. Build it once and run it on the host:
+
+```bash
+cd <REPO_ROOT>/nexup-business-system/bridge
+npm run build:cli                                   # → dist/release-cli.js (not committed)
+node dist/release-cli.js preflight \
+  --hermes-src /opt/hermes \
+  --expected-digest <SHA256_FROM_P0>                # add --exec-probes for P0.6
+node dist/release-cli.js hermes-compat \
+  --hermes-src /opt/hermes                           # add --accept-degraded to record §6.5 DEGRADE
+```
+
+- **Read-only.** It only runs `node --version`, `caddy version`, `caddy validate`,
+  `ss`, `stat`, `df`, `sha256sum`, `command -v`, `id`, `date`, `systemctl show`,
+  and — only with `--exec-probes` — one `node …/main.js` run that exits before
+  `listen`. Nothing is started, stopped, written or configured.
+- **Exit codes:** `0` PASS · `1` NO-GO · `2` usage error. The verdict
+  (`PREFLIGHT: PASS|FAIL`, `HERMES-COMPAT: PASS|FAIL`) is the last line.
+- **Fail closed.** A safety check that cannot run is a NO-GO, not a pass: omitting
+  `--exec-probes` leaves P0.6 *could-not-run* and the whole run FAILs.
+- **Never prints secrets.** It reads `bridge.env` for names, key ids, line count
+  and the *length* of the HMAC secret, and prints no values; anything registered
+  as secret is redacted from text and `--json` output.
+- The `hermes-compat` command **is** P2: it prints the METHOD / EXPECTED / FOUND /
+  VERDICT matrix and returns NO-GO if `session.create`, `prompt.submit`,
+  `session.status` or `session.interrupt` is missing or renamed; a missing
+  `gateway.ping` is reported distinctly as degraded (§6.5).
+- Off-host, the same checks replay a recorded host with
+  `--fixture fixtures/release/<name>.json` (see `bridge/README.md`) — that is how
+  the probes are exercised without touching the VPS. `--json` emits the same
+  report for the change record.
+
 ### Pre-flight gate
 
 Proceed to install only if P0, P1, P2 (PASS or recorded DEGRADE), P3 (all four

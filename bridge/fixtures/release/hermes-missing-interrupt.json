@@ -1,0 +1,35 @@
+{
+  "label": "installed Hermes with session.interrupt renamed/absent (critical NO-GO)",
+  "now": "2026-10-06T00:00:00.000Z",
+  "stats": { "/opt/hermes": { "exists": true } },
+  "trees": {
+    "/opt/hermes": {
+      "ran": true,
+      "scannedFiles": 212,
+      "hits": {
+        "gateway.ping": [
+          { "file": "/opt/hermes/src/rpc/gateway.ts", "line": 41, "text": "case \"gateway.ping\": return this.ping();" }
+        ],
+        "session.create": [
+          { "file": "/opt/hermes/src/rpc/session.ts", "line": 88, "text": "register(\"session.create\", createSession);" }
+        ],
+        "prompt.submit": [
+          { "file": "/opt/hermes/src/rpc/session.ts", "line": 96, "text": "register(\"prompt.submit\", submitPrompt);" }
+        ],
+        "session.status": [
+          { "file": "/opt/hermes/src/rpc/session.ts", "line": 104, "text": "register(\"session.status\", sessionStatus);" }
+        ],
+        "session.interrupt": [],
+        "session.history": [],
+        "session.events.since": [],
+        "session.": [
+          { "file": "/opt/hermes/src/rpc/session.ts", "line": 88, "text": "register(\"session.create\", createSession);" },
+          { "file": "/opt/hermes/src/rpc/session.ts", "line": 118, "text": "return this.call(\"session.stop\", params);" }
+        ],
+        "gateway.": [
+          { "file": "/opt/hermes/src/rpc/gateway.ts", "line": 41, "text": "case \"gateway.ping\": return this.ping();" }
+        ]
+      }
+    }
+  }
+}

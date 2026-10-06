@@ -6,6 +6,9 @@
   "scripts": {
     "typecheck": "npx tsc -p tsconfig.json --noEmit",
     "build": "npx esbuild src/main.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/main.js --alias:@=../src --log-level=warning",
+    "build:cli": "npx esbuild src/release/cli.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/release-cli.js --alias:@=../src --log-level=warning",
+    "release:preflight": "node dist/release-cli.js preflight",
+    "release:compat": "node dist/release-cli.js hermes-compat",
     "start": "node dist/main.js",
     "test": "npx vitest run --config vitest.config.ts"
   }

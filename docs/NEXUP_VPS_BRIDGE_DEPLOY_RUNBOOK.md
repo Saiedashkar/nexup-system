@@ -85,7 +85,29 @@ sha256sum dist/main.js                            # record the digest
   `ExecStart=/usr/bin/node /opt/nexup-bridge/dist/main.js`. The artifact must
   therefore land at `/opt/nexup-bridge/dist/main.js`. (Note: the short runbook in
   `docs/NEXUP_VPS_BRIDGE.md` §10 copies to `/opt/nexup-bridge/` — that path is
-  stale; this document is authoritative.)
+  stale; this document is authoritative.) A failed P0.5 is a NO-GO: the tool
+  reads the *live* `ExecStart=` / `WorkingDirectory=` directives (comments
+  ignored), so a shipped path that appears only in a comment does not satisfy it.
+  It parses those directives with the `systemd.syntax(7)` grammar instead of by
+  substring, and takes these readings where that grammar leaves a choice — each is
+  asserted in `bridge/tests/release-cli.test.ts` rather than left implicit:
+  the **last** assignment of a directive wins, so a stale correct `ExecStart=`
+  followed by a wrong one is a NO-GO and the reverse is valid (`Type=simple` does
+  not really permit two `ExecStart=` lines at all; judging the last one is the
+  fail-closed reading); **whitespace around `=` is ignored**, so
+  `WorkingDirectory = /opt/nexup-bridge` is accepted; **a line ending in `\`
+  continues**, with a comment block inside the continuation dropped and the
+  continuation resuming after it, and **quotes wrap an item and are removed**;
+  and **`/usr/bin/node` must be the executable with the bundle as its entry
+  script** — the first item that is not a Node option, where `-r`/`--require`,
+  `-e`/`--eval`, `-p`/`--print`, `--import`, `--loader`/`--experimental-loader`
+  and `--inspect-port` also consume the item that follows them, while a
+  preload/import option may name the bundle instead. Any other position does not
+  count: `node other.js /opt/nexup-bridge/dist/main.js` mentions the bundle
+  without running it and stays a NO-GO, and an `ExecStart` prefix other than `-`
+  (`@`, `+`, `!`) is not modelled and fails closed. Finally, **only whole lines
+  beginning with `#` or `;` are comments** — a trailing `# …` is part of the
+  value, so it can neither hide a wrong path nor smuggle in the right one.
 - **P0.6 Loopback-only bind is enforced in code, with no override:** a
   non-loopback `NEXUP_BRIDGE_HOST` returns `enabled:false`. Prove it on the host
   before deploying (this starts **no** listener — it exits before `listen`):
@@ -198,10 +220,10 @@ grep -rn "session.create\|prompt.submit\|session.status\|session.interrupt" <HER
 
 | # | Finding | Exact check | Pass / fail signal |
 |---|---|---|---|
-| P3.1 | **Proxy-collapsed client identity.** `bridge/src/server.ts` L89 takes `remote` from `req.socket.remoteAddress`, so behind Caddy every request is `127.0.0.1`: the pre-auth "per-remote" bucket is effectively one global bucket, and audit `remote` is the proxy | `grep -n "remoteAddress\|x-forwarded" bridge/src/server.ts` | **Expected: only the socket line, no `x-forwarded`.** Treat as *confirmed by design*. Pass only if the operator records this as accepted behaviour (§8 L3) and understands the pre-auth budget is shared (120/min total, not per client). A fix means trusting a proxy-set header that the edge **overwrites** — do not do that in the window |
-| P3.2 | **Weak-secret acceptance.** `config.ts` L116 refuses only `< 16` chars | P1.3 (`length >= 64`) | **Pass:** ≥ 64 chars of hex from a CSPRNG. Fail → regenerate before install |
-| P3.3 | **Pre-auth sweep order.** The *nonce store* order is correct (insertion == expiry). The caveat is `PreAuthGuard`: `sweepBuckets` breaks on the first live bucket while `consumeBucket` does not refresh insertion order, so stale buckets linger until the 10 k cap, and cap eviction can drop a live bucket — resetting that remote's budget | `npx vitest run tests/security.test.ts -t "refills over time and keeps its bucket state bounded"` | **Pass (accepted):** suite is green today. There is **no** test asserting a hot bucket survives eviction — record that as a known low-severity gap (§8 L4). No host action |
-| P3.4 | **Byte-vs-character truncation.** `boundText` slices by characters (`hermes-spawn.ts` L23–26), so a multi-byte payload can exceed `NEXUP_BRIDGE_MAX_OUTPUT_BYTES` by up to ~4× | `grep -n "slice(0, maxBytes)" src/modules/workforce/runtimes/hermes/hermes-spawn.ts` | **Pass (accepted):** the line is character-based. Mitigation in the window: keep `NEXUP_BRIDGE_MAX_OUTPUT_BYTES=262144` (1 MB worst case) and confirm the run with the largest expected output succeeds in S11. No code change in the window |
+| P3.1 | **Client identity behind the proxy — resolved, not collapsed.** `bridge/src/server.ts` L89 still supplies only the *socket* address, but `bridge/src/api/app.ts` L245 passes it to `resolveClientIdentity` (`bridge/src/auth/client-identity.ts`): the proxy header is believed **only** when the TCP peer is a configured trusted proxy (`NEXUP_BRIDGE_TRUSTED_PROXIES`, default `127.0.0.1,::1`) and the value is a bare IP literal, otherwise the socket address is used. `bridge/deploy/Caddyfile` **overwrites** `X-Nexup-Client-IP`, so the pre-auth "per-remote" bucket and the audit `remote` are per client | tool **P3.1** (reads `app.ts`, `client-identity.ts` and `Caddyfile`); `grep -n "resolveClientIdentity" bridge/src/api/app.ts` | **Pass:** the identity chain is present as described and the operator records the residual dependence on the edge overwrite (§8 L3). If `app.ts` does not resolve the identity, or the Caddyfile does not overwrite the header, the pre-auth budget collapses to one shared bucket again — do not widen `NEXUP_BRIDGE_TRUSTED_PROXIES` beyond the loopback proxy in the window |
+| P3.2 | **Weak-secret acceptance.** `config.ts` L116 refuses only `< 16` chars | P1.3 (`length >= 64`, the tool's **P3.2** row re-reports that same decision) | **Pass:** ≥ 64 chars of hex from a CSPRNG. Fail → regenerate before install |
+| P3.3 | **Pre-auth sweep order.** The *nonce store* order is correct (insertion == expiry). The caveat is `PreAuthGuard`: `sweepBuckets` breaks on the first live bucket while `consumeBucket` does not refresh insertion order, so stale buckets linger until the 10 k cap, and cap eviction can drop a live bucket — resetting that remote's budget | `npx vitest run tests/security.test.ts -t "refills over time and keeps its bucket state bounded"` (tool **P3.3** records it; no host action) | **Pass (accepted):** suite is green today. There is **no** test asserting a hot bucket survives eviction — record that as a known low-severity gap (§8 L4). No host action |
+| P3.4 | **Byte-vs-character truncation.** `boundText` slices by characters (`hermes-spawn.ts` L23–26), so a multi-byte payload can exceed `NEXUP_BRIDGE_MAX_OUTPUT_BYTES` by up to ~4× | `grep -n "slice(0, maxBytes)" src/modules/workforce/runtimes/hermes/hermes-spawn.ts` (tool **P3.4**) | **Pass (accepted):** the line is character-based. Mitigation in the window: keep `NEXUP_BRIDGE_MAX_OUTPUT_BYTES=262144` (1 MB worst case) and confirm the run with the largest expected output succeeds in S11. No code change in the window |
 
 ### P4. Host state capture (the rollback reference)
 
@@ -239,13 +261,18 @@ node dist/release-cli.js hermes-compat \
 ```
 
 - **Read-only.** It only runs `node --version`, `caddy version`, `caddy validate`,
-  `ss`, `stat`, `df`, `sha256sum`, `command -v`, `id`, `date`, `systemctl show`,
+  `ss`, `stat`, `df`, `sha256sum`, `command -v`, `id`, `date`, `systemctl --version`,
   and — only with `--exec-probes` — one `node …/main.js` run that exits before
   `listen`. Nothing is started, stopped, written or configured.
 - **Exit codes:** `0` PASS · `1` NO-GO · `2` usage error. The verdict
   (`PREFLIGHT: PASS|FAIL`, `HERMES-COMPAT: PASS|FAIL`) is the last line.
-- **Fail closed.** A safety check that cannot run is a NO-GO, not a pass: omitting
-  `--exec-probes` leaves P0.6 *could-not-run* and the whole run FAILs.
+- **Fail closed, and a warning stops the run.** A check that FAILS is a NO-GO at
+  *any* severity: §1 says do not proceed on a warning, and an advisory row that
+  fails **is** a warning — it is reported as a gated failure, not a note. A check
+  that merely *cannot run* is a NO-GO only when it is safety-critical: omitting
+  `--exec-probes` leaves P0.6 *could-not-run* and the whole run FAILs, while the
+  advisory rows that legitimately cannot run here (P0.1 build gate, P0.3
+  toolchain, P1.7 Vercel) are reported and do not gate.
 - **Never prints secrets.** It reads `bridge.env` for names, key ids, line count
   and the *length* of the HMAC secret, and prints no values; anything registered
   as secret is redacted from text and `--json` output.
@@ -601,7 +628,7 @@ record so the write-up does not over-claim.
 |---|---|---|
 | L1 | Nonce/rate-limit state is process-local, so a restart inside the 300 s window re-permits one replayed request | Restart is not attacker-triggerable (`Restart=on-failure` only, no exposed control); bounded by the skew window |
 | L2 | Metrics exist only in memory — **there is no `/metrics` HTTP route** (`metrics.ts` has `renderPrometheus`, nothing registers it) | Observability in the window is `journalctl` + the audit lines; do not promise a metrics endpoint |
-| L3 | Behind Caddy the bridge sees `127.0.0.1` as the client, so pre-auth limits are shared and audit `remote` is the proxy | Fixing it means trusting a forwarded header and proving the edge overwrites it — out of scope for the window |
+| L3 | Client identity behind the proxy depends on two things outside the code: the edge must **overwrite** `X-Nexup-Client-IP` (`deploy/Caddyfile` does) and `NEXUP_BRIDGE_TRUSTED_PROXIES` must name the proxy (default `127.0.0.1,::1`). `resolveClientIdentity` believes the header only from a trusted peer and otherwise falls back to the socket address — a real per-peer bucket, never an unbounded or shared "trusted" one | The fallback means a spoofed or mis-forwarded header cannot mint fresh pre-auth budgets; the loopback default matches a loopback Caddy, and **P3.1** together with the P1 trusted-proxy check cover both sides. Widening the trusted-proxy list is the only way to break it |
 | L4 | No test asserts that a live pre-auth bucket survives cap eviction | Bounded (10 k) and low impact; captured as hardening debt |
 | L5 | HMAC secrets between 16 and 63 chars are accepted by the code | Pre-flight P1.3 imposes the real policy; a startup minimum is a code change for later |
 | L6 | The unit sets no seccomp / `SystemCallFilter` | The bundle contains no `node:child_process` (verified: the import is tree-shaken out) and nothing on the request path can spawn; container-level hardening would be the next step, not a deployment blocker |

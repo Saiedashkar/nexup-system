@@ -18,7 +18,10 @@ npm start           # node dist/main.js
 The P0–P4 pre-flight and the P2 Hermes method-compatibility probe from
 [`../docs/NEXUP_VPS_BRIDGE_DEPLOY_RUNBOOK.md`](../docs/NEXUP_VPS_BRIDGE_DEPLOY_RUNBOOK.md)
 are encoded as one read-only CLI. It executes no state change and prints no secret
-values; a safety check that cannot run fails the run (fail closed).
+values; a failed check is a NO-GO at any severity (do not proceed on a warning),
+and a safety check that cannot run fails the run (fail closed). A check that
+cannot run is reported without gating only when it is advisory and off-host by
+design (P0.1, P0.3, P1.7).
 
 ```bash
 npm run build:cli   # esbuild bundle -> dist/release-cli.js

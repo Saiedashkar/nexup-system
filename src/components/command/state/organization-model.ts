@@ -89,8 +89,10 @@ export type Department = {
   insight: string;
   /** The single thing slowing this space down right now. Mock. */
   bottleneck: string;
-  /** Missions owned by this space (count only — labels come from projects). */
-  missions: number;
+  /* Mission counts are deliberately NOT configured here. `departmentMissions()`
+     in `department-workspace.ts` derives each space's count from the mission list
+     that space actually owns, so the node, the rail, the Active Missions panel and
+     the top KPI cannot drift away from the workspace. */
   /** This space's own adaptive deck. */
   deck: DeckAction[];
 };
@@ -154,7 +156,7 @@ export const OVERVIEW_DECK: DeckAction[] = [
 export type WorkspaceMode = { id: string; label: string; icon: DeckIconKey; hint: string };
 
 export const WORKSPACE_MODES: WorkspaceMode[] = [
-  { id: "work", label: "Work", icon: "run", hint: "Live work in this space" },
+  { id: "work", label: "Work", icon: "run", hint: "Current work in this space" },
   { id: "map", label: "Map", icon: "map", hint: "Who and what is here — later phase" },
   { id: "flow", label: "Flow", icon: "workflow", hint: "How work moves through it — later phase" },
   { id: "assets", label: "Assets", icon: "stack", hint: "What this space runs on — later phase" },
@@ -185,7 +187,6 @@ export const DEPARTMENTS: Department[] = [
     director: "AI Director · Ops",
     insight: "Runbook coverage at 92%",
     bottleneck: "Vendor lead times",
-    missions: 2,
     deck: DECK_PROCESS,
   },
   {
@@ -210,7 +211,6 @@ export const DEPARTMENTS: Department[] = [
     director: "AI Director · Delivery",
     insight: "6 clients in flight",
     bottleneck: "Onboarding paperwork",
-    missions: 2,
     deck: DECK_DELIVERY,
   },
   {
@@ -235,7 +235,6 @@ export const DEPARTMENTS: Department[] = [
     director: "Product lead",
     insight: "Command Shell UI in review",
     bottleneck: "Review queue depth",
-    missions: 3,
     deck: DECK_BUILD,
   },
   {
@@ -260,7 +259,6 @@ export const DEPARTMENTS: Department[] = [
     director: "AI Director · Growth",
     insight: "18 leads being qualified",
     bottleneck: "Answer speed",
-    missions: 4,
     deck: DECK_REVENUE,
   },
   {
@@ -284,7 +282,6 @@ export const DEPARTMENTS: Department[] = [
     director: "AI Controller",
     insight: "Two payments held for you",
     bottleneck: "Approval limit breach",
-    missions: 1,
     deck: DECK_MONEY,
   },
 ];
@@ -299,8 +296,10 @@ export const FOUNDER = {
   name: "Founder",
   role: "Founder / Human Authority",
   initials: "FN",
-  /** Focus card shown beside the greeting. */
-  focus: { label: "Today's Focus", value: "3 active missions" },
+  /* Focus card shown beside the greeting. Its value is NOT configured here:
+     `room-identity.tsx` renders it from `totalMissions()`, the same source the
+     top KPI reads, so the card cannot quote a total the rest of the page rejects. */
+  focus: { label: "Today's Focus" },
 } as const;
 
 /**

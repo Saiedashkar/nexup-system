@@ -7,12 +7,12 @@ import {
   type Actor,
 } from "../state/actors";
 import {
-  DEPARTMENTS,
   DEPARTMENT_BY_ID,
   EXECUTIVE,
   FOUNDER,
 } from "../state/organization-model";
 import { MOCK_PROJECTS, type ProjectEntry } from "../state/demo-scenarios";
+import { totalMissions } from "../state/department-workspace";
 import { isWorkingStatus, needsHumanStatus } from "../state/visual-state";
 import {
   IconActivity,
@@ -78,9 +78,12 @@ export function CommandHeader() {
       <div className="nc-cc-head__chips">
         <HeadChip label="Local time" value={clockLabel()} />
         <HeadChip label="Authority" value={FOUNDER.role.includes("/") ? "Human" : FOUNDER.role} />
+        {/* Honest state label: this environment is local mock state, not a live
+            production feed. Same pill, same placement — only the word changed,
+            so the header composition is untouched. */}
         <span className="nc-cc-head__presence">
           <span className="nc-cc-head__dot" aria-hidden="true" />
-          Live
+          Local preview
         </span>
       </div>
     </header>
@@ -121,7 +124,9 @@ export function CommandKpis() {
     (node) => node.needsApproval || needsHumanStatus(node.status),
   ).length;
 
-  const missions = DEPARTMENTS.reduce((sum, department) => sum + department.missions, 0);
+  /* Read from the mission lists the departments actually own, so this figure and
+     the Active Missions panel below can never report two different totals. */
+  const missions = totalMissions();
   const aiAgents = ACTORS.filter((actor) => actor.kind === "ai").length;
   const executionRate = Math.round(
     (nodes.reduce((sum, node) => sum + node.activityLevel, 0) / nodes.length) * 100,
@@ -185,6 +190,8 @@ export function CommandMissionsPanels() {
             <IconMission size={16} />
           </span>
           <h2 className="nc-cc-panel__title">Active Missions</h2>
+          {/* Same source as the KPI above: every row below IS one mission, so the
+              badge can only ever match the table it labels. */}
           <span className="nc-cc-panel__count">{MOCK_PROJECTS.length}</span>
           <button type="button" className="nc-cc-panel__viewall" onClick={() => notify("The full mission list arrives with the Work area.")}>
             View all

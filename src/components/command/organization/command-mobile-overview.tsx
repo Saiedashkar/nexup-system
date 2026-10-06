@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCommand } from "../state/command-store";
 import { DEPARTMENTS, FOUNDER, type DepartmentId } from "../state/organization-model";
-import { workspaceHref } from "../state/department-workspace";
+import { departmentAttention, totalAttention, workspaceHref } from "../state/department-workspace";
 import { DEPARTMENT_ICONS, IconExec, IconMission, IconRun, IconWarRoom } from "../ui/icons";
 
 /**
@@ -30,12 +30,15 @@ export function CommandMobileOverview() {
   const { snapshot, setExecOpen, notify } = useCommand();
   const { visual } = snapshot;
 
-  const needsYou = DEPARTMENTS.filter((d) => visual.departments[d.id]?.needsApproval);
+  /* Read from the same shared source as the graph nodes and the List rows, so
+     the mobile summary cannot disagree with a department's own workspace. */
+  const needsYou = DEPARTMENTS.filter((d) => departmentAttention(d.id) > 0);
+  const needsYouItems = totalAttention();
 
   const actions = [
     { id: "mission", label: "New mission", Icon: IconMission, run: () => notify("New mission opens in a later phase — mock only.") },
     { id: "exec", label: "Talk to EXEC", Icon: IconExec, run: () => setExecOpen(true) },
-    { id: "needs", label: "Needs you", Icon: IconWarRoom, run: () => notify(`${needsYou.length} item(s) need you — mock only.`) },
+    { id: "needs", label: "Needs you", Icon: IconWarRoom, run: () => notify(`${needsYouItems} item(s) need you — mock only.`) },
     { id: "work", label: "Active work", Icon: IconRun, run: () => notify("Active work opens in a later phase — mock only.") },
   ];
 
@@ -61,7 +64,13 @@ export function CommandMobileOverview() {
         </span>
         <span className="nc-mobile-command__exec-text">
           <span className="nc-mobile-command__exec-title">Talk to EXEC</span>
-          <span className="nc-mobile-command__exec-hint">Two decisions are waiting on you</span>
+          {/* Counted, never written down: this line reads the same attention source
+              the "Needs you" list below is built from. */}
+          <span className="nc-mobile-command__exec-hint">
+            {needsYouItems === 0
+              ? "Nothing needs you right now"
+              : `${needsYouItems} item${needsYouItems === 1 ? "" : "s"} need you`}
+          </span>
         </span>
       </button>
 
@@ -82,7 +91,7 @@ export function CommandMobileOverview() {
               <Link key={d.id} className="nc-mobile-command__need" href={workspaceHref(d.id)}>
                 <span className="nc-mobile-command__need-dot" style={{ background: "var(--nc-approval)" }} aria-hidden="true" />
                 <span>{d.name}</span>
-                <span className="nc-mobile-command__need-meta">approval required</span>
+                <span className="nc-mobile-command__need-meta">needs attention</span>
               </Link>
             ))}
           </div>

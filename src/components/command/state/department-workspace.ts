@@ -22,7 +22,7 @@
  *     may later be attached to or detached from an agent dynamically.
  */
 
-import { systemsForDepartment, type DepartmentId } from "./organization-model";
+import { DEPARTMENT_IDS, systemsForDepartment, type DepartmentId } from "./organization-model";
 
 /* ── Modes ─────────────────────────────────────────────────────────────────
    The eight internal surfaces every department workspace hosts. Icons are
@@ -459,6 +459,45 @@ export const WORKSPACES: Record<DepartmentId, DepartmentWorkspaceConfig> = {
 
 export function workspaceFor(id: DepartmentId): DepartmentWorkspaceConfig {
   return WORKSPACES[id];
+}
+
+/**
+ * The single source of truth for a department's "needs attention" summary.
+ *
+ * The graph nodes, the List rows and the mobile overview all read this, and the
+ * department workspace renders the very same array — so an overview can never
+ * report a space as clear while that space's own workspace is holding items for
+ * a human. Deriving the summary keeps the two from drifting.
+ */
+export function departmentAttention(id: DepartmentId): number {
+  return WORKSPACES[id].attention.length;
+}
+
+/**
+ * The single source of truth for a department's missions.
+ *
+ * A mission is a `Mission` of kind "mission" — jobs and human tasks are real work
+ * but they are not missions, so they are deliberately excluded.
+ *
+ * `Department.missions` used to be a second, hand-kept count in
+ * `organization-model.ts`, and it had already drifted (the Finance node claimed
+ * 1 while its own workspace held 2). The mission lists below are the real data, so
+ * every summary reads them: the graph node, the context rail, the Active Missions
+ * panel and the top KPI can no longer disagree with the workspace that owns the
+ * work.
+ */
+export function departmentMissions(id: DepartmentId): Mission[] {
+  return WORKSPACES[id].missions.filter((mission) => mission.kind === "mission");
+}
+
+/** Organization-wide mission total — the number the top KPI reports. */
+export function totalMissions(): number {
+  return DEPARTMENT_IDS.reduce((sum, id) => sum + departmentMissions(id).length, 0);
+}
+
+/** Organization-wide attention total — the number the mobile summary reports. */
+export function totalAttention(): number {
+  return DEPARTMENT_IDS.reduce((sum, id) => sum + departmentAttention(id), 0);
 }
 
 /** Split a team into its human and AI halves for the Team mode. */

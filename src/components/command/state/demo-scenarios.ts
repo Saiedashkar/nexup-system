@@ -11,6 +11,7 @@
  */
 
 import { DEPARTMENTS, DEPARTMENT_IDS, type DepartmentId } from "./organization-model";
+import { departmentMissions } from "./department-workspace";
 import {
   idleNode,
   type OrganizationVisualState,
@@ -86,14 +87,22 @@ function departmentsWith(patches: Array<[DepartmentId, Patch]>): Record<string, 
 
 const deptName = (id: string) => DEPARTMENTS.find((d) => d.id === id)?.name ?? id;
 
-/* ── Static mock: projects (scenario-independent background context) ────── */
+/* ── Static mock: the organization's missions (scenario-independent) ───────
+   Projected from the mission list each department workspace already owns, in
+   configuration order. Nothing is invented: a row exists exactly because a
+   department is running that mission, with that owner and that progress. This is
+   what keeps the Active Missions panel, the context rail and the top KPI
+   describing the same missions as the workspaces they came from. */
 
-export const MOCK_PROJECTS: ProjectEntry[] = [
-  { id: "p-1", name: "Q4 Outbound Engine", department: "growth", progress: 68, meta: "3,412 leads · 2 agents" },
-  { id: "p-2", name: "Client Onboarding Revamp", department: "client", progress: 42, meta: "6 clients in flight" },
-  { id: "p-3", name: "Command Shell · UI-01", department: "product", progress: 55, meta: "Local only · no deploy" },
-  { id: "p-4", name: "Cash-Flow Control", department: "finance", progress: 31, meta: "Collections automation" },
-];
+export const MOCK_PROJECTS: ProjectEntry[] = DEPARTMENT_IDS.flatMap((id) =>
+  departmentMissions(id).map((mission) => ({
+    id: mission.id,
+    name: mission.title,
+    department: id,
+    progress: mission.progress,
+    meta: mission.owner,
+  })),
+);
 
 /* ── Scenario definitions ───────────────────────────────────────────────── */
 

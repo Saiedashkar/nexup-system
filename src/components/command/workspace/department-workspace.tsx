@@ -6,6 +6,8 @@ import { useCommand } from "../state/command-store";
 import { DEPARTMENT_BY_ID } from "../state/organization-model";
 import {
   WORKSPACE_MODES,
+  departmentAttention,
+  departmentMissions,
   workspaceFor,
   type WorkspaceModeId,
 } from "../state/department-workspace";
@@ -66,7 +68,8 @@ export function DepartmentWorkspace({ departmentId }: { departmentId: string }) 
 
   const config = workspaceFor(department.id);
   const SpaceIcon = DEPARTMENT_ICONS[department.id];
-  const activeMissions = config.missions.filter((mission) => mission.kind === "mission").length;
+  /* The same derived count the graph node, the rail, the panel and the KPI use. */
+  const activeMissions = departmentMissions(department.id).length;
 
   return (
     <div
@@ -106,9 +109,9 @@ export function DepartmentWorkspace({ departmentId }: { departmentId: string }) 
             <dt>Active missions</dt>
             <dd>{activeMissions}</dd>
           </div>
-          <div className="nc-dw__fact" data-attention={config.attention.length > 0}>
+          <div className="nc-dw__fact" data-attention={departmentAttention(department.id) > 0}>
             <dt>Needs attention</dt>
-            <dd>{config.attention.length}</dd>
+            <dd>{departmentAttention(department.id)}</dd>
           </div>
           <div className="nc-dw__fact">
             <dt>Connected systems</dt>

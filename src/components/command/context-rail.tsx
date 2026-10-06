@@ -121,7 +121,7 @@ export function ContextRail() {
           </button>
         </div>
         <div className="nc-context__rail">
-          Live context
+          Local context
           {snapshot.approvals.length > 0 && (
             <span className="nc-room__legend-dot" style={{ background: "var(--nc-approval)" }} />
           )}
@@ -305,6 +305,8 @@ function DepartmentContext({
   const visual = snapshot.visual.departments[departmentId];
   if (!department || !visual) return null;
 
+  /* The rows this space owns, from the same projection the Active Missions panel
+     reads — so the count below is always the number of rows actually shown. */
   const missions = MOCK_PROJECTS.filter((project) => project.department === department.id);
 
   return (
@@ -352,7 +354,7 @@ function DepartmentContext({
       </section>
 
       <section className="nc-context__block">
-        <SectionLabel count={department.missions}>Running missions</SectionLabel>
+        <SectionLabel count={missions.length}>Running missions</SectionLabel>
         {missions.length === 0 ? (
           <p className="nc-empty">No mission in this space is currently tracked.</p>
         ) : (

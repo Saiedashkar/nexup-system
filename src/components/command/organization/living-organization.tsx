@@ -89,16 +89,16 @@ export function LivingOrganization() {
           <button
             type="button"
             className="nc-cc-tool"
-            onClick={() => notify("Live view follows the running scenario — visual only in this phase.")}
+            onClick={() => notify("Local view follows the running scenario — visual only in this phase.")}
           >
             <span className="nc-cc-tool__dot" aria-hidden="true" />
-            Live View
+            Local View
             <IconChevronDown size={13} />
           </button>
           <button
             type="button"
             className="nc-cc-tool"
-            onClick={() => notify("Mission routing is drawn live on the graph — it is visual only in this phase.")}
+            onClick={() => notify("Mission routing follows the running scenario on the graph — visual only in this phase.")}
           >
             <IconWorkflow size={14} />
             Mission Routing
@@ -125,7 +125,7 @@ export function LivingOrganization() {
               <h2 className="nc-room__panel-title">Living Organization</h2>
               <span className="nc-room__panel-note">
                 {view === "list"
-                  ? "The same live state, as rows."
+                  ? "The same organization state, as rows."
                   : "Not built in this phase — reserved for the organization map."}
               </span>
             </div>

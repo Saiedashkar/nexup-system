@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCommand } from "../state/command-store";
 import { DEPARTMENTS, DEPARTMENT_BY_ID, type DepartmentId } from "../state/organization-model";
-import { workspaceHref } from "../state/department-workspace";
+import { departmentAttention, departmentMissions, workspaceHref } from "../state/department-workspace";
 import { cameraFor, cameraTransform, corePlacement, podPlacement } from "../state/spatial-camera";
 import { ConnectionField } from "./connection-field";
 import { DepartmentPod } from "./department-pod";
@@ -77,14 +77,14 @@ export function CommandScene() {
   const camera = cameraFor(focusedDepartment);
   const core = corePlacement(camera);
 
-  /* A space's live signals: missions from configuration, active actors from the
-     live worker activity, attention from the visual state. Only three, ever. */
+  /* A space's signals: missions and needs-attention both from the department's
+     OWN workspace data — the same lists its workspace page renders — and active
+     actors from the live worker activity. Only three, ever, and none of them can
+     disagree with the space it summarises. */
   const signalsFor = (id: DepartmentId) => {
-    const department = DEPARTMENT_BY_ID[id];
     const node = visual.departments[id];
     const activeActors = Object.values(node?.workerActivity ?? {}).filter((level) => level >= 0.25).length;
-    const attention = node?.needsApproval || node?.status === "BLOCKED" || node?.status === "ERROR" ? 1 : 0;
-    return { missions: department?.missions ?? 0, activeActors, attention };
+    return { missions: departmentMissions(id).length, activeActors, attention: departmentAttention(id) };
   };
 
   return (

@@ -8,12 +8,12 @@ import {
   type Department,
   type DepartmentId,
 } from "../state/organization-model";
-import { MOCK_PROJECTS } from "../state/demo-scenarios";
+import { departmentMissions } from "../state/department-workspace";
 import type { Placement } from "../state/spatial-camera";
 import { cssVars } from "../ui/css-vars";
 import { DECK_ICONS, DEPARTMENT_ICONS } from "../ui/icons";
 import { ActorList } from "./actor-presence";
-import { STATUS_LABEL, needsHumanStatus, workerLevel, type VisualNodeState } from "../state/visual-state";
+import { STATUS_LABEL, workerLevel, type VisualNodeState } from "../state/visual-state";
 
 /**
  * DEPARTMENT POD — an operational bay, and then a workspace (Phase UI-02.1)
@@ -83,21 +83,25 @@ export function DepartmentPod({
   onHover,
   onOpen,
 }: DepartmentPodProps) {
-  const { status, activityLevel, activeJob, needsApproval } = visual;
+  const { status, activityLevel, activeJob } = visual;
 
   /* One insight only. Live work always wins over the configured headline,
      because "what is happening now" is the more useful truth. */
   const insight = activeJob ?? department.insight;
   const insightIsLive = Boolean(activeJob);
 
-  const attention = needsApproval || needsHumanStatus(status) ? 1 : 0;
+  /* Needs-attention is NOT recomputed here: it comes from the department's own
+     workspace data (via the scene's signals), so the node can never show
+     "Clear" for a space whose workspace is holding items for a human. */
+  const attention = signals.attention;
   const reveal = hovered || focused;
 
-  /* "On track" means the missions this space owns; when it owns none, fall back
-     to how loaded the space is right now. Both come from real state. */
-  const owned = MOCK_PROJECTS.filter((project) => project.department === department.id);
+  /* "On track" summarises the missions this space owns — the same missions its
+     workspace lists, so the figure cannot describe work the space does not have.
+     When it owns none, fall back to how loaded the space is right now. */
+  const owned = departmentMissions(department.id);
   const onTrack = owned.length
-    ? Math.round(owned.reduce((sum, project) => sum + project.progress, 0) / owned.length)
+    ? Math.round(owned.reduce((sum, mission) => sum + mission.progress, 0) / owned.length)
     : Math.round(activityLevel * 100);
 
   /* Bays face the centre of the room. Derived from configuration, applied as one
@@ -189,7 +193,7 @@ export function DepartmentPod({
               </span>
               <span className="nc-pod__stat" data-attention={attention > 0}>
                 <b>{attention}</b>
-                <span>Blocked</span>
+                <span>Attention</span>
               </span>
             </span>
 
@@ -285,7 +289,7 @@ function Workspace({
 
       <div className="nc-ws__surface">
         <section className="nc-ws__panel" data-panel="work">
-          <span className="nc-ws__panel-kicker">Live work</span>
+          <span className="nc-ws__panel-kicker">Current work</span>
           <span className="nc-ws__job" data-live={Boolean(visual.activeJob)}>
             {insight}
           </span>

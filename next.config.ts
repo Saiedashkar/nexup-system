@@ -41,37 +41,51 @@ const nextConfig: NextConfig = {
 
   /* Custom headers for caching and security */
   async headers() {
+    /* Long-lived immutable caching is right for a production build and wrong for
+       `next dev`: the browser pins dev chunks for a year, so an edited file keeps
+       serving the old code from cache — even on a hard reload of the same origin —
+       and Next.js itself warns that a custom Cache-Control breaks development
+       behaviour. So the asset-caching rules are emitted for production only; in
+       development Next.js keeps its own cache behaviour, and the security headers
+       below apply in every environment either way. Production output is unchanged. */
+    const assetCache =
+      process.env.NODE_ENV === "production"
+        ? [
+            {
+              /* Cache static assets aggressively */
+              source: "/(.*)\\.(jpg|jpeg|png|gif|ico|svg|webp|avif|woff|woff2|ttf|eot)",
+              headers: [
+                {
+                  key: "Cache-Control",
+                  value: "public, max-age=31536000, immutable",
+                },
+              ],
+            },
+            {
+              /* Cache Next.js static files */
+              source: "/_next/static/(.*)",
+              headers: [
+                {
+                  key: "Cache-Control",
+                  value: "public, max-age=31536000, immutable",
+                },
+              ],
+            },
+            {
+              /* Cache JS/CSS bundles */
+              source: "/(.*)\\.(js|css)",
+              headers: [
+                {
+                  key: "Cache-Control",
+                  value: "public, max-age=86400, stale-while-revalidate=604800",
+                },
+              ],
+            },
+          ]
+        : [];
+
     return [
-      {
-        /* Cache static assets aggressively */
-        source: "/(.*)\\.(jpg|jpeg|png|gif|ico|svg|webp|avif|woff|woff2|ttf|eot)",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
-      {
-        /* Cache Next.js static files */
-        source: "/_next/static/(.*)",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
-      {
-        /* Cache JS/CSS bundles */
-        source: "/(.*)\\.(js|css)",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=86400, stale-while-revalidate=604800",
-          },
-        ],
-      },
+      ...assetCache,
       {
         /* Security headers */
         source: "/(.*)",

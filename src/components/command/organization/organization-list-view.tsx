@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCommand } from "../state/command-store";
 import { DEPARTMENTS, EXECUTIVE } from "../state/organization-model";
-import { workspaceHref } from "../state/department-workspace";
+import { departmentAttention, workspaceHref } from "../state/department-workspace";
 import { DEPARTMENT_ICONS, IconMap, IconSpark } from "../ui/icons";
 import { cssVars } from "../ui/css-vars";
 import { STATUS_LABEL } from "../state/visual-state";
@@ -29,6 +29,7 @@ export function OrganizationListView() {
       capability: EXECUTIVE.kicker,
       accentVar: "--nc-lime",
       visual: snapshot.visual.executive,
+      attention: snapshot.visual.executive.needsApproval ? 1 : 0,
       onOpen: () => setExecOpen(true),
       action: "Open the Executive console",
     },
@@ -39,6 +40,9 @@ export function OrganizationListView() {
       capability: department.capability,
       accentVar: department.accentVar,
       visual: snapshot.visual.departments[department.id],
+      /* Needs-attention is the SAME number the workspace page shows, read from
+         one shared source, so the row can never disagree with the space. */
+      attention: departmentAttention(department.id),
       /* Phase UI-03: rows open the department's workspace route. */
       onOpen: () => router.push(workspaceHref(department.id)),
       action: "Open department workspace",
@@ -57,7 +61,7 @@ export function OrganizationListView() {
       </div>
 
       <ul style={{ display: "contents" }}>
-        {rows.map(({ key, Icon, name, capability, accentVar, visual, onOpen, action }) => (
+        {rows.map(({ key, Icon, name, capability, accentVar, visual, attention, onOpen, action }) => (
           <li key={key} style={{ display: "contents" }}>
             <button
               type="button"
@@ -69,7 +73,7 @@ export function OrganizationListView() {
               aria-label={`${name} — ${STATUS_LABEL[visual.status]}. ${
                 visual.activeJob ?? capability
               }. Activity ${Math.round(visual.activityLevel * 100)} percent.${
-                visual.needsApproval ? " Needs your approval." : ""
+                attention > 0 ? ` Needs attention: ${attention}.` : ""
               } ${action}.`}
             >
               <span className="nc-list__icon" aria-hidden="true">
@@ -92,8 +96,8 @@ export function OrganizationListView() {
                 <i style={{ width: `${Math.round(visual.activityLevel * 100)}%` }} />
               </span>
               <span>
-                {visual.needsApproval ? (
-                  <span className="nc-list__flag">Needs you</span>
+                {attention > 0 ? (
+                  <span className="nc-list__flag">Needs you · {attention}</span>
                 ) : (
                   <span className="nc-list__none">—</span>
                 )}
@@ -123,7 +127,7 @@ export function OrganizationMapView() {
       <span className="nc-section__title">Map view arrives in a later phase</span>
       <span className="nc-section__note" style={{ maxWidth: 380 }}>
         A real map needs business locations and a mapping surface. Nothing here is faked — the
-        organization, its state and its wiring are all live in the Graph and List views.
+        organization, its state and its wiring are all readable in the Graph and List views.
       </span>
     </div>
   );

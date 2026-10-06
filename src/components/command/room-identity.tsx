@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useCommand } from "./state/command-store";
 import { FOUNDER } from "./state/organization-model";
+import { totalMissions } from "./state/department-workspace";
 import { IconChevronRight, IconSpark } from "./ui/icons";
 
 /**
@@ -56,7 +57,9 @@ export function RoomIdentity() {
         </span>
         <span className="nc-ident__focus-copy">
           <span className="nc-ident__focus-label">{FOUNDER.focus.label}</span>
-          <span className="nc-ident__focus-value">{FOUNDER.focus.value}</span>
+          {/* Derived, not configured: this line and the Active Missions KPI read the
+              same mission lists, so the room cannot greet you with a stale total. */}
+          <span className="nc-ident__focus-value">{totalMissions()} active missions</span>
         </span>
         <span className="nc-ident__focus-chev">
           <IconChevronRight size={16} />

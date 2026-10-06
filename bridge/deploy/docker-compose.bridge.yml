@@ -1,0 +1,117 @@
+# NEXUP VPS Bridge — orchestration definition (revised C).
+#
+# Project:  /opt/nexup-bridge
+# Applied:  docker compose -f /opt/nexup-bridge/docker-compose.bridge.yml up -d
+#
+# The three properties that make this deployment safe, in order of importance:
+#
+#   1. `network_mode: container:<hermes>` — the bridge shares the Hermes
+#      container's network namespace. Hermes keeps listening on 127.0.0.1 and
+#      stays non-public; the bridge can reach `ws://127.0.0.1:9119/api/ws`
+#      because loopback is now shared, which is exactly the credential channel
+#      the bridge needs (`?token=` is rejected in Hermes' gated mode, so the
+#      serve must stay bound to loopback — measured, Gate 0/B').
+#   2. NO `ports:` anywhere — the bridge publishes nothing on the host. Traefik
+#      routes to it by following `NetworkMode` to the OWNER's address, so a
+#      published port would add exposure without adding reachability.
+#   3. The router and its middlewares live in these labels, so the edge policy
+#      and the bridge are one artifact and cannot drift.
+#
+# The managed Hermes image, its compose file, its dashboard and its `default`
+# (Adel) profile are NOT touched by anything in this file.
+
+services:
+  nexup-bridge:
+    # ONE source of truth for the image identity: the deployment environment
+    # (`/etc/nexup-bridge/deploy.env`, installed 0600 root, from
+    # `nexup-bridge.deploy.env.example`). Deliberately NOTHING is embedded here:
+    # a fallback digest in the definition would be a second identity that no
+    # check compares against the recorded build, so a stale default would
+    # silently keep deploying the previous artifact. Preflight resolves this
+    # through `docker compose config` — the way the deployment itself resolves
+    # it — and refuses a digest that differs from the recorded build digest
+    # (P0.5b). A missing variable is therefore a hard failure, not a fallback.
+    image: ${NEXUP_BRIDGE_IMAGE:?set NEXUP_BRIDGE_IMAGE in /etc/nexup-bridge/deploy.env}
+
+    container_name: nexup-bridge
+
+    # The non-root identity, declared HERE as well as in the Dockerfile
+    # (`USER 10001:10001`). Belt and braces on purpose: the image is the control
+    # of record, and this line keeps the deployment definition self-describing,
+    # so a harness that reads only the compose file still sees an unprivileged
+    # container. Must stay identical to CONTAINER_USER in src/release/preflight.ts
+    # — `tests/deploy-artifact.test.ts` asserts that against this file.
+    user: "10001:10001"
+
+    # The owner is named by its STABLE name/alias, never by an ID or an IP: the
+    # ID changes on every recreation and Docker renumbers the network with it
+    # (measured: 172.16.0.2 -> 172.16.1.2 -> 172.16.2.2 across recreations).
+    network_mode: "container:${NEXUP_HERMES_CONTAINER:-hermes-agent-r3j1-hermes-agent-1}"
+
+    # A shared-namespace container that outlives its namespace owner is an
+    # orphan (measured: the route drops to 404 while the container still reads
+    # `running`). The external supervisor reconciles that; this policy only
+    # covers the bridge's own process exiting.
+    restart: unless-stopped
+
+    # Secrets and the bind/identity decision come from this root-only file
+    # (0600). It is the ONLY place a value lives, so a `docker inspect` of the
+    # container shows no secret.
+    env_file:
+      - /etc/nexup-bridge/bridge.env
+
+    # The bridge holds two secrets in memory and writes nothing but logs.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # ── edge policy ───────────────────────────────────────────────────────────
+    # TLS terminates at Traefik, which already owns :80/:443 on this host. No
+    # `traefik.docker.network` is set on purpose: a shared-namespace container
+    # exposes no address of its own, and naming a network made the provider
+    # resolve the wrong endpoint. The provider follows the owner's endpoint.
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.nexup-bridge.rule=Host(`${NEXUP_BRIDGE_HOSTNAME:?set NEXUP_BRIDGE_HOSTNAME to the bridge hostname}`)
+      - traefik.http.routers.nexup-bridge.entrypoints=websecure
+      - traefik.http.routers.nexup-bridge.tls=true
+      - traefik.http.routers.nexup-bridge.tls.certresolver=letsencrypt
+      - traefik.http.routers.nexup-bridge.service=nexup-bridge
+      - traefik.http.routers.nexup-bridge.middlewares=nexup-bridge-headers@docker
+
+      # The bridge's port inside the SHARED namespace. Never published.
+      - traefik.http.services.nexup-bridge.loadbalancer.server.port=9220
+
+      # Security headers, exactly the set the Caddy site used to add.
+      # `customResponseHeaders` is used for Referrer-Policy rather than the
+      # dedicated option: it exists in every Traefik version this host may be
+      # running (`traefik:latest`), and it is the same wire result.
+      - traefik.http.middlewares.nexup-bridge-headers.headers.stsSeconds=31536000
+      - traefik.http.middlewares.nexup-bridge-headers.headers.stsIncludeSubdomains=true
+      - traefik.http.middlewares.nexup-bridge-headers.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.nexup-bridge-headers.headers.customResponseHeaders.Referrer-Policy=no-referrer
+
+      # NO buffering middleware, deliberately. The run stream is
+      # `text/event-stream`: a response buffer defeats streaming, and the
+      # measured budget is the bridge's own 120 s run timeout (E5). The edge
+      # must never hold a frame.
+      #
+      # NO body-limit middleware either: Traefik core has no request-body cap
+      # without a plugin, and `buffering` is the only built-in that has one —
+      # which is the middleware above that must not be used here. The 256 KB
+      # cap (E6) is therefore enforced by the BRIDGE itself
+      # (`NEXUP_BRIDGE_MAX_BODY_BYTES=262144`, 413 before any work), and P1.1
+      # gates that value. This is a deliberate, documented difference from the
+      # old Caddy site, not an omission.

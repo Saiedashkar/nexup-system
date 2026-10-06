@@ -34,12 +34,15 @@ const USAGE = [
   "",
   "PREFLIGHT",
   "  --env-file <path>       Bridge env file        (default /etc/nexup-bridge/bridge.env)",
-  "  --bundle <path>         Shipped bundle         (default /opt/nexup-bridge/dist/main.js)",
-  "  --unit <path>           systemd unit           (default /etc/systemd/system/nexup-bridge.service)",
-  "  --caddyfile <path>      Caddy site config      (default /etc/caddy/Caddyfile)",
-  "  --expected-digest <sha> Digest recorded in runbook P0; compared with the host copy",
-  "  --exec-probes           Allow ONE execution check: P0.6 runs the bundle with an invalid",
-  "                          host address so it exits before binding. Off by default.",
+  "  --compose <path>        Deployment definition  (default /opt/nexup-bridge/docker-compose.bridge.yml)",
+  "  --image <ref>           Bridge image reference (default nexup-bridge); pass the",
+  "                          digest-pinned form to check the artifact identity",
+  "  --expected-digest <sha> Digest recorded when the image was built (runbook P0)",
+  "  --bridge-hostname <h>   Hostname the router must serve (checked in P0.7b)",
+  "  --exec-probes           Allow the THREE execution checks: P0.2c greps the bundle inside",
+  "                          the image, P0.6 runs it with an invalid bind so it exits before",
+  "                          binding, P4.12 opens one TCP connection to the serve endpoint.",
+  "                          None of them changes state. Off by default.",
   "  --min-free-mib <n>      Free-space floor on / (default 200)",
   "  --hermes-src <dir>      Installed Hermes tree; without it the P2 checks cannot run (NO-GO)",
   "  --accept-degraded       Record an explicit acceptance of a missing gateway.ping (runbook §6.5)",
@@ -102,16 +105,16 @@ export function parseArgs(argv: readonly string[]): Parsed {
         parsed.preflight.envFile = next(index, arg) ?? parsed.preflight.envFile;
         index += 1;
         break;
-      case "--bundle":
-        parsed.preflight.bundlePath = next(index, arg) ?? parsed.preflight.bundlePath;
+      case "--compose":
+        parsed.preflight.composePath = next(index, arg) ?? parsed.preflight.composePath;
         index += 1;
         break;
-      case "--unit":
-        parsed.preflight.unitPath = next(index, arg) ?? parsed.preflight.unitPath;
+      case "--image":
+        parsed.preflight.image = next(index, arg) ?? parsed.preflight.image;
         index += 1;
         break;
-      case "--caddyfile":
-        parsed.preflight.caddyfilePath = next(index, arg) ?? parsed.preflight.caddyfilePath;
+      case "--bridge-hostname":
+        parsed.preflight.bridgeHostname = next(index, arg) ?? parsed.preflight.bridgeHostname;
         index += 1;
         break;
       case "--expected-digest":

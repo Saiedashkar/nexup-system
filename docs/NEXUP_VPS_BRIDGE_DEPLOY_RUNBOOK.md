@@ -10,12 +10,58 @@ the VPS. It is the script for a supervised deployment window.
 - `bridge/README.md` — build/test commands.
 
 **Relationship to the code.** Every step below is derived from the artifacts on
-disk: `bridge/`, `bridge/deploy/Caddyfile`, `bridge/systemd/nexup-bridge.service`,
+disk: `bridge/`, `bridge/deploy/Dockerfile`,
+`bridge/deploy/docker-compose.bridge.yml`, `bridge/deploy/nexup-bridge-supervisor.sh`,
+`bridge/deploy/systemd/nexup-bridge-supervisor.service`,
 `bridge/deploy/nexup-bridge.env.example`, and
 `src/modules/workforce/bridge/signing.ts`. Where the code does **not** back a
 promise, this runbook says so and gives a check instead of an assertion. Anything
 the operator cannot verify is listed under
 [§8 Known-accepted limitations](#8-known-accepted-limitations-do-not-relitigate-these-in-the-window).
+
+---
+
+## 0.0 The architecture as deployed (revised C) — read this first
+
+The bridge is **not** a host process behind Caddy in front of a host Hermes. It is
+an independent container that **shares the Hermes container's network namespace**:
+
+```
+  internet ──► Traefik (host netns, owns :80/:443) ──► 172.16.x.2:9220
+                                                          │  (the OWNER's address)
+  ┌─────────────────────── Hermes container network namespace ───────────────┐
+  │  127.0.0.1:9119  hermes -p saieed serve --isolated   ◄── supervised      │
+  │  0.0.0.0:9220    nexup-bridge  (shares this namespace, publishes NOTHING)│
+  └──────────────────────────────────────────────────────────────────────────┘
+  supervisor (systemd, host): owns the serve above and re-creates the bridge
+                              whenever the Hermes container ID changes
+```
+
+Why it has to be this shape (each measured in Gate 0, not assumed):
+
+1. **Hermes' only usable credential channel is a loopback bind.** With a
+   non-loopback bind Hermes enters its gated auth mode, where `?token=` is
+   `403` and only a browser-minted `?ticket=` works — unusable by a service.
+   The serve must therefore stay on `127.0.0.1`, and sharing the namespace is
+   what lets the bridge reach it.
+2. **Traefik reaches a shared-namespace container at the OWNER's address.** A
+   `network_mode: container:` container exposes no address of its own
+   (`Networks = {}`), yet routes fine because the provider follows `NetworkMode`
+   to the owner's endpoint. When the owner is removed, the route drops to 404
+   while the dependent still reads `running` — an orphan the supervisor must
+   re-create.
+3. **Nothing is ever published on the host.** No `ports:` anywhere in the
+   definition; the bridge is reachable only through Traefik and only inside that
+   namespace.
+
+### Carried policy decisions, and where they landed
+
+| Item | Decision | Where it lives |
+|---|---|---|
+| **E4** client IP / `X-Forwarded-For` | Traefik cannot overwrite an arbitrary header with the peer address; it **appends** the peer to `X-Forwarded-For`. So the bridge is configured with `NEXUP_BRIDGE_CLIENT_IP_HEADER=x-forwarded-for` and reads the **RIGHTMOST** entry. Anything to its left is caller-supplied and cannot mint a fresh pre-auth bucket. The trusted boundary is named as a **network** (`172.16.0.0/16`), not one address, because Docker renumbers the network on every recreation | `client-identity.ts` (`EDGE_APPENDED_HEADERS`, CIDR matching), `config.ts` (off-loopback requires an explicit non-loopback boundary), tool **P1.8**, **P3.1** |
+| **E5** SSE budget | The run stream must never be buffered by the edge, and the end-to-end budget is the bridge's own 120 s run timeout. The definition therefore carries **no** buffering middleware, and `x-accel-buffering: no` / `no-cache, no-transform` are set by the bridge itself | `docker-compose.bridge.yml` (labels), tool **P0.7b** |
+| **E6** 256 KB body cap + security headers | Security headers are applied at the edge by a Traefik `headers` middleware (HSTS, nosniff, Referrer-Policy). The **body cap has no edge implementation**: Traefik core cannot limit a request body without a plugin, and the one built-in that can (`buffering`) is exactly the middleware E5 forbids. The bridge is therefore the control of record — `NEXUP_BRIDGE_MAX_BODY_BYTES=262144`, refused before any work | tool **P1.1** (gates the value), **P0.7b** (refuses buffering), §8 L11 |
+| **E9** DNS / ACME | Deferred to the deployment stage: it needs a real certificate issuance for `<BRIDGE_HOSTNAME>` | §3 step 9, §5 R.5 |
 
 **Placeholder convention.** `<ANGLE_BRACKETS>` mark values the operator supplies.
 Secret-like values are **never** written into this document, into shell history,
@@ -32,101 +78,176 @@ install+smoke, with pre-flight done beforehand.
 
 | Fact | Source | Check |
 |---|---|---|
-| Bridge binds `127.0.0.1:9220`, loopback only, no override | `bridge/src/config.ts` L157–162; `bridge/src/main.ts` L86 | P0.6 |
-| Hermes is reached at `ws://127.0.0.1:9119/api/ws`, profile pinned `saieed` | `bridge/src/config.ts` L123–152 | P1.4, P1.5 |
+| The bridge runs as its own container in the Hermes network namespace, publishing nothing | `bridge/deploy/docker-compose.bridge.yml` | P0.5a |
+| It reaches Hermes at `ws://127.0.0.1:9119/api/ws` with a **fixed** session token, profile pinned `saieed` | `bridge/src/config.ts`; `bridge/deploy/nexup-bridge-supervisor.sh` | P1.4, P1.5, P4.12 |
+| The off-loopback bind is refused unless `NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND=true` **and** the trusted edge is named off-loopback | `bridge/src/config.ts` | P0.6, P1.8 |
+| The client address comes from the **rightmost** `X-Forwarded-For` entry, believed only from a trusted proxy network | `bridge/src/auth/client-identity.ts` | P1.8, P3.1 |
+| Traefik terminates TLS on the bridge hostname and applies the security headers, with no buffering middleware | `docker-compose.bridge.yml` labels | P0.7a, P0.7b |
+| A systemd supervisor owns the `saieed serve` lifecycle and re-creates the bridge when the Hermes container ID changes | `bridge/deploy/nexup-bridge-supervisor.sh` | P3.5, P4.11 |
 | Bridge serves only `/v1/*`; no generic RPC, no query strings | `bridge/src/api/app.ts` L261, L312 | S3, S6 |
-| The shipped unit runs `/opt/nexup-bridge/dist/main.js` as user `nexup-bridge` | `bridge/systemd/nexup-bridge.service` | P0.5 |
-| Caddy terminates TLS and proxies to loopback; no compression, `flush_interval -1` | `bridge/deploy/Caddyfile` | P0.7 |
-| The bridge never starts, stops or reconfigures Hermes | `bridge/src/main.ts` (no lifecycle calls anywhere) | S14 (Hermes and the dashboard unchanged) |
-
----
+| The bridge never starts, stops or reconfigures Hermes, and never touches `default`/Adel | `bridge/src/main.ts`; the supervisor's profile allowlist | S14 (Hermes and the dashboard unchanged) |
 
 ## 1. PRE-FLIGHT
 
 Run all of P0–P4 on the build machine and on the VPS. **Every check has a stated
 pass signal. Do not proceed on a warning.**
 
-### P0. Workspace, build and artifact integrity
+### P0. Release artifact and deployment definition
+
+Run the build half on the build machine; run the tool on the VPS.
 
 ```bash
 cd <REPO_ROOT>/nexup-business-system/bridge
 git -C <REPO_ROOT> rev-parse HEAD                 # record this SHA in the change record
 git -C <REPO_ROOT> status --porcelain             # pass: no unexpected modifications
-node --version                                    # pass: v22.x (bundle target is node22)
 npx tsc -p tsconfig.json --noEmit                 # pass: no output, exit 0
-npx vitest run --config vitest.config.ts          # pass: every suite green
-npm run build                                     # pass: exit 0, esbuild is silent on success
-sha256sum dist/main.js                            # record the digest
+npx vitest run --config vitest.config.ts          # pass: every suite green (incl. supervisor.test.sh)
+npm run build                                     # pass: exit 0
+npm run build:cli                                 # pass: exit 0
+sha256sum dist/main.js                            # record (build input)
 ```
+
+Then **build the image on the VPS** from the staged context (`/opt/nexup-bridge`
+holds `Dockerfile` + `dist/main.js`) and **pin it by digest**:
+
+```bash
+docker build --pull -t nexup-bridge:<SHA> /opt/nexup-bridge
+docker image inspect --format '{{index .RepoDigests 0}}' nexup-bridge:<SHA>   # record this digest
+```
+
+> **Recorded build (STEP 2 pre-deploy checkpoint).** The build INPUT, measured
+> on the tree this commit captures:
+>
+> | | |
+> |---|---|
+> | Bundle | `bridge/dist/main.js` sha256 `1136425b17e1fa1204f1d74694db7580866b2d5f0216ccb8c6930c9ec73b4a4f`, **75,408 B** |
+> | Build tag used at build time | `nexup-bridge:step2-1136425b17e1` |
+>
+> **Where the image digest lives — exactly one place.**
+> `bridge/deploy/nexup-bridge.deploy.env.example`, installed as
+> `/etc/nexup-bridge/deploy.env` (0600 root), holds
+> `NEXUP_BRIDGE_IMAGE=<name>@sha256:…`. That installed file is the deployment's
+> only image identity: `docker-compose.bridge.yml` interpolates it and embeds no
+> fallback of its own, and the pre-flight reads the digest back from this same
+> file rather than being told it separately:
+>
+> ```bash
+> # the recorded build digest, from the one source
+> DEPLOY=/etc/nexup-bridge/deploy.env
+> EXPECTED=$(awk -F'@' '/^NEXUP_BRIDGE_IMAGE=/{print $2}' "$DEPLOY")
+> IMAGE=$(awk -F= '/^NEXUP_BRIDGE_IMAGE=/{print $2}' "$DEPLOY")
+>
+> # P0.5b resolves the image the way the DEPLOYMENT does (`docker compose config`)
+> # and refuses a digest that differs from --expected-digest, or an identity it
+> # cannot resolve. --image/--expected-digest come from the file above, so there is
+> # no second copy of the digest to keep in step.
+> node dist/release-cli.js preflight --image "$IMAGE" --expected-digest "$EXPECTED"
+> ```
+>
+> **It is a build-specific value, not a constant.** Any change to `bridge/src`
+> produces a different `dist/main.js` and therefore a different image digest;
+> when that happens, update the ONE source — the `NEXUP_BRIDGE_IMAGE` line in
+> `nexup-bridge.deploy.env.example` (and re-install it) — and update the bundle row
+> above in the same commit. Do not restate the digest anywhere else: a second copy
+> is a second identity, and nothing compares it against the build record.
 
 - **P0.1 Fail signal:** typecheck or any bridge test fails → stop. The method
   guard is proven by `tests/method-guard.test.ts`; a red suite means the
   compile-time allowlist guarantee is not evidenced for this commit.
-- **P0.2 Do not ship a pre-existing bundle.** `dist/` is gitignored
+- **P0.2 Image identity, not a loose bundle.** `dist/` is gitignored
   (`bridge/.gitignore`), so any `dist/main.js` already on disk was built at an
-  unknown time. Rebuild from the recorded SHA and treat the **pre-existing**
-  digest as invalid. As an integrity probe, confirm the guard survived bundling:
-
-  ```bash
-  grep -c "is not permitted by the NEXUP bridge" dist/main.js   # pass: >= 1
-  ```
-
-  A local rebuild from a clean tree reproduced the on-disk digest byte for byte,
-  so the digest is a usable identity for the artifact: record it here and compare
-  it again after the copy in §2.
+  unknown time. Rebuild from the recorded SHA, build the image from that exact
+  file, and treat the **digest of the image** as the artifact identity. Run the
+  tool with `--expected-digest <repo-digest-from-P0>` and `--image
+  nexup-bridge@sha256:<...>`; **P0.2b** compares the host's copy against it and
+  **P0.2c** confirms the allowlist refusal survived into the image.
 - **P0.3 Toolchain availability.** `bridge/` has no `node_modules` of its own; the
-  build and tests resolve `esbuild`/`vitest` from the repository root
-  (`npx --no-install esbuild --version` → `0.28.2` locally). Run P0 from a full
-  checkout, or `npm i` at the repo root first.
-- **P0.4 VPS needs no package manager.** The bundle is self-contained CommonJS;
-  the VPS needs only `/usr/bin/node` ≥ 22. Do not `npm install` on the VPS.
-- **P0.5 Unit paths.** The systemd unit sets
-  `WorkingDirectory=/opt/nexup-bridge` and
-  `ExecStart=/usr/bin/node /opt/nexup-bridge/dist/main.js`. The artifact must
-  therefore land at `/opt/nexup-bridge/dist/main.js`. (Note: the short runbook in
-  `docs/NEXUP_VPS_BRIDGE.md` §10 copies to `/opt/nexup-bridge/` — that path is
-  stale; this document is authoritative.) A failed P0.5 is a NO-GO: the tool
-  reads the *live* `ExecStart=` / `WorkingDirectory=` directives (comments
-  ignored), so a shipped path that appears only in a comment does not satisfy it.
-  It parses those directives with the `systemd.syntax(7)` grammar instead of by
-  substring, and takes these readings where that grammar leaves a choice — each is
-  asserted in `bridge/tests/release-cli.test.ts` rather than left implicit:
-  the **last** assignment of a directive wins, so a stale correct `ExecStart=`
-  followed by a wrong one is a NO-GO and the reverse is valid (`Type=simple` does
-  not really permit two `ExecStart=` lines at all; judging the last one is the
-  fail-closed reading); **whitespace around `=` is ignored**, so
-  `WorkingDirectory = /opt/nexup-bridge` is accepted; **a line ending in `\`
-  continues**, with a comment block inside the continuation dropped and the
-  continuation resuming after it, and **quotes wrap an item and are removed**;
-  and **`/usr/bin/node` must be the executable with the bundle as its entry
-  script** — the first item that is not a Node option, where `-r`/`--require`,
-  `-e`/`--eval`, `-p`/`--print`, `--import`, `--loader`/`--experimental-loader`
-  and `--inspect-port` also consume the item that follows them, while a
-  preload/import option may name the bundle instead. Any other position does not
-  count: `node other.js /opt/nexup-bridge/dist/main.js` mentions the bundle
-  without running it and stays a NO-GO, and an `ExecStart` prefix other than `-`
-  (`@`, `+`, `!`) is not modelled and fails closed. Finally, **only whole lines
-  beginning with `#` or `;` are comments** — a trailing `# …` is part of the
-  value, so it can neither hide a wrong path nor smuggle in the right one.
-- **P0.6 Loopback-only bind is enforced in code, with no override:** a
-  non-loopback `NEXUP_BRIDGE_HOST` returns `enabled:false`. Prove it on the host
-  before deploying (this starts **no** listener — it exits before `listen`):
+  build, the tests and `docker build` resolve from the repository root. Run P0
+  from a full checkout, or `npm i` at the repo root first.
+- **P0.4 The host needs Docker, not Node.** There is **no** Node, npm or Caddy on
+  this VPS, and none is installed: the bundle runs inside the image.
+  **P0.4a** requires a reachable daemon, **P0.4b** requires Compose v2.
+- **P0.5 The deployment definition is the artifact that must be read, not
+  grepped.** **P0.5a** requires `network_mode: "container:${NEXUP_HERMES_CONTAINER:-hermes-agent-r3j1-hermes-agent-1}"`
+  and refuses any published port (`ports:` with any non-empty value, or a bare
+  `- "H:C"` item) — an *empty* `ports: []` publishes nothing and is accepted.
+  **P0.5b** requires a digest-pinned image, `env_file: /etc/nexup-bridge/bridge.env`,
+  a non-root `user:` declared in the definition (the image sets the same uid;
+  both are kept — belt and braces), `read_only: true`, `cap_drop: [ALL]`,
+  `no-new-privileges:true` and a `restart:` policy. The image identity is
+  **resolved, not read off the page**: the check runs
+  `docker compose -f /opt/nexup-bridge/docker-compose.bridge.yml config` — the
+  way the deployment and the supervisor's own `up -d` resolve it — and then
+  requires the RESOLVED digest to equal `--expected-digest`. A digest that
+  differs, a definition that embeds a fallback digest of its own, and an
+  identity that cannot be resolved at all are each a NO-GO (fail closed: an
+  unknown deployed identity is never a pass). The tool reads the **live**
+  directives (comments ignored), and applies **last-wins** to a repeated scalar
+  key *and* to a repeated label, the way compose itself merges them — so a later
+  wrong `network_mode`, `image`, `user`, `cap_drop`, `env_file` or router label
+  wins and is a NO-GO, while the correct value sitting in a comment satisfies
+  nothing. A commented-looking correct line plus a live wrong one is exactly the
+  false pass this parser exists to prevent.
+- **P0.6 Loopback-only bind, with one narrow override.** A non-loopback
+  `NEXUP_BRIDGE_HOST` fails closed unless `NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND=true`
+  **and** `NEXUP_BRIDGE_TRUSTED_PROXIES` names a non-loopback boundary **and**
+  `NEXUP_BRIDGE_CLIENT_IP_HEADER` is set explicitly. Off-loopback, the loopback
+  default would trust no peer, so every caller would share ONE pre-auth bucket —
+  one client could starve the rest. Prove both refusals inside the image (each run
+  exits before `listen`; no port, no config, no state):
 
   ```bash
-  set -a; . /etc/nexup-bridge/bridge.env; set +a
-  NEXUP_BRIDGE_HOST=0.0.0.0 node dist/main.js; echo "exit=$?"
-  # pass: exit=1 and stderr: NEXUP_BRIDGE_HOST must be loopback (the bridge is not published directly)
+  # NOTE: no `--entrypoint`. Let the IMAGE's entrypoint run (`node
+  # /app/dist/main.js`) and pass the overrides as `-e` only. Adding `--entrypoint
+  # /usr/local/bin/node` REPLACES the entrypoint and therefore DROPS the bundle
+  # argument: node starts a REPL, reads EOF and exits 0, so the run can never
+  # observe a refusal and the check silently proves nothing (measured against the
+  # real daemon during P0).
+  docker run --rm \
+    -e NEXUP_BRIDGE_HOST=0.0.0.0 -e NEXUP_BRIDGE_HMAC_SECRET=<syn> \
+    -e NEXUP_BRIDGE_ALLOWED_KEY_IDS=nexup-vercel -e HERMES_SESSION_TOKEN=<syn> \
+    -e HERMES_PROFILE=saieed -e NEXUP_BRIDGE_ALLOWED_PROFILES=saieed \
+    -e HERMES_RPC_URL=ws://127.0.0.1:9119/api/ws \
+    nexup-bridge@sha256:<DIGEST>; echo "exit=$?"
+  # pass: exit=1, stderr mentions "loopback" and NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND
+  #
+  # Always bound the wait: `timeout 25 docker run …` — a config that DOES listen
+  # would otherwise hold the shell open until it is killed by hand.
   ```
-- **P0.7 Caddy version.** The Caddyfile uses `request_body { max_size 256KB }`,
-  which requires **Caddy ≥ 2.10**.
+
+  Repeat with `-e NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND=true -e NEXUP_BRIDGE_TRUSTED_PROXIES=127.0.0.1,::1`:
+  pass is `exit=1` with stderr naming `NEXUP_BRIDGE_TRUSTED_PROXIES`. (The tool
+  does all three runs — both bind refusals **and** the off-scope profile refusal
+  below — for you under `--exec-probes`.)
+
+  **The third run: an off-scope profile.** `adel` names the same `/opt/data` root
+  as `default`, so the image must refuse it by name:
 
   ```bash
-  caddy version            # pass: v2.10 or later
-  caddy validate --config /etc/caddy/Caddyfile   # pass: "Valid configuration"
+  timeout 25 docker run --rm \
+    -e NEXUP_BRIDGE_HOST=0.0.0.0 -e NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND=true \
+    -e NEXUP_BRIDGE_TRUSTED_PROXIES=172.16.0.0/16 -e NEXUP_BRIDGE_CLIENT_IP_HEADER=x-forwarded-for \
+    -e NEXUP_BRIDGE_HMAC_SECRET=<syn> -e NEXUP_BRIDGE_ALLOWED_KEY_IDS=nexup-vercel \
+    -e HERMES_SESSION_TOKEN=<syn> -e NEXUP_BRIDGE_ALLOWED_PROFILES=saieed \
+    -e HERMES_PROFILE=adel -e HERMES_RPC_URL=ws://127.0.0.1:9119/api/ws \
+    nexup-bridge@sha256:<DIGEST>; echo "exit=$?"
+  # pass: exit=1, stderr names NEXUP_BRIDGE_ALLOWED_PROFILES
   ```
-  **Fail signal:** unknown directive `request_body` → the edge body cap is not
-  applied; upgrade Caddy or lower `NEXUP_BRIDGE_MAX_BODY_BYTES` and accept that
-  the edge cap is absent. Do not silently drop the line.
+
+  This refusal exists because the **real daemon disproved the earlier design**:
+  before the allowlist was added, the image ACCEPTED `HERMES_PROFILE=adel` and
+  served 401s, i.e. it was addressable off-scope. `default` is refused
+  unconditionally (`assertAddressableProfile`); every other name must be listed in
+  `NEXUP_BRIDGE_ALLOWED_PROFILES`, which is why P1.5 requires that list to be
+  exactly `saieed`.
+- **P0.7 The edge is Traefik, and its policy lives in the labels.**
+  **P0.7a** requires the Traefik container to be running and the host to listen on
+  both `:80` and `:443`. **P0.7b** reads the labels: a `Host(...)` rule for
+  `<BRIDGE_HOSTNAME>`, `entrypoints=websecure`, `tls=true` with a
+  `certresolver`, the service port `9220`, the `nexup-bridge-headers` security
+  header middleware — and **no buffering middleware**, because response buffering
+  would hold the SSE run frames (E5). Traefik core has no request-body limit
+  without a plugin, so no edge body cap is asked for here; see §8 L11.
 
 ### P1. Environment and secret **names** (never values)
 
@@ -142,16 +263,19 @@ Host file: `/etc/nexup-bridge/bridge.env` (created in install from
 `NEXUP_BRIDGE_CLOCK_SKEW_SECONDS`, `NEXUP_BRIDGE_MAX_BODY_BYTES`,
 `HERMES_RPC_URL`, `HERMES_SESSION_TOKEN`, `HERMES_ORIGIN`, `HERMES_PROFILE`.
 
-- **P1.1 `NEXUP_BRIDGE_MAX_BODY_BYTES` is read by the code but is absent from
-  the example env file** (audit gap 9). If it is unset the default is 262 144 B,
-  which matches Caddy's `max_size 256KB`. **Pass signal:** either the variable is
-  set to 262144, or the operator records "default in use". Any other value must be
-  reconciled with Caddy or the larger body is silently truncated at the edge.
+- **P1.1 `NEXUP_BRIDGE_MAX_BODY_BYTES` is the ONLY request-body cap (E6).** There
+  is no edge body limit any more: Traefik core cannot cap a body without a plugin,
+  and the built-in that can (`buffering`) would break the SSE run stream (§8 L11,
+  tool **P0.7b**). If the variable is unset the code default is 262 144 B, which is
+  the value the policy assumes. **Pass signal:** the variable is absent, or set to
+  exactly `262144`. Any other value raises or lowers the real limit — change it
+  deliberately and record why.
 - **P1.2 File permissions.** The example documents `chmod 600` only in a comment;
-  nothing enforces it:
+  nothing enforces it, and the container reads the file as root-owned:
 
   ```bash
-  stat -c '%a %U:%G' /etc/nexup-bridge/bridge.env   # pass: 600 nexup-bridge:nexup-bridge
+  stat -c '%a %U:%G' /etc/nexup-bridge/bridge.env   # pass: 600 root:root
+  stat -c '%a %U:%G' /etc/nexup-bridge/hermes-session-token   # pass: 600 root:root
   ```
 - **P1.3 Secret strength.** The code refuses only `< 16` characters
   (`config.ts` L116)  while the example recommends 32 random bytes (the weak-secret acceptance
@@ -220,7 +344,7 @@ grep -rn "session.create\|prompt.submit\|session.status\|session.interrupt" <HER
 
 | # | Finding | Exact check | Pass / fail signal |
 |---|---|---|---|
-| P3.1 | **Client identity behind the proxy — resolved, not collapsed.** `bridge/src/server.ts` L89 still supplies only the *socket* address, but `bridge/src/api/app.ts` L245 passes it to `resolveClientIdentity` (`bridge/src/auth/client-identity.ts`): the proxy header is believed **only** when the TCP peer is a configured trusted proxy (`NEXUP_BRIDGE_TRUSTED_PROXIES`, default `127.0.0.1,::1`) and the value is a bare IP literal, otherwise the socket address is used. `bridge/deploy/Caddyfile` **overwrites** `X-Nexup-Client-IP`, so the pre-auth "per-remote" bucket and the audit `remote` are per client | tool **P3.1** (reads `app.ts`, `client-identity.ts` and `Caddyfile`); `grep -n "resolveClientIdentity" bridge/src/api/app.ts` | **Pass:** the identity chain is present as described and the operator records the residual dependence on the edge overwrite (§8 L3). If `app.ts` does not resolve the identity, or the Caddyfile does not overwrite the header, the pre-auth budget collapses to one shared bucket again — do not widen `NEXUP_BRIDGE_TRUSTED_PROXIES` beyond the loopback proxy in the window |
+| P3.1 | **Client identity behind the edge — resolved, not collapsed, and spoof-resistant (E4).** `bridge/src/server.ts` L89 still supplies only the *socket* address, but `bridge/src/api/app.ts` L245 passes it to `resolveClientIdentity` (`bridge/src/auth/client-identity.ts`). The forwarded address is believed **only** when the TCP peer is inside a configured trusted proxy **network** (`NEXUP_BRIDGE_TRUSTED_PROXIES`, here `172.16.0.0/16`), and for an edge-APPENDED header (`X-Forwarded-For`, which Traefik appends to) the **rightmost** entry is taken: everything to its left is caller-supplied. Any untrusted peer, repeated header or malformed value falls back to the socket address. The bridge publishes no port, so there is no path around the edge | tool **P3.1** (reads `app.ts`, `client-identity.ts` and the deployment definition); `grep -n "resolveClientIdentity" bridge/src/api/app.ts` | **Pass:** the identity chain is present as described, the definition publishes nothing, and the operator records the residual dependence on Traefik's append semantics (§8 L3). A leftmost read would hand every caller a fresh pre-auth bucket — if `client-identity.ts` loses the rightmost rule, that row fails and the deployment is a NO-GO |
 | P3.2 | **Weak-secret acceptance.** `config.ts` L116 refuses only `< 16` chars | P1.3 (`length >= 64`, the tool's **P3.2** row re-reports that same decision) | **Pass:** ≥ 64 chars of hex from a CSPRNG. Fail → regenerate before install |
 | P3.3 | **Pre-auth sweep order.** The *nonce store* order is correct (insertion == expiry). The caveat is `PreAuthGuard`: `sweepBuckets` breaks on the first live bucket while `consumeBucket` does not refresh insertion order, so stale buckets linger until the 10 k cap, and cap eviction can drop a live bucket — resetting that remote's budget | `npx vitest run tests/security.test.ts -t "refills over time and keeps its bucket state bounded"` (tool **P3.3** records it; no host action) | **Pass (accepted):** suite is green today. There is **no** test asserting a hot bucket survives eviction — record that as a known low-severity gap (§8 L4). No host action |
 | P3.4 | **Byte-vs-character truncation.** `boundText` slices by characters (`hermes-spawn.ts` L23–26), so a multi-byte payload can exceed `NEXUP_BRIDGE_MAX_OUTPUT_BYTES` by up to ~4× | `grep -n "slice(0, maxBytes)" src/modules/workforce/runtimes/hermes/hermes-spawn.ts` (tool **P3.4**) | **Pass (accepted):** the line is character-based. Mitigation in the window: keep `NEXUP_BRIDGE_MAX_OUTPUT_BYTES=262144` (1 MB worst case) and confirm the run with the largest expected output succeeds in S11. No code change in the window |
@@ -260,10 +384,13 @@ node dist/release-cli.js hermes-compat \
   --hermes-src /opt/hermes                           # add --accept-degraded to record §6.5 DEGRADE
 ```
 
-- **Read-only.** It only runs `node --version`, `caddy version`, `caddy validate`,
-  `ss`, `stat`, `df`, `sha256sum`, `command -v`, `id`, `date`, `systemctl --version`,
-  and — only with `--exec-probes` — one `node …/main.js` run that exits before
-  `listen`. Nothing is started, stopped, written or configured.
+- **Read-only.** It only runs `docker version`, `docker compose version`,
+  `docker inspect`, `docker image inspect`, `ss`, `stat`, `df`, `sha256sum`,
+  `command -v`, `date`, `systemctl --version`, `systemctl is-enabled|is-active`,
+  and — only with `--exec-probes` — three executions that change no state: a
+  `grep` inside the image, two bridge runs that exit before `listen`, and one TCP
+  connection to the serve endpoint from inside the Hermes container. Nothing is
+  started, stopped, created, written or configured.
 - **Exit codes:** `0` PASS · `1` NO-GO · `2` usage error. The verdict
   (`PREFLIGHT: PASS|FAIL`, `HERMES-COMPAT: PASS|FAIL`) is the last line.
 - **Fail closed, and a warning stops the run.** A check that FAILS is a NO-GO at
@@ -297,88 +424,130 @@ recorded) and P4 are complete. Any FAIL → stop (§6).
 | Artifact | Source on the build machine | Destination on the VPS | Copy how |
 |---|---|---|---|
 | Bridge bundle | `bridge/dist/main.js` (built in P0) | `/opt/nexup-bridge/dist/main.js` | `scp`, digest compared after copy |
-| systemd unit | `bridge/systemd/nexup-bridge.service` | `/etc/systemd/system/nexup-bridge.service` | `scp`, then `daemon-reload` |
-| Caddy site | `bridge/deploy/Caddyfile` | merged into `/etc/caddy/Caddyfile` (or `/etc/caddy/conf.d/nexup-bridge.caddy`) | `scp` + `caddy validate` |
+| Image definition | `bridge/deploy/Dockerfile` | `/opt/nexup-bridge/Dockerfile` | `scp` |
+| Deployment definition | `bridge/deploy/docker-compose.bridge.yml` | `/opt/nexup-bridge/docker-compose.bridge.yml` | `scp` |
+| Supervisor | `bridge/deploy/nexup-bridge-supervisor.sh` | `/usr/local/bin/nexup-bridge-supervisor` (0755 root) | `scp` |
+| Supervisor unit | `bridge/deploy/systemd/nexup-bridge-supervisor.service` | `/etc/systemd/system/nexup-bridge-supervisor.service` | `scp`, then `daemon-reload` |
 | Env template | `bridge/deploy/nexup-bridge.env.example` | `/etc/nexup-bridge/bridge.env` | **created on the host** from the example; the secret is generated on the host and never leaves it |
-| Hermes session token | Hermes host configuration (`HERMES_DASHBOARD_SESSION_TOKEN`) | mirrored into `bridge.env` | typed by the operator; never printed |
+| Deployment env | `bridge/deploy/nexup-bridge.deploy.env.example` | `/etc/nexup-bridge/deploy.env` (0600 root) | `install`, then set the image digest + hostname; **the one place the image identity lives** (step 6) |
+| Session token | the operator's fixed value | `/etc/nexup-bridge/hermes-session-token` (0600 root) **and** mirrored into `bridge.env` | typed by the operator; never printed |
 
 ```bash
 sha256sum bridge/dist/main.js                          # local digest, recorded in P0
 scp bridge/dist/main.js <VPS_HOST>:/tmp/main.js.upload
-ssh <VPS_HOST> 'install -o root -g root -m 0755 /tmp/main.js.upload /opt/nexup-bridge/dist/main.js && rm /tmp/main.js.upload'
+ssh <VPS_HOST> 'install -o root -g root -m 0644 /tmp/main.js.upload /opt/nexup-bridge/dist/main.js && rm /tmp/main.js.upload'
 ssh <VPS_HOST> 'sha256sum /opt/nexup-bridge/dist/main.js'   # must equal the local digest
 ```
 
 - **Pass signal:** the two digests are byte-identical.
-- **Mismatch → stop.** Do not start a service from an unverified artifact.
-- Keep the previous bundle as `/opt/nexup-bridge/dist/main.js.prev` (rollback R.3).
+- **Mismatch → stop.** Do not build or start from an unverified artifact.
+- The previous image stays in the local image store under its old tag/digest; that
+  is rollback R.3.
 - Nothing in `dist/` is committed (`bridge/.gitignore`), and the Vercel app never
   bundles the bridge: the VPS copy is the only deployment of it.
 
----
-
 ## 3. INSTALL / ENABLE
 
-Ordered. **Do not enable the unit before the smoke test passes** (I.9), and do not
-flip Vercel until the bridge is proven (I.10). Each step lists its expected output.
+Ordered. **Do not enable the supervisor before §4 passes**, and do not flip Vercel
+until the bridge is proven. Each step lists its expected output.
 
-1. **Create the service user** (idempotent):
-   ```bash
-   id nexup-bridge || useradd --system --no-create-home --shell /usr/sbin/nologin nexup-bridge
-   ```
-   *Expected:* `uid=… (nexup-bridge) gid=…` on the second run.
-2. **Directories:** `install -d -o root -g root -m 0755 /opt/nexup-bridge/dist /etc/nexup-bridge`
+1. **Directories:** `install -d -o root -g root -m 0755 /opt/nexup-bridge /etc/nexup-bridge`
    *Expected:* no output.
-3. **Bundle** in place with the digest verified (§2). *Expected:* matching sha256.
-4. **Env file:** `install -o nexup-bridge -g nexup-bridge -m 0600 /etc/nexup-bridge/bridge.env.example /etc/nexup-bridge/bridge.env`, then edit in place to fill the two secrets and confirm P1 values. *Expected:* later `stat` shows `600 nexup-bridge:nexup-bridge`.
-5. **Unit:** `install -m 0644 bridge/systemd/nexup-bridge.service /etc/systemd/system/nexup-bridge.service && systemctl daemon-reload` *Expected:* no output.
-6. **Pre-start sanity, without listening.** With the env sourced:
+2. **Bundle, definitions and supervisor** in place with the digests verified (§2).
+   *Expected:* matching sha256 for the bundle.
+3. **The fixed session token** — this is what makes the serve endpoint usable. The
+   value must be **fixed** (the same one on every start); a per-start token means
+   re-keying the bridge on every restart.
+   ```bash
+   install -d -m 0700 /etc/nexup-bridge
+   umask 077; openssl rand -hex 32 > /etc/nexup-bridge/hermes-session-token
+   chmod 0600 /etc/nexup-bridge/hermes-session-token   # never print it, never commit it
+   ```
+   *Expected:* `stat -c '%a %U:%G' /etc/nexup-bridge/hermes-session-token` → `600 root:root`.
+4. **Env file:** `install -o root -g root -m 0600 /etc/nexup-bridge/bridge.env.example /etc/nexup-bridge/bridge.env`,
+   then fill the HMAC secret, the **same** session token, and the P1 values.
+   *Expected:* later `stat` shows `600 root:root` (P1.2).
+5. **Build the image and schedule it** (§2/P0). *Expected:* a new `sha256:`
+   image digest from `docker image inspect`.
+6. **Deployment environment — created, not improvised.** This file is
+   **required**: the definition interpolates `NEXUP_BRIDGE_IMAGE` from it, and
+   the unit loads it (`EnvironmentFile=`), so a missing file stops the service
+   before it can reconcile anything.
+   ```bash
+   install -o root -g root -m 0600 bridge/deploy/nexup-bridge.deploy.env.example \
+     /etc/nexup-bridge/deploy.env
+   # then set, in that file (0600 root):
+   #   NEXUP_BRIDGE_IMAGE=nexup-bridge@sha256:<DIGEST_FROM_STEP_5>
+   #   NEXUP_BRIDGE_HOSTNAME=<BRIDGE_HOSTNAME>
+   #   NEXUP_HERMES_CONTAINER=<name>   (omit: the shipped default is the real one)
+   stat -c '%a %U:%G' /etc/nexup-bridge/deploy.env   # pass: 600 root:root
+   ```
+   *Expected:* `docker compose -f /opt/nexup-bridge/docker-compose.bridge.yml
+   config` resolves with no `variable is not set` warning, and its `image:` line
+   names the digest above. **Prove the negative too** — the unit must NOT start
+   without this file (the required `EnvironmentFile=` makes activation fail):
+   ```bash
+   systemd-run --property=EnvironmentFile=/etc/nexup-bridge/absent.env /bin/true; echo "exit=$?"
+   # pass: exit != 0, "Failed to load environment files" — the same failure mode a
+   # missing deploy.env produces for nexup-bridge-supervisor.service
+   ```
+7. **Supervisor environment and unit:**
+   ```bash
+   install -o root -g root -m 0600 /dev/null /etc/nexup-bridge/supervisor.env   # then set HERMES_PROFILE=saieed
+   install -m 0644 bridge/deploy/systemd/nexup-bridge-supervisor.service /etc/systemd/system/
+   install -m 0755 bridge/deploy/nexup-bridge-supervisor.sh /usr/local/bin/nexup-bridge-supervisor
+   systemctl daemon-reload
+   ```
+   *Expected:* no output. The unit reads BOTH
+   `/etc/nexup-bridge/supervisor.env` and `/etc/nexup-bridge/deploy.env` (step 6)
+   — the second is what lets its recovery path run `docker compose up -d` with the
+   image reference interpolated.
+8. **Pre-start sanity, without publishing anything.** With the env sourced:
    ```bash
    set -a; . /etc/nexup-bridge/bridge.env; set +a
-   HERMES_PROFILE=default node /opt/nexup-bridge/dist/main.js; echo "exit=$?"
+   HERMES_PROFILE=default docker run --rm -e HERMES_PROFILE=default nexup-bridge@sha256:<DIGEST>; echo "exit=$?"
    ```
-   *Expected:* `exit=1` and stderr `[nexup-bridge] disabled: HERMES_PROFILE "default" is unsafe or forbidden (default is never addressable)`. This is the proof that the `default` profile cannot be addressed — it never reaches `listen`. (Also covered in S5.)
-7. **Start:** `systemctl start nexup-bridge`
-   *Expected:* `systemctl is-active nexup-bridge` → `active`.
-8. **Verify what it bound and whom it serves:**
+   *Expected:* `exit=1` with stderr refusing `default`. This is the proof that the
+   `default` profile cannot be addressed — it never reaches `listen`. (Also S5.)
+9. **Start the supervisor** (it starts the serve, then creates the bridge):
    ```bash
-   systemctl status nexup-bridge --no-pager | head -15
-   journalctl -u nexup-bridge -n 20 --no-pager
-   ss -ltnp | grep 9220
+   systemctl enable --now nexup-bridge-supervisor
+   journalctl -u nexup-bridge-supervisor -n 30 --no-pager
    ```
-   *Expected:* one JSON log line `"msg":"bridge listening"` with
-   `host:"127.0.0.1"`, `port:9220`, `profile:"saieed"`; `ss` shows
-   `127.0.0.1:9220` **only**.
-   *Fail signal:* any `0.0.0.0:9220` / `[::]:9220` → stop now (§6).
-9. **Enable:** `systemctl enable nexup-bridge` (only after §4 smoke passes)
-   *Expected:* symlink created in `multi-user.target.wants`.
-10. **Publish the edge:** place the Caddy site, `caddy validate --config /etc/caddy/Caddyfile`,
-    `systemctl reload caddy`.
-    *Expected:* `Valid configuration`; `systemctl is-active caddy` → `active`.
-    **Test reachability unsigned — this must fail closed:**
+   *Expected:* `SERVE-DOWN -> starting serve with fixed token` then `SERVE-UP`, then
+   `BRIDGE-OK` (or `BRIDGE-STALE -> re-creating` on the first pass), and
+   `systemctl is-active nexup-bridge-supervisor` → `active`. **No token value
+   appears in the journal** — if one does, stop (§6).
+10. **Verify what is exposed:**
+    ```bash
+    docker inspect -f '{{.HostConfig.NetworkMode}}' nexup-bridge   # container:<hermes id>
+    docker inspect -f '{{json .NetworkSettings.Networks}}' nexup-bridge   # {} — no address of its own
+    ss -ltnp | grep -E '(:9220|:9119)' || echo "neither port is on the host (correct)"
+    ```
+    *Expected:* the shared-namespace mode, no address, and **neither** port on the
+    host. *Fail signal:* `0.0.0.0:9220` or any `:9119` on the host → stop (§6).
+11. **Prove the route end to end — unsigned first, on the real hostname:**
     ```bash
     curl -sS -o /dev/null -w '%{http_code}\n' https://<BRIDGE_HOSTNAME>/v1/health
     ```
-    *Expected:* `401` (re-checked as **S3**). A `200` means the auth path is not in
-    front of the route — stop immediately.
-11. **Flip Vercel (last):** set the five variables from P1.7 in the production
+    *Expected:* `401` (re-checked as **S3**), and a certificate issued for
+    `<BRIDGE_HOSTNAME>` (E9). A `200` means the auth path is not in front of the
+    route — stop immediately. A `404` means the router did not attach: check
+    `docker inspect` labels and that Traefik can see the owner's endpoint.
+12. **Flip Vercel (last):** set the five variables from P1.7 in the production
     environment and redeploy. *Expected:* the app's workforce health endpoint
     reports the runtime as configured with transport `BRIDGE` and profile
     `saieed`. Keep the previous value of `HERMES_RUNTIME_TRANSPORT` recorded —
     it is rollback R.1.
-12. **Disable the build machine's stale bundle from the record:** not applicable;
-    just note that only the digest from §2 is deployed.
-
----
 
 ## 4. SMOKE TEST
 
 **These steps were executed locally** in this order against the **compiled
 bundle**, with a stub Hermes JSON-RPC endpoint on loopback. Every “Expected
 output” below is an observation from that run, not a prediction. One hop the rig
-could not cover: TLS and the Caddy proxy, because it spoke plain HTTP to
-`127.0.0.1` — so S1 proves the proxy path only once it runs against
-`https://<BRIDGE_HOSTNAME>`.
+could not cover: TLS, the Traefik route and the shared network namespace, because
+it spoke plain HTTP to `127.0.0.1` — so S1 proves the edge path only once it runs
+against `https://<BRIDGE_HOSTNAME>`.
 
 Hermes contact escalates: **S1–S9 open no Hermes socket at all**, so a failure
 there costs nothing; S10 connects; S11 creates a real session on profile
@@ -494,12 +663,12 @@ Environment for every step: `set -a; . /etc/nexup-bridge/bridge.env; set +a` and
 | **S5** tampered signature rejected | `node /tmp/nexup-smoke.mjs tampered` | `401` with `error.code:"SIGNATURE_INVALID"`, `message:"Bridge signature did not match"` | Constant-time HMAC comparison, `signing.ts` L70–76 |
 | **S6** stale timestamp rejected | `node /tmp/nexup-smoke.mjs stale` | `401` with `error.code:"REPLAY"`, `message:"Signed request timestamp is outside the acceptance window"` | The skew window is checked **before** the HMAC (`signature.ts` L52–58) |
 | **S7** replayed nonce rejected | `node /tmp/nexup-smoke.mjs replay` | #1 `200`; #2 `401` with `error.code:"REPLAY"`, `message:"Bridge nonce was already used"` | The nonce is consumed **after** the HMAC, once (`signature.ts` L61–68) |
-| **S8** `default` profile is never addressable | I.6, re-run now: `HERMES_PROFILE=default node /opt/nexup-bridge/dist/main.js; echo $?` | `exit=1` + `HERMES_PROFILE "default" … is unsafe or forbidden`; **no listener starts** | `assertAddressableProfile` refuses `default` at config time |
+| **S8** `default` profile is never addressable | I.8, re-run now: `docker run --rm -e HERMES_PROFILE=default nexup-bridge@sha256:<DIGEST>; echo $?` | `exit=1` + `HERMES_PROFILE "default" … is unsafe or forbidden`; **no listener starts** | `assertAddressableProfile` refuses `default` at config time |
 | **S9** caller-supplied profile refused | `node /tmp/nexup-smoke.mjs profile` | `403` with `error.code:"FORBIDDEN_PROFILE"`; body says the bridge pins the profile server-side | `profile-policy.ts` L26–32 |
 | **S10** readiness (first Hermes contact) | `node /tmp/nexup-smoke.mjs health` | `200` with `bridge:"ok"` and `hermes:"healthy"`, `detail:"gateway.ready"`. If `gateway.ping` is unsupported instead: `200` with `hermes:"degraded"`, `detail:"gateway.ping not supported"` — **that is a NO-GO unless P2 recorded it and the operator accepts it explicitly** (§6.5) | Live Hermes reachability on loopback; **read `detail`, never the status code alone** |
 | **S11** run + SSE streaming (creates a real session on `saieed`) | `node /tmp/nexup-smoke.mjs run` | submit `201` with `status:"RUNNING"`; then `stream -> 200`, `content-type=text/event-stream`, `cache-control=no-cache, no-transform`, `x-accel-buffering=no`; frames `event: delta` … ending in `event: complete` with `status:"succeeded"` | Deltas forward, the terminal frame ends the stream, compression/buffering stay off at the edge |
 | **S12** cancel → `session.interrupt` | `node /tmp/nexup-smoke.mjs cancel` | `POST /v1/runs/<id>/cancel -> 200 {"status":"CANCELLED"}`, then `GET /v1/runs/<id> -> 200 {"status":"CANCELLED"}`. If the turn had already finished, cancel is a harmless no-op returning the terminal status — re-run S12 with a longer instruction | The cancel path reaches Hermes' interrupt (observed on the wire in the local stub rig as `session.interrupt {session_id:…}`) |
-| **S13** audit + leak check | `journalctl -u nexup-bridge -n 50 --no-pager \| grep -c '"action"'` then inspect one line | JSON lines with `keyId`, `outcome`, `runId`, `profile:"saieed"`, `durationMs`; **zero** occurrences of the HMAC secret, the Hermes session token, or the prompt text | §7 observability; any secret in the log → §6.10 |
+| **S13** audit + leak check | `docker logs nexup-bridge --tail 50 \| grep -c '"action"'` then inspect one line; and `journalctl -u nexup-bridge-supervisor -n 50 --no-pager \| grep -c "$(cat /etc/nexup-bridge/hermes-session-token)"` | JSON lines with `keyId`, `outcome`, `runId`, `profile:"saieed"`, `durationMs`; **zero** occurrences of the HMAC secret, the Hermes session token, or the prompt text — including in the supervisor journal, which must never echo the token | §7 observability; any secret in a log → §6.10 |
 | **S14** nothing else moved | `ss -ltnp \| grep -E '(:9119|:4860)'` and compare `MainPID`/`ActiveEnterTimestamp` with P4 | identical to P4 | Hermes and the dashboard were untouched |
 
 **Readiness semantics (runtime unchanged; enforced by the gate).** S10 is the
@@ -521,8 +690,10 @@ no HTTP probe for them. The deployment-time evidence is (a) the guard is present
 green on the same commit:
 
 ```bash
-grep -c "is not permitted by the NEXUP bridge" /opt/nexup-bridge/dist/main.js  # >= 1
-npx vitest run tests/method-guard.test.ts -t "llm.oneshot"                     # green
+# in the image, not on the host (the host has no bundle and no Node)
+docker run --rm --entrypoint /bin/sh nexup-bridge@sha256:<DIGEST> \
+  -c "grep -c 'is not permitted by the NEXUP bridge' /app/dist/main.js"   # >= 1
+npx vitest run tests/method-guard.test.ts -t "llm.oneshot"                # green (build machine)
 ```
 
 In the local stub rig the outbound wire carried only `gateway.ping`,
@@ -545,18 +716,36 @@ Fastest first. R.1 and R.2 need no VPS access at all.
   and redeploy. `resolveHermesConfig` then fails closed and the runtime is not
   registered; workforce jobs report the runtime as unavailable. **This is the
   primary rollback and it does not touch the VPS.**
-- **R.2 (≈1 min) — stop the bridge.** `systemctl stop nexup-bridge`. Hermes is a
-  separate process that the bridge never manages; stopping the bridge cannot
-  affect it.
-- **R.3 — restore the previous bundle.**
+- **R.2 (≈1 min) — withdraw the route, keep everything alive.** Stop only the
+  bridge container: `docker compose -f /opt/nexup-bridge/docker-compose.bridge.yml stop`.
+  The serve keeps running and Hermes is untouched; without the route there is no
+  reachable bridge at all. (Strictly better than stopping the supervisor, which
+  would also take the serve down.)
+- **R.3 — restore the previous image.** Re-pin `NEXUP_BRIDGE_IMAGE` in
+  `/etc/nexup-bridge/deploy.env` — the ONE place the identity is written — to the
+  previously deployed digest (it is still in the local image store) and
+  re-apply:
   ```bash
-  install -o root -g root -m 0755 /opt/nexup-bridge/dist/main.js.prev /opt/nexup-bridge/dist/main.js
-  sha256sum /opt/nexup-bridge/dist/main.js      # must equal the digest recorded in P4
-  systemctl start nexup-bridge
+  install -o root -g root -m 0600 \
+    /etc/nexup-bridge/deploy.env /etc/nexup-bridge/deploy.env.pre-<DATE>
+  # edit NEXUP_BRIDGE_IMAGE=…@sha256:<PREVIOUS> in /etc/nexup-bridge/deploy.env
+  set -a; . /etc/nexup-bridge/deploy.env; set +a
+  docker compose -f /opt/nexup-bridge/docker-compose.bridge.yml up -d
+  docker image inspect --format '{{index .RepoDigests 0}}' "$NEXUP_BRIDGE_IMAGE"
+  # the reverted identity must be the one the pre-flight then confirms (P0.5b)
+  docker compose -f /opt/nexup-bridge/docker-compose.bridge.yml config | grep '^ *image:'
   ```
-  No bundle history → `systemctl disable --now nexup-bridge` and stay on R.1.
-- **R.4 — restore the previous env.** `install -o nexup-bridge -g nexup-bridge -m 0600 /etc/nexup-bridge/bridge.env.bak-<DATE> /etc/nexup-bridge/bridge.env` then `systemctl restart nexup-bridge`.
-- **R.5 — withdraw the edge.** Remove the Caddy site block, `caddy validate`, `systemctl reload caddy`. If a certificate was issued for `<BRIDGE_HOSTNAME>`, leave it; it is harmless.
+  There is no copy of the digest in the compose file to revert as well: if the
+  two ever disagree, the definition is the wrong one to edit.
+  No previous digest → `systemctl disable --now nexup-bridge-supervisor` and stay
+  on R.1.
+- **R.4 — restore the previous env.** `install -o root -g root -m 0600 /etc/nexup-bridge/bridge.env.bak-<DATE> /etc/nexup-bridge/bridge.env`
+  then `docker compose -f /opt/nexup-bridge/docker-compose.bridge.yml up -d` (an
+  `env_file` change needs a container re-create, not a restart).
+- **R.5 — withdraw the edge (E9).** Remove the bridge service from the definition
+  (or `docker compose ... down`), so the router and its certificate are no longer
+  referenced. If a certificate was issued for `<BRIDGE_HOSTNAME>`, leave it; it is
+  harmless. Traefik itself is **not** restarted at any point.
 - **R.6 — confirm the blast radius was zero.**
   ```bash
   ss -ltnp | grep -E '(:9119|:4860)'                       # same as P4
@@ -606,19 +795,23 @@ record so the write-up does not over-claim.
 | Nonce single-use, consumed **after** HMAC | `signature.ts` L61–68; `bridge/src/auth/nonce-store.ts` |
 | Pre-auth rate limit before any HMAC work | `bridge/src/auth/pre-auth-guard.ts`; `bridge/src/api/app.ts` L274 |
 | Per-key rate limit after auth | `bridge/src/auth/rate-limit.ts`; `app.ts` L316 |
-| Bounded request body | `bridge/src/server.ts` L19–45; `config.ts` L181; Caddyfile `request_body 256KB` |
+| Bounded request body | `bridge/src/server.ts` L19–45; `config.ts`; **the bridge is the only cap** (no edge body limit exists — §8 L11) |
 | Pinned profile, re-checked per request | `config.ts` L146–152; `hermes-config.ts` L108–135; both transports |
 | `default` forbidden | `hermes-config.ts` L114, L133; `config.ts` L149–152 |
 | No generic RPC, no query strings | `app.ts` L261, L312 |
 | Method allowlist **on the outbound path** | `bridge/src/hermes/allowlist.ts`; `method-guard.ts` L85–101; `client.ts` L61–79 |
 | `llm.oneshot` excluded | `allowlist.ts` L28 |
-| Loopback-only bind, no override | `config.ts` L157–162 |
+| Loopback-only bind by default; off-loopback only with an explicit opt-in **and** a named, non-loopback edge boundary | `config.ts` (`NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND`, `NEXUP_BRIDGE_TRUSTED_PROXIES`, `NEXUP_BRIDGE_CLIENT_IP_HEADER`) |
 | Loopback-only Hermes URL | `config.ts` L129 |
 | `no-store` / SSE `no-cache, no-transform` + `x-accel-buffering: no` | `server.ts` L60, L108, L110 |
-| Edge: no compression, `flush_interval -1`, HSTS/nosniff | `bridge/deploy/Caddyfile` |
+| Edge: no response buffering (SSE), HSTS/nosniff/Referrer-Policy | `bridge/deploy/docker-compose.bridge.yml` labels; tool P0.7b |
+| Client address: rightmost edge-appended `X-Forwarded-For` entry, trusted proxies as CIDR | `bridge/src/auth/client-identity.ts` |
+| Fixed session token, never in argv or logs; serve lifecycle and bridge re-parenting owned outside Hermes | `bridge/deploy/nexup-bridge-supervisor.sh`; tool P3.5 |
+| Nothing published on the host: no `ports:`, no `:9220`/`:9119` listener | `docker-compose.bridge.yml`; tool P0.5a, P4.1, P4.2 |
 | Secret redaction (logs, audit, wire) | `bridge/src/redaction.ts`; `main.ts` L41–44; `app.ts` L291, L355 |
 | Audit line per request and per run | `app.ts` L277 (pre-auth denial), L322 (allowed), L344 (denied); `run-manager.ts` `finalize` |
-| Unit hardening (non-root, `ProtectSystem=strict`, no caps) | `bridge/systemd/nexup-bridge.service` |
+| Container hardening (non-root uid, `read_only`, `cap_drop: [ALL]`, no-new-privileges, dropped service user) | `bridge/deploy/Dockerfile`; `docker-compose.bridge.yml`; tool P0.5b |
+| Supervisor unit hardening (non-root-capable, `ProtectSystem=strict`, no caps) | `bridge/deploy/systemd/nexup-bridge-supervisor.service` |
 
 ---
 
@@ -628,14 +821,16 @@ record so the write-up does not over-claim.
 |---|---|---|
 | L1 | Nonce/rate-limit state is process-local, so a restart inside the 300 s window re-permits one replayed request | Restart is not attacker-triggerable (`Restart=on-failure` only, no exposed control); bounded by the skew window |
 | L2 | Metrics exist only in memory — **there is no `/metrics` HTTP route** (`metrics.ts` has `renderPrometheus`, nothing registers it) | Observability in the window is `journalctl` + the audit lines; do not promise a metrics endpoint |
-| L3 | Client identity behind the proxy depends on two things outside the code: the edge must **overwrite** `X-Nexup-Client-IP` (`deploy/Caddyfile` does) and `NEXUP_BRIDGE_TRUSTED_PROXIES` must name the proxy (default `127.0.0.1,::1`). `resolveClientIdentity` believes the header only from a trusted peer and otherwise falls back to the socket address — a real per-peer bucket, never an unbounded or shared "trusted" one | The fallback means a spoofed or mis-forwarded header cannot mint fresh pre-auth budgets; the loopback default matches a loopback Caddy, and **P3.1** together with the P1 trusted-proxy check cover both sides. Widening the trusted-proxy list is the only way to break it |
+| L3 | Client identity now depends on Traefik's `X-Forwarded-For` semantics: the bridge takes the **rightmost** entry and believes it only from `NEXUP_BRIDGE_TRUSTED_PROXIES` (here `172.16.0.0/16`, the Docker network the namespace lives on). A peer that is not trusted, a repeated header, or a malformed value degrades to the socket address | The rightmost entry is the one Traefik appended, so a caller-prepended address cannot mint a fresh pre-auth bucket; the fallback is a real per-peer bucket, never a shared or unbounded one. The boundary is a NETWORK because Docker renumbers it on every recreation; **P1.8** + **P3.1** cover both halves. E4 is settled in code and tested locally; the live header shape is re-measured at the RECOVERY VERIFIED checkpoint |
 | L4 | No test asserts that a live pre-auth bucket survives cap eviction | Bounded (10 k) and low impact; captured as hardening debt |
 | L5 | HMAC secrets between 16 and 63 chars are accepted by the code | Pre-flight P1.3 imposes the real policy; a startup minimum is a code change for later |
-| L6 | The unit sets no seccomp / `SystemCallFilter` | The bundle contains no `node:child_process` (verified: the import is tree-shaken out) and nothing on the request path can spawn; container-level hardening would be the next step, not a deployment blocker |
+| L6 | Neither unit sets seccomp / `SystemCallFilter`; the container relies on `cap_drop: [ALL]`, `read_only`, `no-new-privileges` and a non-root uid | The bundle contains no `node:child_process` (verified: the import is tree-shaken out) and nothing on the request path can spawn; a seccomp profile is hardening debt, not a deployment blocker |
 | L7 | `boundText` truncates by characters, not bytes | Mitigated by keeping `MAX_OUTPUT_BYTES` sane and confirming S11 |
 | L8 | Audit lines go to journald with no rotation/integrity policy | Operational item, not a deployment blocker |
-| L9 | Hermes session token travels in the WebSocket URL query (Hermes' own auth mechanism) | Bridge-side redaction cannot cover Hermes' logs; the token never leaves loopback |
+| L9 | Hermes session token travels in the WebSocket URL query (Hermes' own auth mechanism) | Bridge-side redaction cannot cover Hermes' logs; the token never leaves the shared namespace, and the supervisor passes it to the serve process by variable NAME so it never enters any argv |
 | L10 | Unknown request-body fields are ignored rather than rejected (`profile` is the exception and is rejected) | Contract-safe: no caller-supplied field can become the emitted method or the addressed profile, and the method plan is derived in code; strict schema rejection is hardening debt, not a gate item |
+| L11 | **There is no request-body cap at the edge.** Traefik core cannot limit a body without a plugin, and the only built-in that can (`buffering`) must not be used here because it would buffer the SSE run stream | The bridge caps every body at `NEXUP_BRIDGE_MAX_BODY_BYTES=262144` and answers `413` before doing any work, and **P1.1** gates that exact value. A larger cap is a deliberate change, never a drift |
+| L12 | Recreating the Hermes container breaks the bridge until the supervisor reconciles (default interval 10 s), and the serve endpoint is briefly absent | Measured, expected behaviour of a shared namespace; the supervisor is idempotent and re-creates the bridge through the compose file (P3.5, P4.11), and recovery is re-verified at the RECOVERY VERIFIED checkpoint |
 
 ---
 
@@ -643,23 +838,31 @@ record so the write-up does not over-claim.
 
 1. **Do not expose Hermes publicly.** No port-forward, no `0.0.0.0` bind, no
    second proxy path. Hermes stays on `127.0.0.1:9119`.
-2. **Loopback only** for the bridge: `NEXUP_BRIDGE_HOST` must be `127.0.0.1`
-   (the code refuses anything else) and only Caddy may publish `:443`.
+2. **Never publish the bridge.** The definition has no `ports:`; the off-loopback
+   bind inside the shared namespace is the only override, and it exists solely so
+   Traefik can reach the bridge at the owner's address. Only Traefik may own
+   `:80`/`:443`, and nothing may publish `:9220` or `:9119`.
 3. **Profile `saieed` only.** Exactly one profile is addressed, pinned at
    configuration time, and a caller-supplied profile is rejected.
 4. **`default` is Adel's profile.** Never use it, never modify it, never restart
    it, never inspect it destructively. Do not write the string into any bridge
    file. The code refuses it; the operator must too.
-5. **Never touch the existing Hermes/dashboard process or port 4860.** No
-   `systemctl restart` of it, no config edit, no version change.
+5. **Never touch the managed Hermes deployment.** No edit to
+   `/docker/hermes-agent-r3j1/docker-compose.yml`, no image change, no
+   `docker restart` of the Hermes container, no change to port 4860 or the
+   dashboard. The supervisor starts and probes the `saieed` serve; that is all.
 6. **No secrets in git — ever.** Not in a commit, a diff, a screenshot, a ticket
    or a chat. The env example carries placeholders only. Verify any paste before
    sending it.
 7. **No database migration, no Prisma change, no Supabase/DB contact.** The
    bridge has no database; this deployment must not introduce one.
-8. **No `npm install` or toolchain change on the VPS.** Ship the built bundle.
-9. **No Hermes lifecycle management.** The bridge only connects; it never starts,
-   stops or reconfigures Hermes.
+8. **No `npm install` or toolchain change on the VPS.** There is no Node on the
+   host: the bundle runs inside the image, and the image is built from the
+   already-built bundle.
+9. **No Hermes lifecycle management by the bridge.** The bridge only connects.
+   The ONLY process allowed to start the `saieed` serve is the operator-owned
+   supervisor, and it may only start it — never stop it, never reconfigure it,
+   never address `default`.
 10. **No generic RPC, no caller-supplied method or profile, no shell execution.**
     If a task seems to need one, it is out of scope.
 11. **Do not enable the bridge for production traffic** (`systemctl enable`,

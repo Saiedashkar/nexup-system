@@ -102,22 +102,34 @@ Hermes transport kinds map onto these codes in one place
 
 ## 10. Runbook
 
+There is **no host Node process** any more. The bridge is its own container that
+shares the Hermes container's network namespace, and an operator-owned systemd
+supervisor owns both the `saieed serve` endpoint and the bridge's lifecycle. The
+authoritative, step-by-step procedure is
+[`NEXUP_VPS_BRIDGE_DEPLOY_RUNBOOK.md`](./NEXUP_VPS_BRIDGE_DEPLOY_RUNBOOK.md); the
+shape is:
+
 ```bash
-# build
-cd nexup-business-system/bridge && npm run build
+# build (build machine)
+cd nexup-business-system/bridge && npm run build && npm run build:cli
 
-# install (VPS)
-sudo mkdir -p /opt/nexup-bridge /etc/nexup-bridge
-sudo cp dist/main.js /opt/nexup-bridge/
-sudo cp deploy/nexup-bridge.env.example /etc/nexup-bridge/bridge.env   # edit secrets
-sudo chmod 600 /etc/nexup-bridge/bridge.env
-sudo cp systemd/nexup-bridge.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now nexup-bridge
+# stage + build + pin the image (VPS: /opt/nexup-bridge holds Dockerfile + dist/main.js)
+docker build --pull -t nexup-bridge:<SHA> /opt/nexup-bridge
+docker image inspect --format '{{index .RepoDigests 0}}' nexup-bridge:<SHA>
 
-# verify loopback-only exposure
-ss -ltn | grep -E '9119|9220'   # both on 127.0.0.1
-curl -sS https://bridge.hymanna.com/v1/health   # 401 without a signature
-journalctl -u nexup-bridge -f
+# secrets: HMAC + the FIXED session token (never printed, never in argv)
+install -m 0600 deploy/nexup-bridge.env.example /etc/nexup-bridge/bridge.env
+umask 077; openssl rand -hex 32 > /etc/nexup-bridge/hermes-session-token
+
+# supervisor: owns the serve, re-creates the bridge when the Hermes ID changes
+install -m 0755 deploy/nexup-bridge-supervisor.sh /usr/local/bin/nexup-bridge-supervisor
+install -m 0644 deploy/systemd/nexup-bridge-supervisor.service /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now nexup-bridge-supervisor
+
+# verify: nothing is published, and the edge answers
+ss -ltn | grep -E '9119|9220'   # expected: NO output — both live inside the container
+curl -sS https://<BRIDGE_HOSTNAME>/v1/health   # 401 without a signature
+journalctl -u nexup-bridge-supervisor -f
 ```
 
 ## 11. Rollback

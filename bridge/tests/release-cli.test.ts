@@ -29,7 +29,10 @@ const MISSING_INTERRUPT = path.join(FIXTURES, "hermes-missing-interrupt.json");
 
 const HMAC_SENTINEL = "SENTINEL_hmac_secret_value_that_must_never_be_printed_0123456789abcdef";
 const TOKEN_SENTINEL = "SENTINEL_session_token_that_must_never_be_printed_abcdef";
-const PASS_DIGEST = "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4";
+/** The digest pinned at build time; the recorded host holds this exact image. */
+const PASS_DIGEST = "d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4";
+const IMAGE_REF = `nexup-bridge@sha256:${PASS_DIGEST}`;
+const COMPOSE_PATH = "/opt/nexup-bridge/docker-compose.bridge.yml";
 
 const OUT_OF_SCOPE = "OUT OF SCOPE — DO NOT TOUCH";
 
@@ -43,7 +46,7 @@ function run(argv: readonly string[]): Run {
   return { code, out: out.join("\n"), err: err.join("\n") };
 }
 
-/** The healthy recorded host, fully exercised (P0.6 opt-in included). */
+/** The healthy recorded host, fully exercised (the execution probes included). */
 const passPreflight = [
   "preflight",
   "--fixture",
@@ -52,6 +55,8 @@ const passPreflight = [
   "/opt/hermes",
   "--expected-digest",
   PASS_DIGEST,
+  "--image",
+  IMAGE_REF,
   "--exec-probes",
 ];
 
@@ -114,14 +119,20 @@ describe("release CLI — preflight through the entry point", () => {
     }
   });
 
-  it("fails closed when a safety check cannot run (P0.6 without --exec-probes)", () => {
+  it("fails closed when the execution probes are not enabled", () => {
+    // P0.2c (the allowlist guard survived into the image), P0.6 (the bind guard)
+    // and P4.12 (the serve endpoint really answers on loopback) all EXECUTE
+    // something, so all three must be opted into — and a safety row that cannot
+    // run is a NO-GO, never a quiet pass.
     const withoutExec = passPreflight.filter((arg) => arg !== "--exec-probes");
     const { code, out } = run(withoutExec);
     expect(code).toBe(1);
-    expect(out).toContain("[NOGO] P0.6");
-    expect(out).toContain("could not run:");
+    for (const id of ["P0.2c", "P0.6", "P4.12"]) {
+      expect(out).toContain(`[NOGO] ${id}`);
+      // Reported as "could not run", never as a failure of the thing checked.
+      expect(out).toContain("could not run:");
+    }
     expect(out).toContain("NO-GO — gating checks did not pass");
-    expect(out).toContain("P0.6");
     expect(lastLine(out)).toBe("PREFLIGHT: FAIL");
   });
 
@@ -132,18 +143,22 @@ describe("release CLI — preflight through the entry point", () => {
 
     const nogo = out.split("\n").find((line) => line.startsWith("NO-GO"));
     expect(nogo).toBeDefined();
-    for (const id of ["P0.4a", "P0.7a", "P1.3", "P1.5", "P2.1", "P4.1"]) expect(nogo).toContain(id);
+    // A mutable image, a published port, a host-exposed Hermes, a missing
+    // supervisor — every one of them is a NO-GO on its own.
+    for (const id of ["P0.2b", "P0.5a", "P0.5b", "P0.7a", "P0.7b", "P1.1", "P1.3", "P1.5", "P2.1", "P4.1", "P4.2"]) {
+      expect(nogo).toContain(id);
+    }
     expect(out).toContain("[FAIL] P1.3");
     expect(out).toContain("[FAIL] P1.5");
+    expect(out).toContain("[FAIL] P4.11");
   });
 
   it("gates on a FAILED advisory row instead of reporting a harmless warning", () => {
-    // The audit found P0.5/P3.x could emit `warn` and the run still returned
-    // PASS/0. §1 P0 says do not proceed on a warning, so a failed row gates at
-    // any severity — while a row that merely cannot run (P0.1/P0.3/P1.7) does not.
+    // §1 P0 says do not proceed on a warning, so a failed row gates at any
+    // severity — while a row that merely cannot run (P0.1/P0.3/P1.7) does not.
     const { code, out } = run(failPreflight);
     const nogo = out.split("\n").find((line) => line.startsWith("NO-GO")) ?? "";
-    for (const id of ["P0.5", "P3.1", "P3.2", "P3.3", "P3.4"]) {
+    for (const id of ["P3.1", "P3.2", "P3.3", "P3.4", "P3.5"]) {
       expect(out).toContain(`[FAIL] ${id}`);
       expect(nogo).toContain(id);
     }
@@ -152,33 +167,36 @@ describe("release CLI — preflight through the entry point", () => {
     expect(code).toBe(1);
   });
 
-  it("P0.5 reads the LIVE unit directives — a correct path in a comment does not satisfy it", () => {
-    // The recorded unit's real ExecStart is /srv/WRONG/main.js; the shipped path
-    // appears only in a comment. A substring detector passed this (the audit's
-    // finding); the directive parser must not.
+  it("P0.5a reads the LIVE compose directives — a commented-out line does not satisfy it", () => {
+    // The recorded compose runs `network_mode: bridge` and publishes 9220; the
+    // correct `container:` form appears only in a comment. A substring detector
+    // passes that (the audit's finding); the directive reader must not.
     const { out } = run(failPreflight);
-    expect(out).toContain("[FAIL] P0.5");
-    expect(out).toContain("observed ExecStart: /usr/bin/node /srv/WRONG/main.js");
+    expect(out).toContain("[FAIL] P0.5a");
+    expect(out).toContain("network_mode");
+    expect(out).toContain("ports");
   });
 
-  it("fails P3.3 and P3.4 when the documented accepted state is absent", () => {
+  it("fails P3.3, P3.4 and P3.5 when the documented accepted state is absent", () => {
     const { out } = run(failPreflight);
     expect(out).toContain("[FAIL] P3.3");
     expect(out).toContain("[FAIL] P3.4");
+    expect(out).toContain("[FAIL] P3.5");
     expect(out).toContain("§8 L4");
     expect(out).toContain("§8 L7");
   });
 
   it("keeps a genuinely healthy host green — off-host advisory rows still do not gate", () => {
     // Guards against the lazy fix of widening every advisory row to blocking:
-    // P0.1/P0.3/P1.7 cannot run here by design and the run must still exit 0,
-    // and the healthy unit must satisfy the stricter P0.5 parser.
+    // P0.1/P0.3/P1.7 cannot run here by design and the run must still exit 0.
     const { code, out } = run(passPreflight);
     expect(code).toBe(0);
     expect(out).toContain("[skip] P0.1");
     expect(out).toContain("[skip] P0.3");
     expect(out).toContain("[skip] P1.7");
-    expect(out).toContain("[PASS] P0.5");
+    expect(out).toContain("[PASS] P0.5a");
+    expect(out).toContain("[PASS] P0.5b");
+    expect(out).toContain("[PASS] P0.7b");
     expect(out).toContain("gating failures: 0");
     expect(out).not.toContain("[FAIL]");
   });
@@ -190,20 +208,23 @@ describe("release CLI — preflight through the entry point", () => {
     expect(new Set(ids).size).toBe(ids.length);
 
     for (const id of [
-      "P0.1", "P0.2a", "P0.2b", "P0.2c", "P0.3", "P0.4a", "P0.4b", "P0.5", "P0.6", "P0.7a", "P0.7b",
+      "P0.1", "P0.2a", "P0.2b", "P0.2c", "P0.3", "P0.4a", "P0.4b", "P0.5a", "P0.5b", "P0.6", "P0.7a", "P0.7b",
       "P1.0a", "P1.0b", "P1.1", "P1.2", "P1.3", "P1.4", "P1.5", "P1.6", "P1.7", "P1.8",
       "P2.1", "P2.2", "P2.3", "P2.4", "P2.5", "P2.6",
-      "P3.1", "P3.2", "P3.3", "P3.4",
-      "P4.1", "P4.2", "P4.3", "P4.4", "P4.5", "P4.6", "P4.7", "P4.8", "P4.9", "P4.10",
+      "P3.1", "P3.2", "P3.3", "P3.4", "P3.5",
+      "P4.1", "P4.2", "P4.3", "P4.4", "P4.5", "P4.6", "P4.7", "P4.8", "P4.9", "P4.10", "P4.11", "P4.12",
     ]) {
       expect(ids).toContain(id);
     }
 
-    // P0.5 and every P3.x row must exist AND be addressable without gating: they
-    // are recorded findings, so an advisory result is what an operator ticks off.
+    // The recorded findings exist AND stay addressable without gating: an
+    // advisory result is what an operator ticks off.
     const byId = new Map(checks.map((check) => [check.id, check]));
-    expect(byId.get("P0.5")?.severity).toBe("advisory");
-    for (const id of ["P3.1", "P3.2", "P3.3", "P3.4"]) expect(byId.get(id)?.severity).toBe("advisory");
+    for (const id of ["P3.1", "P3.2", "P3.3", "P3.4", "P3.5"]) expect(byId.get(id)?.severity).toBe("advisory");
+    // ...and the rows that carry the revised-C safety properties are safety.
+    for (const id of ["P0.5a", "P0.5b", "P0.7b", "P1.8", "P4.1", "P4.2", "P4.11"]) {
+      expect(byId.get(id)?.severity).toBe("safety");
+    }
   });
 
   it("keeps the scope banner and TARGET_PROFILE from drifting apart", () => {
@@ -213,129 +234,160 @@ describe("release CLI — preflight through the entry point", () => {
 });
 
 /**
- * P0.5 is the SOLE owner of the unit parse, so its grammar is exercised here,
- * through the CLI, against a DERIVED recorded host: the healthy fixture with only
- * its systemd unit swapped out. Nothing on this machine is probed and no fixture
- * on disk is modified.
+ * P0.5a/P0.5b/P0.7b are the SOLE owners of the deployment-definition parse, so
+ * their grammar is exercised here, through the CLI, against a DERIVED recorded
+ * host: the healthy fixture with only its compose file swapped out. Nothing on
+ * this machine is probed and no fixture on disk is modified.
  *
- * The grammar is `systemd.syntax(7)` plus `systemd.exec(5)` and is pinned by the
- * runbook's P0.5 paragraph. Where those documents leave a tie-breaker to real
- * systemd behaviour that cannot be observed on a Windows workstation, the
- * reading this tool takes is stated in the runbook AND asserted below rather than
- * left implicit.
+ * The subject changed with the architecture (a compose file, not a systemd unit)
+ * but the PROPERTY did not: the check reads what the definition actually
+ * declares, ignores comments, and refuses anything that would expose the bridge
+ * or run an unpinned artifact.
  */
-describe("release CLI — P0.5 unit grammar", () => {
-  const UNIT = "/etc/systemd/system/nexup-bridge.service";
-  const BUNDLE = "/opt/nexup-bridge/dist/main.js";
-  const WD = "WorkingDirectory=/opt/nexup-bridge";
-  const ENVFILE = "EnvironmentFile=/etc/nexup-bridge/bridge.env";
-  // A trailing backslash is written through fromCharCode so the byte in this
-  // file is unambiguous: systemd joins a line that ENDS with one backslash.
-  const BACKSLASH = String.fromCharCode(92);
-
+describe("release CLI — deployment-definition grammar (P0.5a/P0.5b/P0.7b)", () => {
   const temp = mkdtempSync(path.join(os.tmpdir(), "nexup-p05-"));
   afterAll(() => rmSync(temp, { recursive: true, force: true }));
 
   let cases = 0;
-  /** Preflight against the recorded healthy host, with a different unit file. */
-  function runWithUnit(unit: string): Run {
+  /** Preflight against the recorded healthy host, with a different compose file. */
+  function runWithCompose(compose: string): Run {
     const host = JSON.parse(readFileSync(PASS, "utf8")) as RecordedFixture;
-    host.files = { ...(host.files ?? {}), [UNIT]: unit };
+    host.files = { ...(host.files ?? {}), [COMPOSE_PATH]: compose };
     cases += 1;
-    const file = path.join(temp, `unit-case-${cases}.json`);
+    const file = path.join(temp, `compose-case-${cases}.json`);
     writeFileSync(file, JSON.stringify(host), "utf8");
     return run(passPreflight.map((arg) => (arg === PASS ? file : arg)));
   }
 
-  /** A unit in the shape the runbook ships, with the given [Service] lines. */
-  const unit = (...serviceLines: string[]): string =>
-    ["[Unit]", "Description=NEXUP VPS Bridge", "[Service]", "User=nexup-bridge", ...serviceLines, ""].join("\n");
+  /** The shipped shape, with individual lines replaced. */
+  const compose = (...overrides: string[]): string =>
+    [
+      "services:",
+      "  nexup-bridge:",
+      "    image: ${NEXUP_BRIDGE_IMAGE:?set NEXUP_BRIDGE_IMAGE}",
+      '    network_mode: "container:${NEXUP_HERMES_CONTAINER:-hermes-agent-r3j1-hermes-agent-1}"',
+      "    restart: unless-stopped",
+      "    env_file:",
+      `      - ${ENV_FILE}`,
+      "    read_only: true",
+      '    user: "10001:10001"',
+      "    cap_drop:",
+      "      - ALL",
+      "    security_opt:",
+      "      - no-new-privileges:true",
+      "    labels:",
+      "      - traefik.enable=true",
+      "      - traefik.http.routers.nexup-bridge.rule=Host(`${NEXUP_BRIDGE_HOSTNAME}`)",
+      "      - traefik.http.routers.nexup-bridge.entrypoints=websecure",
+      "      - traefik.http.routers.nexup-bridge.tls=true",
+      "      - traefik.http.routers.nexup-bridge.tls.certresolver=letsencrypt",
+      "      - traefik.http.routers.nexup-bridge.middlewares=nexup-bridge-headers@docker",
+      "      - traefik.http.services.nexup-bridge.loadbalancer.server.port=9220",
+      "      - traefik.http.middlewares.nexup-bridge-headers.headers.stsSeconds=31536000",
+      ...overrides,
+      "",
+    ].join("\n");
 
-  const expectP05Pass = ({ code, out }: Run): void => {
-    expect(out).toContain("[PASS] P0.5");
-    // P0.5 is the only thing under test here: the host is otherwise healthy.
-    expect(out).toContain("gating failures: 0");
+  /**
+   * Exactly the named rows fail, and nothing else on the recorded host does. A
+   * defect in the deployment definition is usually caught by MORE than one row
+   * (P0.5a/P0.5b read it directly, P3.1 reads it as the edge contract), so the
+   * expectation is the full set rather than one id.
+   */
+  const expectOnly = (out: string, ...ids: string[]): void => {
+    for (const id of ids) {
+      expect(out).toContain(`[FAIL] ${id}`);
+      expect(nogoLine(out)).toContain(id);
+    }
+    expect(out).toContain(`gating failures: ${ids.length}`);
+  };
+
+  it("accepts the shipped compose unchanged", () => {
+    const { code, out } = runWithCompose(compose());
+    expect(out).toContain("[PASS] P0.5a");
+    expect(out).toContain("[PASS] P0.5b");
+    expect(out).toContain("[PASS] P0.7b");
     expect(code).toBe(0);
-  };
-
-  const expectP05Nogo = ({ code, out }: Run): void => {
-    expect(out).toContain("[FAIL] P0.5");
-    expect(nogoLine(out)).toContain("P0.5");
-    // ...and nothing else on the recorded healthy host failed.
-    expect(out).toContain("gating failures: 1");
-    expect(code).toBe(1);
-  };
-
-  it("accepts a Node option placed before the script (the realistic hardening edit)", () => {
-    // `node -r /srv/preload.js <bundle>` launches the shipped bundle; the entry
-    // script is the first argument that is not a Node option.
-    expectP05Pass(runWithUnit(unit(WD, ENVFILE, `ExecStart=/usr/bin/node -r /srv/preload.js ${BUNDLE}`)));
   });
 
-  it("accepts a quoted bundle path", () => {
-    // systemd.syntax(7) QUOTING: quotes wrap an item and are removed.
-    expectP05Pass(runWithUnit(unit(WD, ENVFILE, `ExecStart=/usr/bin/node "${BUNDLE}"`)));
-    expectP05Pass(runWithUnit(unit(`WorkingDirectory="/opt/nexup-bridge"`, ENVFILE, `ExecStart=/usr/bin/node ${BUNDLE}`)));
+  it("refuses any definition that publishes a port", () => {
+    const published = runWithCompose(compose("    ports:", '      - "9220:9220"'));
+    // P0.5a refuses the definition AND P3.1 refuses the edge contract it implies.
+    expectOnly(published.out, "P0.5a", "P3.1");
+    // The empty list publishes nothing, so it is not a finding.
+    const empty = runWithCompose(compose("    ports: []"));
+    expect(empty.out).toContain("[PASS] P0.5a");
+    expect(empty.code).toBe(0);
   });
 
-  it("accepts a backslash-continued ExecStart, including across a comment block", () => {
-    // "Lines ending in a backslash are concatenated with the following line while
-    // reading and the backslash is replaced by a space character."
-    expectP05Pass(runWithUnit(unit(WD, ENVFILE, `ExecStart=/usr/bin/node ${BACKSLASH}`, `  ${BUNDLE}`)));
-    // "When a comment line or lines follow a line ending with a backslash, the
-    // comment block is ignored, so the continued line is concatenated with
-    // whatever follows the comment block."
-    expectP05Pass(
-      runWithUnit(unit(WD, ENVFILE, `ExecStart=/usr/bin/node ${BACKSLASH}`, "# preload is added later", `  ${BUNDLE}`)),
+  it("uses the LIVE network_mode, the way compose does (a comment is not a value)", () => {
+    // Both the correct value in a comment and a wrong live value. A substring
+    // reader passes this; the directive reader must not.
+    const commented = runWithCompose(
+      compose("    # network_mode: container:hermes-agent-r3j1-hermes-agent-1", "    network_mode: bridge"),
     );
+    expectOnly(commented.out, "P0.5a");
+    expect(commented.out).toContain("observed bridge");
+
+    // A SECOND live network_mode wins, exactly as compose's own merge does.
+    const twice = runWithCompose(compose("    network_mode: host"));
+    expectOnly(twice.out, "P0.5a");
   });
 
-  it("uses the LAST live ExecStart, the way systemd does (a later wrong one is a NO-GO)", () => {
-    // The audit's false negative: `any line wins` let a unit that ends up
-    // launching /srv/WRONG/main.js pass because a correct line appeared first.
-    expectP05Nogo(
-      runWithUnit(unit(WD, ENVFILE, `ExecStart=/usr/bin/node ${BUNDLE}`, "ExecStart=/usr/bin/node /srv/WRONG/main.js")),
-    );
-    // The mirror image is a valid unit: the last assignment is what runs.
-    expectP05Pass(
-      runWithUnit(unit(WD, ENVFILE, "ExecStart=/usr/bin/node /srv/WRONG/main.js", `ExecStart=/usr/bin/node ${BUNDLE}`)),
-    );
+  it("refuses a namespace owner that is not the Hermes container", () => {
+    const wrongOwner = runWithCompose(compose('    network_mode: "container:some-other-container"'));
+    expectOnly(wrongOwner.out, "P0.5a");
+    // ...and accepts both the shipped interpolated form and the literal name.
+    expect(runWithCompose(compose("    network_mode: container:hermes-agent-r3j1-hermes-agent-1")).code).toBe(0);
   });
 
-  it("accepts whitespace around `=` — a stated reading, not an accident", () => {
-    // systemd.syntax(7): "Whitespace immediately before or after the \"=\" is
-    // ignored." The previous parser happened to tolerate this; the runbook now
-    // states it, so an operator may write either form.
-    expectP05Pass(
-      runWithUnit(
-        unit(
-          "WorkingDirectory = /opt/nexup-bridge",
-          "EnvironmentFile = /etc/nexup-bridge/bridge.env",
-          `ExecStart = /usr/bin/node ${BUNDLE}`,
-        ),
-      ),
-    );
+  it("refuses an image that is not pinned by digest", () => {
+    const mutable = runWithCompose(compose("    image: nexup-bridge:latest"));
+    expectOnly(mutable.out, "P0.5b");
+    expect(mutable.out).toContain("digest");
+
+    // A literal digest that differs from the recorded build digest is a NO-GO.
+    const wrong = runWithCompose(compose(`    image: ${IMAGE_REF.replace("d1e2", "ffff")}`));
+    expectOnly(wrong.out, "P0.5b");
   });
 
-  it("keeps rejecting a unit that only MENTIONS the shipped path", () => {
-    // The four defeat cases the directive parser already handled: they must not
-    // regress while it gains quoting, continuation and option handling.
-    const mentions = runWithUnit(
-      unit(WD, ENVFILE, `ExecStart=/usr/bin/node /srv/WRONG/main.js # ${BUNDLE}`),
+  it("refuses a root user, a writable root filesystem and an emptied cap drop", () => {
+    expectOnly(runWithCompose(compose('    user: "0:0"')).out, "P0.5b");
+    expectOnly(runWithCompose(compose("    user: root")).out, "P0.5b");
+    expectOnly(runWithCompose(compose("    read_only: false")).out, "P0.5b");
+    // The LAST cap_drop wins, so this definition drops nothing even though an
+    // earlier `- ALL` is still in the file.
+    expectOnly(runWithCompose(compose("    cap_drop: []")).out, "P0.5b");
+  });
+
+  it("refuses a definition that would not read the root-only env file", () => {
+    // No env_file at all: the container would start with no secrets.
+    expectOnly(runWithCompose(compose().replace(`      - ${ENV_FILE}\n`, "")).out, "P0.5b");
+    // A LATER env_file wins, even though the root-only path is still in the file.
+    expectOnly(runWithCompose(compose("    env_file:", "      - /tmp/bridge.env")).out, "P0.5b");
+  });
+
+  it("refuses an edge that buffers the run stream or drops the TLS entrypoint", () => {
+    const buffering = runWithCompose(
+      compose("      - traefik.http.middlewares.nexup-bridge-buffer.buffering.maxRequestBodyBytes=262144"),
     );
-    expectP05Nogo(mentions);
-    expect(mentions.out).toContain("observed ExecStart: /usr/bin/node /srv/WRONG/main.js #");
+    expectOnly(buffering.out, "P0.7b");
+    expect(buffering.out).toContain("buffering");
 
-    // The path as WorkingDirectory's trailing comment, with the right ExecStart.
-    expectP05Nogo(runWithUnit(unit(`WorkingDirectory=/tmp # ${BUNDLE}`, ENVFILE, `ExecStart=/usr/bin/node ${BUNDLE}`)));
+    expectOnly(runWithCompose(compose("      - traefik.http.routers.nexup-bridge.entrypoints=web")).out, "P0.7b");
+    expect(
+      runWithCompose(
+        compose("      - traefik.http.routers.nexup-bridge.tls.certresolver=letsencrypt"),
+      ).code,
+    ).toBe(0);
+  });
 
-    // The path as another directive's value.
-    expectP05Nogo(runWithUnit(unit(`EnvironmentFile=${BUNDLE}`, WD, "ExecStart=/usr/bin/node /srv/WRONG/main.js")));
-
-    // No live ExecStart at all — only a commented one.
-    const commented = runWithUnit(unit(WD, ENVFILE, `# ExecStart=/usr/bin/node ${BUNDLE}`));
-    expectP05Nogo(commented);
-    expect(commented.out).toContain("(no ExecStart directive found)");
+  it("refuses a router with no host rule, and one pointed at the wrong service port", () => {
+    const noHost = runWithCompose(
+      compose("      - traefik.http.routers.nexup-bridge.rule=PathPrefix(`/`)"),
+    );
+    expectOnly(noHost.out, "P0.7b");
+    expectOnly(runWithCompose(compose("      - traefik.http.services.nexup-bridge.loadbalancer.server.port=9119")).out, "P0.7b");
   });
 });
 

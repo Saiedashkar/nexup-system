@@ -1,0 +1,47 @@
+[Unit]
+Description=NEXUP Bridge supervisor (owns the saieed serve endpoint and re-parents the bridge)
+Documentation=https://github.com/Saiedashkar/nexup-system
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+# Needs the docker socket: it runs `docker exec` inside the Hermes container and
+# `docker compose` for its own bridge container, and nothing else.
+ExecStart=/usr/local/bin/nexup-bridge-supervisor
+# Two files, both read as root:
+#   supervisor.env — this unit's own settings (HERMES_PROFILE, intervals);
+#   deploy.env     — the values `docker-compose.bridge.yml` interpolates
+#                    (`NEXUP_BRIDGE_IMAGE`, `NEXUP_BRIDGE_HOSTNAME`). Without it
+#                    the recovery path — `docker compose up -d` after Hermes is
+#                    re-created — fails to interpolate `image:` and exits 1
+#                    (measured on the real daemon).
+EnvironmentFile=/etc/nexup-bridge/supervisor.env
+EnvironmentFile=/etc/nexup-bridge/deploy.env
+Restart=always
+RestartSec=5
+# A reconcile pass is short; the loop sleeps between passes. SIGTERM during the
+# sleep must not wait for a full interval.
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+# Hardening. The supervisor writes nothing: it only drives the docker socket.
+# `ProtectSystem=strict` is safe because no path under / is written, and
+# `PrivateTmp` is safe because no temporary file is used. Address-family and
+# namespace restrictions are deliberately NOT set: this unit's whole job is
+# reliability, and the Docker CLI is a Go binary whose start-up path is not
+# worth risking for a hardening win that `NoNewPrivileges` already covers.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+LockPersonality=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

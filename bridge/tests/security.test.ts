@@ -296,6 +296,60 @@ describe("7. configuration", () => {
     expect(pinned.config.clientIpHeader).toBe("X-Real-Client-IP");
   });
 
+  /**
+   * The mission pins ONE profile: `saieed`. "default is refused" is not the same
+   * statement as "only saieed is addressable" — the real VPS daemon accepted
+   * `HERMES_PROFILE=adel`, started listening and served 401s, which is a scope
+   * violation the code did not prevent. `adel` is the root of `/opt/data`, i.e.
+   * the same place `default` resolves to, so accepting it is the same class of
+   * mistake as accepting `default`.
+   */
+  describe("profile pinning is an allowlist, not just a `default` refusal", () => {
+    it("addresses saieed", () => {
+      const resolution = resolveBridgeConfig({ ...FULL_ENV, HERMES_PROFILE: "saieed" });
+      expect(resolution.enabled).toBe(true);
+      if (!resolution.enabled) return;
+      expect(resolution.config.hermes.profile).toBe("saieed");
+    });
+
+    it("refuses every profile outside the allowlist, including Adel's names", () => {
+      for (const profile of ["adel", "creative-director", "Adel", "cleanup-hygiene", "saieed2"]) {
+        const resolution = resolveBridgeConfig({ ...FULL_ENV, HERMES_PROFILE: profile });
+        expect(resolution.enabled).toBe(false);
+        if (!resolution.enabled) expect(resolution.reason).toMatch(/ALLOWED_PROFILES|forbidden/);
+      }
+    });
+
+    it("trims surrounding whitespace before matching, as the other settings do", () => {
+      const padded = resolveBridgeConfig({ ...FULL_ENV, HERMES_PROFILE: "  saieed\t" });
+      expect(padded.enabled).toBe(true);
+      if (!padded.enabled) return;
+      expect(padded.config.hermes.profile).toBe("saieed");
+      // ...but a case difference is a different name, not padding.
+      expect(resolveBridgeConfig({ ...FULL_ENV, HERMES_PROFILE: "SAIEED" }).enabled).toBe(false);
+    });
+
+    it("refuses an explicit allowlist that tries to widen the scope", () => {
+      // An operator can name a set, but it may never contain `default`, and the
+      // set itself is what is honoured — never a caller-supplied value.
+      const widened = resolveBridgeConfig({
+        ...FULL_ENV,
+        NEXUP_BRIDGE_ALLOWED_PROFILES: "saieed,adel",
+        HERMES_PROFILE: "adel",
+      });
+      expect(widened.enabled).toBe(true);
+      if (!widened.enabled) return;
+      expect(widened.config.hermes.profile).toBe("adel");
+
+      const withForbidden = resolveBridgeConfig({
+        ...FULL_ENV,
+        NEXUP_BRIDGE_ALLOWED_PROFILES: "saieed,default",
+        HERMES_PROFILE: "saieed",
+      });
+      expect(withForbidden.enabled).toBe(false);
+    });
+  });
+
   it("reads the secrets separately from the config", () => {
     expect(readBridgeSecrets(FULL_ENV)).toEqual({
       hmacSecret: SECRET,
@@ -311,6 +365,73 @@ describe("7. configuration", () => {
       if (!resolution.enabled) expect(resolution.reason).toMatch(/loopback/);
     }
     expect(resolveBridgeConfig({ ...FULL_ENV, NEXUP_BRIDGE_HOST: "127.0.0.1" }).enabled).toBe(true);
+  });
+
+  /**
+   * Revised C: the bridge is its own container sharing the Hermes network
+   * namespace, so inside that namespace it must bind the namespace's private
+   * interface (Traefik follows `NetworkMode` to the OWNER's address). That is a
+   * non-loopback bind, so the guard above needs exactly one narrow, explicit
+   * opt-in — and the opt-in alone is not enough.
+   */
+  describe("shared-network-namespace bind (revised C)", () => {
+    const IN_NETNS = {
+      ...FULL_ENV,
+      NEXUP_BRIDGE_HOST: "0.0.0.0",
+      NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND: "true",
+      NEXUP_BRIDGE_TRUSTED_PROXIES: "172.16.0.0/16",
+      NEXUP_BRIDGE_CLIENT_IP_HEADER: "x-forwarded-for",
+    };
+
+    it("accepts a non-loopback bind only with the explicit opt-in", () => {
+      const resolution = resolveBridgeConfig(IN_NETNS);
+      expect(resolution.enabled).toBe(true);
+      if (!resolution.enabled) return;
+      expect(resolution.config.host).toBe("0.0.0.0");
+      expect(resolution.config.trustedProxyAddresses).toEqual(["172.16.0.0/16"]);
+      expect(resolution.config.clientIpHeader).toBe("x-forwarded-for");
+      // Hermes stays loopback-only even here: the transport does not move.
+      expect(resolution.config.hermes.rpcUrl).toBe("ws://127.0.0.1:9119/api/ws");
+    });
+
+    it("refuses the opt-in when the trusted edge is left at the loopback default", () => {
+      // Binding off-loopback while trusting only loopback peers means no peer is
+      // ever trusted, so every caller collapses into ONE pre-auth bucket: at
+      // 120/min a single client starves the rest. That is a real defect, so the
+      // combination is refused rather than silently degraded.
+      for (const trusted of [undefined, "", "127.0.0.1,::1", "127.0.0.1"]) {
+        const resolution = resolveBridgeConfig({
+          ...IN_NETNS,
+          ...(trusted === undefined ? { NEXUP_BRIDGE_TRUSTED_PROXIES: undefined } : { NEXUP_BRIDGE_TRUSTED_PROXIES: trusted }),
+        });
+        expect(resolution.enabled).toBe(false);
+        if (!resolution.enabled) expect(resolution.reason).toMatch(/NEXUP_BRIDGE_TRUSTED_PROXIES/);
+      }
+    });
+
+    it("refuses the opt-in when the client-address header is left implicit", () => {
+      // The edge that reaches a shared-namespace bridge is Traefik, which APPENDS
+      // to X-Forwarded-For and cannot set the Caddy-style overwrite header at
+      // all. Taking the default here would silently attribute every request to
+      // the proxy, so the header must be chosen explicitly.
+      const resolution = resolveBridgeConfig({ ...IN_NETNS, NEXUP_BRIDGE_CLIENT_IP_HEADER: undefined });
+      expect(resolution.enabled).toBe(false);
+      if (!resolution.enabled) expect(resolution.reason).toMatch(/NEXUP_BRIDGE_CLIENT_IP_HEADER/);
+    });
+
+    it("still refuses a non-loopback bind without the opt-in", () => {
+      const resolution = resolveBridgeConfig({ ...IN_NETNS, NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND: "false" });
+      expect(resolution.enabled).toBe(false);
+      if (!resolution.enabled) expect(resolution.reason).toMatch(/NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND/);
+    });
+
+    it("leaves a loopback bind working with no opt-in and no trusted-proxy ceremony", () => {
+      const resolution = resolveBridgeConfig(FULL_ENV);
+      expect(resolution.enabled).toBe(true);
+      if (!resolution.enabled) return;
+      expect(resolution.config.host).toBe("127.0.0.1");
+      expect(resolution.config.trustedProxyAddresses).toEqual([...DEFAULT_TRUSTED_PROXIES]);
+    });
   });
 });
 

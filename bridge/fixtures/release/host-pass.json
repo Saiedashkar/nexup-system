@@ -1,68 +1,213 @@
 {
-  "label": "linux-vps / loopback Hermes / all methods present",
+  "label": "linux-vps / containerised bridge sharing the Hermes namespace / all methods present",
   "now": "2026-10-06T00:00:00.000Z",
   "commands": {
-    "/usr/bin/node --version": { "ran": true, "code": 0, "stdout": "v22.23.2\n", "stderr": "" },
-    "caddy version": { "ran": true, "code": 0, "stdout": "v2.10.0 h1:abc\n", "stderr": "" },
-    "caddy validate --config /etc/caddy/Caddyfile": { "ran": true, "code": 0, "stdout": "Valid configuration\n", "stderr": "" },
+    "docker version --format {{.Server.Version}}": {
+      "ran": true,
+      "code": 0,
+      "stdout": "27.1.1\n",
+      "stderr": ""
+    },
+    "docker compose version": {
+      "ran": true,
+      "code": 0,
+      "stdout": "Docker Compose version v2.29.1\n",
+      "stderr": ""
+    },
+    "docker inspect -f {{.Id}} hermes-agent-r3j1-hermes-agent-1": {
+      "ran": true,
+      "code": 0,
+      "stdout": "a19d6e040ec3a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a\n",
+      "stderr": ""
+    },
+    "docker inspect -f {{.State.Running}} hermes-agent-r3j1-hermes-agent-1": {
+      "ran": true,
+      "code": 0,
+      "stdout": "true\n",
+      "stderr": ""
+    },
+    "docker inspect -f {{.State.Running}} nexup-bridge": {
+      "ran": true,
+      "code": 0,
+      "stdout": "true\n",
+      "stderr": ""
+    },
+    "docker inspect -f {{.HostConfig.NetworkMode}} nexup-bridge": {
+      "ran": true,
+      "code": 0,
+      "stdout": "container:a19d6e040ec3a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a\n",
+      "stderr": ""
+    },
+    "docker inspect -f {{.State.Running}} traefik-traefik-1": {
+      "ran": true,
+      "code": 0,
+      "stdout": "true\n",
+      "stderr": ""
+    },
+    "docker image inspect --format {{.Id}} nexup-bridge@sha256:d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4": {
+      "ran": true,
+      "code": 0,
+      "stdout": "sha256:b0000000000000000000000000000000000000000000000000000000000000ff\n",
+      "stderr": ""
+    },
+    "docker image inspect --format {{index .RepoDigests 0}} nexup-bridge@sha256:d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4": {
+      "ran": true,
+      "code": 0,
+      "stdout": "nexup-bridge@sha256:d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4\n",
+      "stderr": ""
+    },
+    "docker run --rm --entrypoint /bin/sh nexup-bridge@sha256:d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4 -c grep -c 'is not permitted by the NEXUP bridge' /app/dist/main.js": {
+      "ran": true,
+      "code": 0,
+      "stdout": "1\n",
+      "stderr": ""
+    },
+    "docker exec hermes-agent-r3j1-hermes-agent-1 /opt/hermes/.venv/bin/python -c import socket;socket.create_connection(('127.0.0.1',9119),2).close()": {
+      "ran": true,
+      "code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
     "ss -ltnp": {
       "ran": true,
       "code": 0,
-      "stdout": "State  Recv-Q Send-Q Local Address:Port Peer Address:Port Process\nLISTEN 0      128    127.0.0.1:9119       0.0.0.0:*         users:((\"hermes\",pid=421,fd=21))\nLISTEN 0      128    127.0.0.1:4860       0.0.0.0:*         users:((\"node\",pid=512,fd=19))\nLISTEN 0      128    0.0.0.0:22           0.0.0.0:*         users:((\"sshd\",pid=1,fd=3))\nLISTEN 0      128    [::]:22              [::]:*            users:((\"sshd\",pid=1,fd=4))\n",
+      "stdout": "State  Recv-Q Send-Q Local Address:Port Peer Address:Port Process\nLISTEN 0      128    0.0.0.0:22           0.0.0.0:*         users:((\"sshd\",pid=1201,fd=3))\nLISTEN 0      128    [::]:22              [::]:*            users:((\"sshd\",pid=1201,fd=4))\nLISTEN 0      128    127.0.0.53:53        0.0.0.0:*         users:((\"systemd-resolve\",pid=703,fd=17))\nLISTEN 0      128    *:80                 *:*               users:((\"docker-proxy\",pid=2210,fd=8))\nLISTEN 0      128    *:443                *:*               users:((\"docker-proxy\",pid=2210,fd=9))\nLISTEN 0      128    0.0.0.0:32768        0.0.0.0:*         users:((\"docker-proxy\",pid=2405,fd=8))\n",
       "stderr": ""
     },
-    "sha256sum /opt/nexup-bridge/dist/main.js": {
+    "stat -c %a %U:%G /etc/nexup-bridge/bridge.env": {
       "ran": true,
       "code": 0,
-      "stdout": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4  /opt/nexup-bridge/dist/main.js\n",
+      "stdout": "600 root:root\n",
       "stderr": ""
     },
-    "stat -c %a %U:%G /etc/nexup-bridge/bridge.env": { "ran": true, "code": 0, "stdout": "600 nexup-bridge:nexup-bridge\n", "stderr": "" },
     "df -Pk /": {
       "ran": true,
       "code": 0,
       "stdout": "Filesystem     1024-blocks    Used Available Capacity Mounted on\n/dev/sda1         41153856 8234560  30827264      22% /\n",
       "stderr": ""
     },
-    "sh -c command -v node": { "ran": true, "code": 0, "stdout": "/usr/bin/node\n", "stderr": "" },
-    "sh -c command -v caddy": { "ran": true, "code": 0, "stdout": "/usr/bin/caddy\n", "stderr": "" },
-    "sh -c command -v systemctl": { "ran": true, "code": 0, "stdout": "/usr/bin/systemctl\n", "stderr": "" },
-    "sh -c command -v ss": { "ran": true, "code": 0, "stdout": "/usr/bin/ss\n", "stderr": "" },
-    "sh -c command -v stat": { "ran": true, "code": 0, "stdout": "/usr/bin/stat\n", "stderr": "" },
-    "sh -c command -v sha256sum": { "ran": true, "code": 0, "stdout": "/usr/bin/sha256sum\n", "stderr": "" },
-    "sh -c command -v df": { "ran": true, "code": 0, "stdout": "/usr/bin/df\n", "stderr": "" },
-    "sh -c command -v sh": { "ran": true, "code": 0, "stdout": "/usr/bin/sh\n", "stderr": "" },
-    "systemctl --version": { "ran": true, "code": 0, "stdout": "systemd 255 (255.4-1ubuntu8)\n", "stderr": "" },
-    "date -u +%s": { "ran": true, "code": 0, "stdout": "1775433600\n", "stderr": "" },
-    "date -u +%Y-%m-%dT%H:%M:%SZ": { "ran": true, "code": 0, "stdout": "2026-10-06T00:00:00Z\n", "stderr": "" },
-    "id nexup-bridge": {
+    "sh -c command -v docker": {
       "ran": true,
       "code": 0,
-      "stdout": "uid=998(nexup-bridge) gid=998(nexup-bridge) groups=998(nexup-bridge)\n",
+      "stdout": "/usr/bin/docker\n",
       "stderr": ""
     },
-    "node /opt/nexup-bridge/dist/main.js": {
+    "sh -c command -v systemctl": {
+      "ran": true,
+      "code": 0,
+      "stdout": "/usr/bin/systemctl\n",
+      "stderr": ""
+    },
+    "sh -c command -v ss": {
+      "ran": true,
+      "code": 0,
+      "stdout": "/usr/bin/ss\n",
+      "stderr": ""
+    },
+    "sh -c command -v stat": {
+      "ran": true,
+      "code": 0,
+      "stdout": "/usr/bin/stat\n",
+      "stderr": ""
+    },
+    "sh -c command -v sha256sum": {
+      "ran": true,
+      "code": 0,
+      "stdout": "/usr/bin/sha256sum\n",
+      "stderr": ""
+    },
+    "sh -c command -v df": {
+      "ran": true,
+      "code": 0,
+      "stdout": "/usr/bin/df\n",
+      "stderr": ""
+    },
+    "sh -c command -v sh": {
+      "ran": true,
+      "code": 0,
+      "stdout": "/bin/sh\n",
+      "stderr": ""
+    },
+    "sh -c command -v grep": {
+      "ran": true,
+      "code": 0,
+      "stdout": "/usr/bin/grep\n",
+      "stderr": ""
+    },
+    "systemctl --version": {
+      "ran": true,
+      "code": 0,
+      "stdout": "systemd 255 (255.4-1ubuntu8)\n",
+      "stderr": ""
+    },
+    "systemctl is-enabled nexup-bridge-supervisor.service": {
+      "ran": true,
+      "code": 0,
+      "stdout": "enabled\n",
+      "stderr": ""
+    },
+    "systemctl is-active nexup-bridge-supervisor.service": {
+      "ran": true,
+      "code": 0,
+      "stdout": "active\n",
+      "stderr": ""
+    },
+    "date -u +%s": {
+      "ran": true,
+      "code": 0,
+      "stdout": "1775433600\n",
+      "stderr": ""
+    },
+    "date -u +%Y-%m-%dT%H:%M:%SZ": {
+      "ran": true,
+      "code": 0,
+      "stdout": "2026-10-06T00:00:00Z\n",
+      "stderr": ""
+    },
+    "docker run --rm -e NEXUP_BRIDGE_HOST=0.0.0.0 -e NEXUP_BRIDGE_HMAC_SECRET=nexup-preflight-synthetic-secret-not-a-real-key -e NEXUP_BRIDGE_ALLOWED_KEY_IDS=nexup-vercel -e HERMES_SESSION_TOKEN=nexup-preflight-synthetic-token-not-real -e HERMES_PROFILE=saieed -e HERMES_RPC_URL=ws://127.0.0.1:9119/api/ws nexup-bridge@sha256:d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4": {
       "ran": true,
       "code": 1,
       "stdout": "",
-      "stderr": "[nexup-bridge] disabled: NEXUP_BRIDGE_HOST must be loopback (the bridge is not published directly); got \"0.0.0.0\"\n"
+      "stderr": "[nexup-bridge] disabled: NEXUP_BRIDGE_HOST must be loopback (the bridge is not published directly); a non-loopback bind needs NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND=true and applies only inside a shared network namespace; got \"0.0.0.0\"\n"
+    },
+    "docker run --rm -e NEXUP_BRIDGE_HOST=0.0.0.0 -e NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND=true -e NEXUP_BRIDGE_TRUSTED_PROXIES=127.0.0.1,::1 -e NEXUP_BRIDGE_HMAC_SECRET=nexup-preflight-synthetic-secret-not-a-real-key -e NEXUP_BRIDGE_ALLOWED_KEY_IDS=nexup-vercel -e HERMES_SESSION_TOKEN=nexup-preflight-synthetic-token-not-real -e HERMES_PROFILE=saieed -e HERMES_RPC_URL=ws://127.0.0.1:9119/api/ws nexup-bridge@sha256:d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4": {
+      "ran": true,
+      "code": 1,
+      "stdout": "",
+      "stderr": "[nexup-bridge] disabled: NEXUP_BRIDGE_TRUSTED_PROXIES (127.0.0.1,::1) is loopback-only while the bind is \"0.0.0.0\": the edge address must be named (its network in CIDR form) or client identity collapses to one bucket\n"
+    },
+    "docker run --rm -e HERMES_PROFILE=adel -e NEXUP_BRIDGE_HMAC_SECRET=nexup-preflight-synthetic-secret-not-a-real-key -e NEXUP_BRIDGE_ALLOWED_KEY_IDS=nexup-vercel -e HERMES_SESSION_TOKEN=nexup-preflight-synthetic-token-not-real -e HERMES_PROFILE=saieed -e HERMES_RPC_URL=ws://127.0.0.1:9119/api/ws nexup-bridge@sha256:d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4": {
+      "ran": true,
+      "code": 1,
+      "stdout": "",
+      "stderr": "[nexup-bridge] disabled: HERMES_PROFILE \"adel\" is not in NEXUP_BRIDGE_ALLOWED_PROFILES (saieed): only the pinned mission profile is addressable\n"
+    },
+    "docker compose -f /opt/nexup-bridge/docker-compose.bridge.yml config": {
+      "ran": true,
+      "code": 0,
+      "stdout": "\nservices:\n  nexup-bridge:\n    image: nexup-bridge@sha256:d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4\n\n    container_name: nexup-bridge\n\n    user: \"10001:10001\"\n\n    network_mode: \"container:hermes-agent-r3j1-hermes-agent-1\"\n\n    restart: unless-stopped\n\n    env_file:\n      - /etc/nexup-bridge/bridge.env\n\n    read_only: true\n    tmpfs:\n      - /tmp\n    cap_drop:\n      - ALL\n    security_opt:\n      - no-new-privileges:true\n    init: true\n\n    logging:\n      driver: json-file\n      options:\n        max-size: \"10m\"\n        max-file: \"3\"\n\n    labels:\n      - traefik.enable=true\n\n      - traefik.http.routers.nexup-bridge.rule=Host(`bridge.example.invalid`)\n      - traefik.http.routers.nexup-bridge.entrypoints=websecure\n      - traefik.http.routers.nexup-bridge.tls=true\n      - traefik.http.routers.nexup-bridge.tls.certresolver=letsencrypt\n      - traefik.http.routers.nexup-bridge.service=nexup-bridge\n      - traefik.http.routers.nexup-bridge.middlewares=nexup-bridge-headers@docker\n\n      - traefik.http.services.nexup-bridge.loadbalancer.server.port=9220\n\n      - traefik.http.middlewares.nexup-bridge-headers.headers.stsSeconds=31536000\n      - traefik.http.middlewares.nexup-bridge-headers.headers.stsIncludeSubdomains=true\n      - traefik.http.middlewares.nexup-bridge-headers.headers.contentTypeNosniff=true\n      - traefik.http.middlewares.nexup-bridge-headers.headers.customResponseHeaders.Referrer-Policy=no-referrer\n\n\n",
+      "stderr": ""
     }
   },
   "files": {
-    "/etc/nexup-bridge/bridge.env": "# /etc/nexup-bridge/bridge.env\n# chmod 600, owner nexup-bridge. Contains secrets — never commit a filled copy.\nNEXUP_BRIDGE_ENABLED=true\nNEXUP_BRIDGE_HOST=127.0.0.1\nNEXUP_BRIDGE_PORT=9220\nNEXUP_BRIDGE_HMAC_SECRET=SENTINEL_hmac_secret_value_that_must_never_be_printed_0123456789abcdef\nNEXUP_BRIDGE_ALLOWED_KEY_IDS=nexup-vercel\nNEXUP_BRIDGE_TIMEOUT_MS=120000\nNEXUP_BRIDGE_MAX_OUTPUT_BYTES=262144\nNEXUP_BRIDGE_MAX_CONCURRENCY=4\nNEXUP_BRIDGE_RATE_LIMIT_PER_MINUTE=60\nNEXUP_BRIDGE_PREAUTH_PER_REMOTE_PER_MINUTE=120\nNEXUP_BRIDGE_PREAUTH_GLOBAL_PER_MINUTE=600\nNEXUP_BRIDGE_CLOCK_SKEW_SECONDS=300\nHERMES_RPC_URL=ws://127.0.0.1:9119/api/ws\nHERMES_SESSION_TOKEN=SENTINEL_session_token_that_must_never_be_printed_abcdef\nHERMES_ORIGIN=http://127.0.0.1:9119\nHERMES_PROFILE=saieed\n",
-    "/opt/nexup-bridge/dist/main.js": "// recorded bundle excerpt\nvar http = require(\"node:http\");\nvar crypto = require(\"crypto\");\nexports.assertAllowedHermesMethod = function (method) {\n  if (!ALLOWED.includes(method)) throw new Error('Hermes method \"' + method + '\" is not permitted by the NEXUP bridge');\n};\n",
-    "/etc/systemd/system/nexup-bridge.service": "[Unit]\nDescription=NEXUP VPS Bridge\n[Service]\nUser=nexup-bridge\nWorkingDirectory=/opt/nexup-bridge\nEnvironmentFile=/etc/nexup-bridge/bridge.env\nExecStart=/usr/bin/node /opt/nexup-bridge/dist/main.js\n",
-    "bridge/src/auth/client-identity.ts": "export function resolveClientIdentity(input) {\n  const socket = normalizeIp(input.socketAddress);\n  const peerIsProxy = input.trustedProxies.some((proxy) => normalizeIp(proxy) === socket);\n  return peerIsProxy ? normalizeIp(singleHeaderValue(input.headers, input.headerName)) ?? socket : socket;\n}\n",
+    "/etc/nexup-bridge/bridge.env": "# /etc/nexup-bridge/bridge.env\n# chmod 600, owner root. Contains secrets — never commit a filled copy.\nNEXUP_BRIDGE_ENABLED=true\nNEXUP_BRIDGE_HOST=0.0.0.0\nNEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND=true\nNEXUP_BRIDGE_PORT=9220\nNEXUP_BRIDGE_HMAC_SECRET=SENTINEL_hmac_secret_value_that_must_never_be_printed_0123456789abcdef\nNEXUP_BRIDGE_ALLOWED_KEY_IDS=nexup-vercel\nNEXUP_BRIDGE_TIMEOUT_MS=120000\nNEXUP_BRIDGE_MAX_OUTPUT_BYTES=262144\nNEXUP_BRIDGE_MAX_CONCURRENCY=4\nNEXUP_BRIDGE_RATE_LIMIT_PER_MINUTE=60\nNEXUP_BRIDGE_PREAUTH_PER_REMOTE_PER_MINUTE=120\nNEXUP_BRIDGE_PREAUTH_GLOBAL_PER_MINUTE=600\nNEXUP_BRIDGE_CLOCK_SKEW_SECONDS=300\nNEXUP_BRIDGE_MAX_BODY_BYTES=262144\nNEXUP_BRIDGE_TRUSTED_PROXIES=172.16.0.0/16\nNEXUP_BRIDGE_CLIENT_IP_HEADER=x-forwarded-for\nHERMES_RPC_URL=ws://127.0.0.1:9119/api/ws\nHERMES_SESSION_TOKEN=SENTINEL_session_token_that_must_never_be_printed_abcdef\nHERMES_ORIGIN=http://127.0.0.1:9119\nHERMES_PROFILE=saieed\nNEXUP_BRIDGE_ALLOWED_PROFILES=saieed\n",
+    "/opt/nexup-bridge/docker-compose.bridge.yml": "# NEXUP VPS Bridge — orchestration definition (revised C).\n#\n# Project:  /opt/nexup-bridge\n# Applied:  docker compose -f /opt/nexup-bridge/docker-compose.bridge.yml up -d\n#\n# The three properties that make this deployment safe, in order of importance:\n#\n#   1. `network_mode: container:<hermes>` — the bridge shares the Hermes\n#      container's network namespace. Hermes keeps listening on 127.0.0.1 and\n#      stays non-public; the bridge can reach `ws://127.0.0.1:9119/api/ws`\n#      because loopback is now shared, which is exactly the credential channel\n#      the bridge needs (`?token=` is rejected in Hermes' gated mode, so the\n#      serve must stay bound to loopback — measured, Gate 0/B').\n#   2. NO `ports:` anywhere — the bridge publishes nothing on the host. Traefik\n#      routes to it by following `NetworkMode` to the OWNER's address, so a\n#      published port would add exposure without adding reachability.\n#   3. The router and its middlewares live in these labels, so the edge policy\n#      and the bridge are one artifact and cannot drift.\n#\n# The managed Hermes image, its compose file, its dashboard and its `default`\n# (Adel) profile are NOT touched by anything in this file.\n\nservices:\n  nexup-bridge:\n    # ONE source of truth for the image identity: the deployment environment\n    # (`/etc/nexup-bridge/deploy.env`, installed 0600 root, from\n    # `nexup-bridge.deploy.env.example`). Deliberately NOTHING is embedded here:\n    # a fallback digest in the definition would be a second identity that no\n    # check compares against the recorded build, so a stale default would\n    # silently keep deploying the previous artifact. Preflight resolves this\n    # through `docker compose config` — the way the deployment itself resolves\n    # it — and refuses a digest that differs from the recorded build digest\n    # (P0.5b). A missing variable is therefore a hard failure, not a fallback.\n    image: ${NEXUP_BRIDGE_IMAGE:?set NEXUP_BRIDGE_IMAGE in /etc/nexup-bridge/deploy.env}\n\n    container_name: nexup-bridge\n\n    # The non-root identity, declared HERE as well as in the Dockerfile\n    # (`USER 10001:10001`). Belt and braces on purpose: the image is the control\n    # of record, and this line keeps the deployment definition self-describing,\n    # so a harness that reads only the compose file still sees an unprivileged\n    # container. Must stay identical to CONTAINER_USER in src/release/preflight.ts\n    # — `tests/deploy-artifact.test.ts` asserts that against this file.\n    user: \"10001:10001\"\n\n    # The owner is named by its STABLE name/alias, never by an ID or an IP: the\n    # ID changes on every recreation and Docker renumbers the network with it\n    # (measured: 172.16.0.2 -> 172.16.1.2 -> 172.16.2.2 across recreations).\n    network_mode: \"container:${NEXUP_HERMES_CONTAINER:-hermes-agent-r3j1-hermes-agent-1}\"\n\n    # A shared-namespace container that outlives its namespace owner is an\n    # orphan (measured: the route drops to 404 while the container still reads\n    # `running`). The external supervisor reconciles that; this policy only\n    # covers the bridge's own process exiting.\n    restart: unless-stopped\n\n    # Secrets and the bind/identity decision come from this root-only file\n    # (0600). It is the ONLY place a value lives, so a `docker inspect` of the\n    # container shows no secret.\n    env_file:\n      - /etc/nexup-bridge/bridge.env\n\n    # The bridge holds two secrets in memory and writes nothing but logs.\n    read_only: true\n    tmpfs:\n      - /tmp\n    cap_drop:\n      - ALL\n    security_opt:\n      - no-new-privileges:true\n    init: true\n\n    logging:\n      driver: json-file\n      options:\n        max-size: \"10m\"\n        max-file: \"3\"\n\n    # ── edge policy ───────────────────────────────────────────────────────────\n    # TLS terminates at Traefik, which already owns :80/:443 on this host. No\n    # `traefik.docker.network` is set on purpose: a shared-namespace container\n    # exposes no address of its own, and naming a network made the provider\n    # resolve the wrong endpoint. The provider follows the owner's endpoint.\n    labels:\n      - traefik.enable=true\n\n      - traefik.http.routers.nexup-bridge.rule=Host(`${NEXUP_BRIDGE_HOSTNAME:?set NEXUP_BRIDGE_HOSTNAME to the bridge hostname}`)\n      - traefik.http.routers.nexup-bridge.entrypoints=websecure\n      - traefik.http.routers.nexup-bridge.tls=true\n      - traefik.http.routers.nexup-bridge.tls.certresolver=letsencrypt\n      - traefik.http.routers.nexup-bridge.service=nexup-bridge\n      - traefik.http.routers.nexup-bridge.middlewares=nexup-bridge-headers@docker\n\n      # The bridge's port inside the SHARED namespace. Never published.\n      - traefik.http.services.nexup-bridge.loadbalancer.server.port=9220\n\n      # Security headers, exactly the set the Caddy site used to add.\n      # `customResponseHeaders` is used for Referrer-Policy rather than the\n      # dedicated option: it exists in every Traefik version this host may be\n      # running (`traefik:latest`), and it is the same wire result.\n      - traefik.http.middlewares.nexup-bridge-headers.headers.stsSeconds=31536000\n      - traefik.http.middlewares.nexup-bridge-headers.headers.stsIncludeSubdomains=true\n      - traefik.http.middlewares.nexup-bridge-headers.headers.contentTypeNosniff=true\n      - traefik.http.middlewares.nexup-bridge-headers.headers.customResponseHeaders.Referrer-Policy=no-referrer\n\n      # NO buffering middleware, deliberately. The run stream is\n      # `text/event-stream`: a response buffer defeats streaming, and the\n      # measured budget is the bridge's own 120 s run timeout (E5). The edge\n      # must never hold a frame.\n      #\n      # NO body-limit middleware either: Traefik core has no request-body cap\n      # without a plugin, and `buffering` is the only built-in that has one —\n      # which is the middleware above that must not be used here. The 256 KB\n      # cap (E6) is therefore enforced by the BRIDGE itself\n      # (`NEXUP_BRIDGE_MAX_BODY_BYTES=262144`, 413 before any work), and P1.1\n      # gates that value. This is a deliberate, documented difference from the\n      # old Caddy site, not an omission.\n",
+    "bridge/src/auth/client-identity.ts": "export function resolveClientIdentity(input) {\n  const socket = normalizeIp(input.socketAddress);\n  const peerIsProxy = input.trustedProxies.some((pattern) => withinTrustedProxy(socket, pattern));\n  const raw = singleHeaderValue(input.headers, input.headerName);\n  const candidate = EDGE_APPENDED_HEADERS.includes(input.headerName.toLowerCase()) ? rightmostEntry(raw) : raw;\n  return normalizeIp(candidate) ?? socket;\n}\n",
     "src/modules/workforce/runtimes/hermes/hermes-spawn.ts": "export function boundText(text: string, maxBytes: number) {\n  return { text: text.slice(0, maxBytes), truncated: text.length > maxBytes };\n}\n",
     "bridge/src/api/app.ts": "import { resolveClientIdentity } from \"../auth/client-identity\";\n      const remoteKey = resolveClientIdentity({\n        headers: request.headers,\n        socketAddress: request.remote,\n        trustedProxies: config.trustedProxyAddresses,\n        headerName: config.clientIpHeader,\n      });\n",
-    "bridge/deploy/Caddyfile": "bridge.hymanna.com {\n\trequest_body {\n\t\tmax_size 256KB\n\t}\n\treverse_proxy 127.0.0.1:9220 {\n\t\tflush_interval -1\n\t\theader_up X-Nexup-Client-IP {http.request.remote.host}\n\t}\n}\n",
-    "bridge/src/auth/pre-auth-guard.ts": "  private sweepBuckets(nowMs: number): void {\n    for (const [key, bucket] of this.buckets) {\n      if (bucket.updatedAtMs + this.ttlMs > nowMs) break; // insertion order ≈ recency\n      this.buckets.delete(key);\n    }\n  }\n"
+    "bridge/src/auth/pre-auth-guard.ts": "  private sweepBuckets(nowMs: number): void {\n    for (const [key, bucket] of this.buckets) {\n      if (bucket.updatedAtMs + this.ttlMs > nowMs) break; // insertion order ≈ recency\n      this.buckets.delete(key);\n    }\n  }\n",
+    "bridge/deploy/nexup-bridge-supervisor.sh": "#!/usr/bin/env bash\nTOKEN_FILE=/etc/nexup-bridge/hermes-session-token\nHERMES_PROFILE=saieed\nALLOWED_PROFILES=saieed\ntoken_value() {\n  token=\"$(cat \"$TOKEN_FILE\")\"\n  printf '%s' \"$token\"\n}\nstart_serve() {\n  HERMES_DASHBOARD_SESSION_TOKEN=\"$1\" \"$DOCKER\" exec -d -e HERMES_DASHBOARD_SESSION_TOKEN \"$HERMES_CONTAINER\" \"$HERMES_BIN\" -p \"$HERMES_PROFILE\" serve --isolated\n}\nrecreate_bridge() {\n  \"$DOCKER\" rm -f \"$BRIDGE_CONTAINER\"\n  \"$DOCKER\" compose -f \"$COMPOSE_FILE\" up -d\n}\n"
   },
   "stats": {
-    "/opt/nexup-bridge/dist/main.js": { "exists": true, "mode": "755", "size": 182734 },
-    "/opt/nexup-bridge": { "exists": true },
-    "/etc/nexup-bridge": { "exists": true },
-    "/opt/hermes": { "exists": true }
+    "/opt/nexup-bridge": {
+      "exists": true
+    },
+    "/etc/nexup-bridge": {
+      "exists": true
+    },
+    "/opt/hermes": {
+      "exists": true
+    }
   },
   "trees": {
     "/opt/hermes": {
@@ -70,30 +215,66 @@
       "scannedFiles": 214,
       "hits": {
         "gateway.ping": [
-          { "file": "/opt/hermes/src/rpc/gateway.ts", "line": 41, "text": "case \"gateway.ping\": return this.ping();" }
+          {
+            "file": "/opt/hermes/src/rpc/gateway.ts",
+            "line": 41,
+            "text": "case \"gateway.ping\": return this.ping();"
+          }
         ],
         "session.create": [
-          { "file": "/opt/hermes/src/rpc/session.ts", "line": 88, "text": "register(\"session.create\", createSession);" }
+          {
+            "file": "/opt/hermes/src/rpc/session.ts",
+            "line": 88,
+            "text": "register(\"session.create\", createSession);"
+          }
         ],
         "prompt.submit": [
-          { "file": "/opt/hermes/src/rpc/session.ts", "line": 96, "text": "register(\"prompt.submit\", submitPrompt);" }
+          {
+            "file": "/opt/hermes/src/rpc/session.ts",
+            "line": 96,
+            "text": "register(\"prompt.submit\", submitPrompt);"
+          }
         ],
         "session.status": [
-          { "file": "/opt/hermes/src/rpc/session.ts", "line": 104, "text": "register(\"session.status\", sessionStatus);" }
+          {
+            "file": "/opt/hermes/src/rpc/session.ts",
+            "line": 104,
+            "text": "register(\"session.status\", sessionStatus);"
+          }
         ],
         "session.interrupt": [
-          { "file": "/opt/hermes/src/rpc/session.ts", "line": 112, "text": "register(\"session.interrupt\", interruptSession);" }
+          {
+            "file": "/opt/hermes/src/rpc/session.ts",
+            "line": 112,
+            "text": "register(\"session.interrupt\", interruptSession);"
+          }
         ],
         "session.history": [
-          { "file": "/opt/hermes/src/rpc/session.ts", "line": 120, "text": "register(\"session.history\", sessionHistory);" }
+          {
+            "file": "/opt/hermes/src/rpc/session.ts",
+            "line": 120,
+            "text": "register(\"session.history\", sessionHistory);"
+          }
         ],
         "session.events.since": [],
         "session.": [
-          { "file": "/opt/hermes/src/rpc/session.ts", "line": 88, "text": "register(\"session.create\", createSession);" },
-          { "file": "/opt/hermes/src/rpc/session.ts", "line": 120, "text": "register(\"session.history\", sessionHistory);" }
+          {
+            "file": "/opt/hermes/src/rpc/session.ts",
+            "line": 88,
+            "text": "register(\"session.create\", createSession);"
+          },
+          {
+            "file": "/opt/hermes/src/rpc/session.ts",
+            "line": 120,
+            "text": "register(\"session.history\", sessionHistory);"
+          }
         ],
         "gateway.": [
-          { "file": "/opt/hermes/src/rpc/gateway.ts", "line": 41, "text": "case \"gateway.ping\": return this.ping();" }
+          {
+            "file": "/opt/hermes/src/rpc/gateway.ts",
+            "line": 41,
+            "text": "case \"gateway.ping\": return this.ping();"
+          }
         ]
       }
     }

@@ -3,54 +3,70 @@ import { SCOPE_BANNER } from "./output";
 import type { Check, CheckOutcome, HostProbe, Suite } from "./runner";
 
 /**
- * Read-only VPS pre-flight probe.
+ * Read-only VPS pre-flight probe for the containerised deployment (revised C).
  *
  * Derived directly from `docs/NEXUP_VPS_BRIDGE_DEPLOY_RUNBOOK.md` §1 (P0–P4) so
  * the document and the tool cannot drift: every check carries the runbook anchor
  * it implements. It inspects and reports only — it never installs, starts,
- * stops, reloads or writes anything, and it never contacts Hermes. The one check
- * that executes anything (P0.6) runs the bundle with a deliberately invalid host
- * so it exits BEFORE binding, and is opt-in.
+ * stops, reloads, re-creates or writes anything, and it never contacts Hermes.
  *
- * Secrets: the env file is parsed into NARROW accessors (presence, length, and
- * equality against a literal) so a value cannot reach an evidence string by
+ * Three checks EXECUTE something, and all three are opt-in (`--exec-probes`):
+ *
+ *   P0.2c  runs `grep` INSIDE the bridge image (no network, no port, no config)
+ *   P0.6   runs the bridge image twice with a deliberately invalid bind so it
+ *          exits BEFORE `listen`, to prove the bind guard
+ *   P4.12  opens a TCP connection to the serve endpoint from inside the Hermes
+ *          container to prove it answers on loopback
+ *
+ * None of them invokes an RPC method and none of them changes state.
+ *
+ * Secrets: the env file is parsed into NARROW accessors (presence, length,
+ * equality against a literal, and — for the trusted-proxy boundary — whether
+ * every entry is loopback) so a value cannot reach an evidence string by
  * accident. The secret values themselves are handed only to the redactor.
  */
 
 export const PREFLIGHT = "PREFLIGHT";
 
 export const ENV_FILE = "/etc/nexup-bridge/bridge.env";
-export const BUNDLE_PATH = "/opt/nexup-bridge/dist/main.js";
-export const UNIT_PATH = "/etc/systemd/system/nexup-bridge.service";
-export const CADDYFILE_PATH = "/etc/caddy/Caddyfile";
+export const COMPOSE_PATH = "/opt/nexup-bridge/docker-compose.bridge.yml";
+/** The bundle path INSIDE the image (the Dockerfile stage root is /app). */
+export const IMAGE_BUNDLE_PATH = "/app/dist/main.js";
 export const HERMES_SRC_GUESSES = ["/opt/hermes", "/opt/hermes/src", "/srv/hermes", "/usr/local/lib/hermes"];
+
+/** Stable container names. Never an ID: the ID changes on every recreation. */
+export const HERMES_CONTAINER = "hermes-agent-r3j1-hermes-agent-1";
+export const BRIDGE_CONTAINER = "nexup-bridge";
+export const TRAEFIK_CONTAINER = "traefik-traefik-1";
+export const SUPERVISOR_SERVICE = "nexup-bridge-supervisor.service";
+
+/** Default bridge image reference; overridden by `--image` with the pinned digest. */
+export const IMAGE_REF_DEFAULT = "nexup-bridge";
 
 export const BRIDGE_PORT = 9220;
 export const HERMES_PORT = 9119;
 export const DASHBOARD_PORT = 4860;
-export const SERVICE_USER = "nexup-bridge";
+/** Host port the managed Hermes compose publishes for the dashboard. */
+export const DASHBOARD_PUBLISHED_PORT = 32768;
+/** Path of the interpreter inside the Hermes container (used by the serve probe). */
+export const HERMES_PYTHON = "/opt/hermes/.venv/bin/python";
+
 export const EXPECTED_KEY_ID = "nexup-vercel";
 export const TARGET_PROFILE = "saieed";
 export const FORBIDDEN_PROFILE = "default";
+/** An off-scope profile that is NOT `default`: the real daemon accepted it until
+ * the config grew an allowlist. Adel's root is `/opt/data`, which is what
+ * `default` resolves to, so both names must be refused. */
+export const FORBIDDEN_OFF_SCOPE_PROFILE = "adel";
 export const MIN_SECRET_CHARS = 64;
-export const MIN_NODE_MAJOR = 22;
-export const MIN_CADDY_MAJOR = 2;
-export const MIN_CADDY_MINOR = 10;
 export const DEFAULT_MAX_BODY_BYTES = "262144";
 export const MIN_FREE_MIB = 200;
+/** The non-root uid both the image and the compose file must agree on. */
+export const CONTAINER_USER = "10001";
 
-/** Node builtins a self-contained bundle may require without a package manager. */
-const NODE_BUILTINS = new Set([
-  "assert", "async_hooks", "buffer", "child_process", "cluster", "console", "constants", "crypto", "dgram",
-  "diagnostics_channel", "dns", "domain", "events", "fs", "http", "http2", "https", "inspector", "module",
-  "net", "os", "path", "perf_hooks", "process", "punycode", "querystring", "readline", "repl", "stream",
-  "string_decoder", "sys", "timers", "tls", "trace_events", "tty", "url", "util", "v8", "vm", "wasi",
-  "worker_threads", "zlib",
-]);
-
-function isNodeBuiltin(specifier: string): boolean {
-  return specifier.startsWith("node:") || NODE_BUILTINS.has(specifier.split("/")[0]);
-}
+/** Traefik entrypoint the bridge router must use (TLS-terminating). */
+const SECURE_ENTRYPOINT = "websecure";
+const HEADERS_MIDDLEWARE = "nexup-bridge-headers";
 
 /**
  * The banner an operator must see before any result. Defined once in `output.ts`
@@ -62,19 +78,20 @@ export const PREFLIGHT_BANNER = SCOPE_BANNER;
 /** The allowlist refusal planted into every run's method guard, used as a bundling probe. */
 const BUNDLE_GUARD_STRING = "is not permitted by the NEXUP bridge";
 
-/** Synthetic values for the opt-in execution probe; never written anywhere. */
+/** Synthetic values for the opt-in execution probes; never real, never written anywhere. */
 const SYNTHETIC_SECRET = "nexup-preflight-synthetic-secret-not-a-real-key";
 const SYNTHETIC_TOKEN = "nexup-preflight-synthetic-token-not-real";
 
-/** Names the bridge actually reads. `NEXUP_BRIDGE_MAX_BODY_BYTES` is deliberately
- * excluded: it is absent from the shipped example and is covered by the dedicated
- * runbook-P1.1 reconciliation check instead. */
+/** The environment the bridge reads. `NEXUP_BRIDGE_MAX_BODY_BYTES` is deliberately
+ * excluded: it is covered by the dedicated P1.1 reconciliation check instead. */
 export const REQUIRED_ENV_NAMES = [
   "NEXUP_BRIDGE_ENABLED",
   "NEXUP_BRIDGE_HOST",
+  "NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND",
   "NEXUP_BRIDGE_PORT",
   "NEXUP_BRIDGE_HMAC_SECRET",
   "NEXUP_BRIDGE_ALLOWED_KEY_IDS",
+  "NEXUP_BRIDGE_ALLOWED_PROFILES",
   "NEXUP_BRIDGE_TIMEOUT_MS",
   "NEXUP_BRIDGE_MAX_OUTPUT_BYTES",
   "NEXUP_BRIDGE_MAX_CONCURRENCY",
@@ -82,6 +99,8 @@ export const REQUIRED_ENV_NAMES = [
   "NEXUP_BRIDGE_PREAUTH_PER_REMOTE_PER_MINUTE",
   "NEXUP_BRIDGE_PREAUTH_GLOBAL_PER_MINUTE",
   "NEXUP_BRIDGE_CLOCK_SKEW_SECONDS",
+  "NEXUP_BRIDGE_TRUSTED_PROXIES",
+  "NEXUP_BRIDGE_CLIENT_IP_HEADER",
   "HERMES_RPC_URL",
   "HERMES_SESSION_TOKEN",
   "HERMES_ORIGIN",
@@ -91,16 +110,22 @@ export const REQUIRED_ENV_NAMES = [
 /** Values that must never be rendered; registered with the redactor. */
 export const SECRET_ENV_NAMES = ["NEXUP_BRIDGE_HMAC_SECRET", "HERMES_SESSION_TOKEN"] as const;
 
-export const REQUIRED_BINARIES = ["node", "caddy", "systemctl", "ss", "stat", "sha256sum", "df", "sh"] as const;
+/**
+ * Binaries the HOST needs. Node and Caddy are gone on purpose: there is no host
+ * Node (the bundle runs in the image) and Traefik is the edge.
+ */
+export const REQUIRED_BINARIES = ["docker", "systemctl", "ss", "stat", "df", "sh", "grep", "sha256sum"] as const;
 
 export type PreflightOptions = CompatOptions & {
   envFile?: string;
-  bundlePath?: string;
-  unitPath?: string;
-  caddyfilePath?: string;
-  /** Digest recorded in runbook P0; compared against the copy on the host. */
+  composePath?: string;
+  /** Digest-pinned image reference (`nexup-bridge@sha256:…`). */
+  image?: string;
+  /** Digest recorded when the image was built; compared against the host copy. */
   expectedDigest?: string;
-  /** Enables P0.6, which executes the bundle once with an invalid host. */
+  /** The bridge hostname the router must serve; checked when supplied. */
+  bridgeHostname?: string;
+  /** Enables the three checks that EXECUTE something. */
   execProbes?: boolean;
   minFreeMiB?: number;
 };
@@ -115,6 +140,13 @@ export type EnvMetadata = {
   equals(key: string, expected: string): boolean;
   /** True when a comma-separated value contains `token`. */
   includesToken(key: string, token: string): boolean;
+  /**
+   * True when every entry of a comma-separated value is loopback, false when at
+   * least one is not, and NULL when the name is absent. This is the only derived
+   * property of a non-secret value the checks need, and it is computed here so
+   * the value itself never leaves the parser.
+   */
+  loopbackOnlyOf(key: string): boolean | null;
   /** True when any profile-shaped assignment in the file is `default`. */
   assignsDefaultProfile: boolean;
   /** Secret values, for redaction registration only. */
@@ -144,21 +176,29 @@ export function parseEnvMetadata(content: string): EnvMetadata {
     if (/PROFILE$/.test(key) && value === FORBIDDEN_PROFILE) assignsDefaultProfile = true;
   }
 
+  const csv = (key: string): string[] =>
+    (values.get(key) ?? "")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
   return {
     names: new Set(values.keys()),
     lengthOf: (key) => (values.has(key) ? (values.get(key) as string).length : null),
     equals: (key, expected) => values.get(key) === expected,
-    includesToken: (key, token) =>
-      (values.get(key) ?? "")
-        .split(",")
-        .map((entry) => entry.trim())
-        .includes(token),
+    includesToken: (key, token) => csv(key).includes(token),
+    loopbackOnlyOf: (key) => (values.has(key) ? csv(key).every((entry) => isLoopbackAddress(entry)) : null),
     assignsDefaultProfile,
     secretValues: SECRET_ENV_NAMES.map((name) => values.get(name)).filter(
       (value): value is string => typeof value === "string" && value.length > 0,
     ),
     ...(values.size === 0 ? { parseError: "no key=value assignments could be parsed" } : {}),
   };
+}
+
+/** A boolean-shaped env value, spelled the way an operator actually writes one. */
+function envTruthy(env: EnvMetadata, key: string): boolean {
+  return ["true", "1", "yes", "on"].some((form) => env.equals(key, form));
 }
 
 /* ── listener parsing ────────────────────────────────────────────────────── */
@@ -184,151 +224,218 @@ export function isLoopbackAddress(address: string): boolean {
   return normalized === "127.0.0.1" || normalized === "::1" || normalized === "localhost";
 }
 
+/* ── deployment-definition (compose) parsing ────────────────────────────────
+ *
+ * The subject of P0.5 changed with the architecture but the property did not:
+ * the check must read what the definition actually DECLARES. A correct value
+ * that only appears in a comment — or in a label — must not satisfy it, because
+ * the false negative that hides a published port or a mutable image tag is
+ * exactly what this check exists to prevent. Deliberately NOT a YAML parser:
+ * the deployment file's shape is fixed and small, and an unparsed construct
+ * falls back to "did not find it", which fails closed.
+ */
+
+/** Live lines only: whole-line `#` comments are removed, the way compose reads them. */
+function liveLines(content: string): string[] {
+  return content.split(/\r?\n/).filter((line) => !line.trim().startsWith("#"));
+}
+
+/** The effective value of `key`, with surrounding quotes removed. NULL when absent. */
+export function composeValue(content: string, key: string): string | null {
+  const pattern = new RegExp(`^\\s*${key}\\s*:\\s*(.*)$`);
+  let found: string | null = null;
+  for (const line of liveLines(content)) {
+    const match = pattern.exec(line);
+    if (!match) continue;
+    let value = (match[1] ?? "").trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"') && value.length > 1) ||
+      (value.startsWith("'") && value.endsWith("'") && value.length > 1)
+    ) {
+      value = value.slice(1, -1);
+    }
+    found = value;
+  }
+  return found;
+}
+
+/**
+ * The EFFECTIVE list value of `key`: the last live `key:` wins (that is how
+ * compose merges a repeated key), and the value may be inline (`[]`, `[a, b]`)
+ * or a block of `- item` lines at deeper indentation. Quotes around an item are
+ * removed.
+ *
+ * Reading the last value matters: a reader that collected items from anywhere in
+ * the file would let an earlier `- ALL` satisfy a definition whose effective
+ * `cap_drop` is empty.
+ */
+export function composeList(content: string, key: string): string[] {
+  const pattern = new RegExp(`^(\\s*)${key}\\s*:\\s*(.*)$`);
+  const lines = liveLines(content);
+
+  let index = -1;
+  let indent = "";
+  let inline = "";
+  for (let cursor = 0; cursor < lines.length; cursor += 1) {
+    const match = pattern.exec(lines[cursor] as string);
+    if (!match) continue;
+    index = cursor;
+    indent = match[1] ?? "";
+    inline = (match[2] ?? "").trim();
+  }
+  if (index < 0) return [];
+
+  const unquote = (value: string): string => value.trim().replace(/^["']|["']$/g, "");
+  if (inline.startsWith("[")) {
+    const inner = inline.replace(/^\[/, "").replace(/\]$/, "");
+    return inner
+      .split(",")
+      .map(unquote)
+      .filter(Boolean);
+  }
+  if (inline === "") {
+    const items: string[] = [];
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      const line = lines[cursor] as string;
+      if (line.trim() === "") continue;
+      const item = /^(\s*)-\s*(.*)$/.exec(line);
+      if (!item || (item[1] ?? "").length <= indent.length) break;
+      const value = unquote(item[2] ?? "");
+      if (value) items.push(value);
+    }
+    return items;
+  }
+  // A scalar where a list was expected is still a value: report it as one item
+  // and let the caller judge (fail-closed for `ports:`, strict for the rest).
+  return [unquote(inline)];
+}
+
+/**
+ * Does the definition publish a host port? True for `ports:` with any non-empty
+ * value (mapping, bare port, or inline list) and for a `- "H:C"` list item,
+ * which publishes even when the key is not visible in the same block.
+ */
+export function composePublishesPorts(content: string): boolean {
+  if (composeList(content, "ports").length > 0) return true;
+  return liveLines(content).some((line) => /^\s*-\s*["']?\d{1,5}:\d{1,5}/.test(line));
+}
+
+/**
+ * Every live list item written as `key=value` (traefik labels are exactly that).
+ * A list item that is not `key=value` — an env-file path, a capability, a port
+ * mapping — is not a label and is deliberately not collected.
+ */
+export type ComposeSecurityInput = {
+  compose: string;
+  /** The digest recorded at build time; the DEPLOYED identity must equal it. */
+  expectedDigest?: string | null;
+  /**
+   * What the deployment environment resolves `${NEXUP_BRIDGE_IMAGE}` to, as
+   * `docker compose config` renders it, or null when it could not be resolved.
+   */
+  resolvedImage?: string | null;
+};
+
+export type ComposeSecurityAssessment = {
+  declaredImage: string | null;
+  /** The DIGEST the deployment will actually run, or null when it is unknowable. */
+  resolvedDigest: string | null;
+  /** True when the definition carries its own fallback digest (a second identity). */
+  embeddedFallbackDigest: boolean;
+  /** True when the deployed digest is knowable AND equals the recorded one. */
+  imageOk: boolean;
+  publishesPorts: boolean;
+  userOk: boolean;
+  /** Every unmet requirement, in the order a reader should fix them. */
+  missing: string[];
+};
+
+/**
+ * P0.5b's decision, extracted so that the ARTIFACT can be judged directly.
+ *
+ * The check suite normally reads a recorded host, which is how a definition that
+ * has drifted from what ships (or a fixture that invents a property the artifact
+ * lacks) stayed green. `tests/deploy-artifact.test.ts` evaluates the checked-in
+ * compose with this same function, so there is one implementation of the rule
+ * and no second, unreachable copy of it.
+ */
+export function assessComposeSecurity(input: ComposeSecurityInput): ComposeSecurityAssessment {
+  const declaredImage = composeValue(input.compose, "image");
+  const expected = normalizeDigest(input.expectedDigest ?? null);
+
+  // `${NEXUP_BRIDGE_IMAGE}`, `${NEXUP_BRIDGE_IMAGE:?msg}` or the discouraged
+  // `${NEXUP_BRIDGE_IMAGE:-fallback}`. The fallback is captured only to REFUSE
+  // it when it carries a digest: that would be a second identity.
+  const isEnvRef = declaredImage !== null && /\$\{NEXUP_BRIDGE_IMAGE\b/.test(declaredImage);
+  const fallback = declaredImage === null ? null : /\$\{NEXUP_BRIDGE_IMAGE:-([^}]*)\}/.exec(declaredImage);
+  const embeddedFallbackDigest = fallback !== null && normalizeDigest(fallback[1] ?? null) !== null;
+
+  const resolvedDigest = isEnvRef
+    ? normalizeDigest(input.resolvedImage ?? null)
+    : declaredImage !== null && declaredImage.includes("@")
+      ? normalizeDigest(declaredImage)
+      : null;
+
+  const user = composeValue(input.compose, "user");
+  const userOk =
+    user !== null && user !== "" && !/^(0|root)(:|$)/.test(user) && user.startsWith(CONTAINER_USER);
+  const labels = composeLabelText(input.compose);
+  const capabilities = composeList(input.compose, "cap_drop");
+  const envFiles = composeList(input.compose, "env_file");
+  const publishesPorts = composePublishesPorts(input.compose);
+
+  const imageMissing = embeddedFallbackDigest
+    ? "image: no fallback digest (`NEXUP_BRIDGE_IMAGE` must be the definition's ONLY image source)"
+    : resolvedDigest !== null && (expected === null || resolvedDigest === expected)
+      ? null
+      : resolvedDigest === null
+        ? isEnvRef
+          ? "image: could not resolve the deployment image digest (`docker compose config` on this host " +
+            "could not interpolate `NEXUP_BRIDGE_IMAGE`), so it cannot be compared with the recorded build digest"
+          : `image: the definition names \`${declaredImage ?? "<no image>"}\`, which is not digest-pinned ` +
+            "(expected `<name>@sha256:\u2026`)"
+        : `image: the deployed digest ${resolvedDigest} differs from the recorded build digest ${expected}`;
+
+  // P0.5a owns the network/ports property and reports it; `publishesPorts` is
+  // returned for the artifact-level tests rather than repeated in this list, so
+  // one defect does not raise two findings.
+  const missing = [
+    imageMissing,
+    envFiles.some((file) => file === ENV_FILE) ? null : `env_file: ${ENV_FILE}`,
+    userOk ? null : `user: "${CONTAINER_USER}:${CONTAINER_USER}"`,
+    composeValue(input.compose, "read_only") === "true" ? null : "read_only: true",
+    capabilities.includes("ALL") ? null : "cap_drop: [ALL]",
+    labels.some((label) => label.includes("no-new-privileges")) || input.compose.includes("no-new-privileges")
+      ? null
+      : "security_opt: no-new-privileges:true",
+    composeValue(input.compose, "restart") !== null ? null : "restart: unless-stopped",
+  ].filter((entry): entry is string => entry !== null);
+
+  return {
+    declaredImage,
+    resolvedDigest,
+    embeddedFallbackDigest,
+    imageOk: imageMissing === null,
+    publishesPorts,
+    userOk,
+    missing,
+  };
+}
+
+export function composeLabelText(content: string): string[] {
+  const labels: string[] = [];
+  for (const line of liveLines(content)) {
+    const match = /^\s*-\s*["']?([A-Za-z0-9_.-]+)=(.*)$/.exec(line);
+    if (!match) continue;
+    labels.push((match[0] ?? "").trim().replace(/^-\s*["']?/, "").replace(/["']$/, ""));
+  }
+  return labels;
+}
+
 /* ── small helpers for checks ────────────────────────────────────────────── */
 
 function firstLine(text: string): string {
   return (text.split("\n")[0] ?? "").trim();
-}
-
-/**
- * The unit-file grammar P0.5 needs, taken from `systemd.syntax(7)` / `systemd.exec(5)`
- * and pinned by the runbook's P0.5 paragraph:
- *
- *   - "Whitespace immediately before or after the `=` is ignored."
- *   - "Lines ending in a backslash are concatenated with the following line while
- *     reading and the backslash is replaced by a space character" — and "when a
- *     comment line or lines follow a line ending with a backslash, the comment
- *     block is ignored, so the continued line is concatenated with whatever
- *     follows the comment block".
- *   - "Empty lines and lines starting with `#` or `;` are ignored."
- *   - Quotes (`"…"`, `'…'`) wrap a whole item and are removed.
- *
- * Two readings genuinely cannot be settled from a Windows workstation, so each is
- * stated in the runbook AND asserted by `tests/release-cli.test.ts` ("P0.5 unit
- * grammar") rather than left implicit: the LAST assignment of a directive is the
- * effective one, and a trailing inline `# …` is NOT a comment (systemd has only
- * whole-line comments). An unrecognised ExecStart prefix (`@`, `+`, `!`) is not
- * modelled and therefore fails closed.
- */
-const isCommentLine = (line: string): boolean => {
-  const trimmed = line.trim();
-  return trimmed.startsWith("#") || trimmed.startsWith(";");
-};
-
-/** Physical lines joined into the logical lines systemd actually reads. */
-function logicalLines(content: string): string[] {
-  const logical: string[] = [];
-  let joined: string | null = null;
-
-  for (const raw of content.split(/\r?\n/)) {
-    if (joined === null) {
-      joined = raw;
-    } else if (isCommentLine(raw)) {
-      // A comment block inside a continuation is dropped, not appended.
-      continue;
-    } else {
-      joined = `${joined} ${raw.trim()}`;
-    }
-
-    const head = joined.trimEnd();
-    if (head.endsWith("\\")) {
-      joined = head.slice(0, -1);
-      continue;
-    }
-    logical.push(joined);
-    joined = null;
-  }
-  if (joined !== null) logical.push(joined);
-  return logical;
-}
-
-/**
- * Reads the live `Key=Value` directives out of a systemd unit, ignoring whole-line
- * comments (`#`, `;`) and any line that is not that key. Deliberately NOT a
- * substring search: P0.5 is about what the unit actually EXECUTES, so a correct
- * path that is merely mentioned — or commented out — must not satisfy it. That
- * false negative is exactly why this parses instead of grepping.
- */
-function unitDirectives(content: string, key: string): string[] {
-  const values: string[] = [];
-  for (const rawLine of logicalLines(content)) {
-    const line = rawLine.trim();
-    if (!line || isCommentLine(line)) continue;
-    const eq = line.indexOf("=");
-    if (eq <= 0) continue;
-    if (line.slice(0, eq).trim() !== key) continue;
-    values.push(line.slice(eq + 1).trim());
-  }
-  return values;
-}
-
-/** The effective value of a directive: systemd applies the LAST assignment. */
-function lastUnitDirective(content: string, key: string): string | null {
-  const values = unitDirectives(content, key);
-  return values.length > 0 ? (values[values.length - 1] as string) : null;
-}
-
-/**
- * `systemd.syntax(7)` QUOTING, to the depth P0.5 needs: quotes wrap an item and
- * are removed. C-style escapes are not modelled — the check only needs the item
- * list so it can find the entry script, and an unmodelled escape fails closed.
- */
-function unitArgs(value: string): string[] {
-  const args: string[] = [];
-  let current = "";
-  let quote: '"' | "'" | null = null;
-  let open = false;
-
-  for (const char of value) {
-    if (quote !== null) {
-      if (char === quote) quote = null;
-      else current += char;
-      continue;
-    }
-    if (char === '"' || char === "'") {
-      quote = char;
-      open = true;
-      continue;
-    }
-    if (/\s/.test(char)) {
-      if (open) {
-        args.push(current);
-        current = "";
-        open = false;
-      }
-      continue;
-    }
-    current += char;
-    open = true;
-  }
-  if (open) args.push(current);
-  return args;
-}
-
-/** Node options whose NEXT item is a module node loads. */
-const NODE_LOAD_OPTIONS = new Set(["-r", "--require", "--import", "--loader", "--experimental-loader"]);
-/** Node options whose NEXT item is a value, not the entry script. */
-const NODE_VALUE_OPTIONS = new Set(["-e", "--eval", "-p", "--print", "--inspect-port"]);
-
-/**
- * Does `node <items…>` launch `bundlePath`? True when the bundle is the entry
- * script (the first item that is not a Node option) or the module of a preload /
- * import option. Any other position does NOT count — `node other.js <bundle>`
- * mentions the bundle without running it, so accepting it would be the same class
- * of false pass this check exists to prevent.
- */
-function launchesBundle(args: readonly string[], bundlePath: string): boolean {
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (!arg.startsWith("-")) return arg === bundlePath;
-    if (NODE_LOAD_OPTIONS.has(arg)) {
-      if (args[index + 1] === bundlePath) return true;
-      index += 1;
-    } else if (NODE_VALUE_OPTIONS.has(arg)) {
-      index += 1;
-    }
-  }
-  return false;
 }
 
 const pass = (evidence: string): CheckOutcome => ({ status: "pass", evidence });
@@ -339,6 +446,18 @@ const skip = (reason: string): CheckOutcome => ({ status: "skip", reason });
 
 const safety = (id: string, title: string, run: Check["run"]): Check => ({ id, title, severity: "safety", run });
 const advisory = (id: string, title: string, run: Check["run"]): Check => ({ id, title, severity: "advisory", run });
+
+/**
+ * A digest in canonical `sha256:<hex>` form, from either a bare hex string (what
+ * `sha256sum` prints) or a reference (`name@sha256:<hex>`).
+ */
+function normalizeDigest(value: string | undefined | null): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toLowerCase();
+  const afterAt = trimmed.includes("@") ? trimmed.slice(trimmed.indexOf("@") + 1) : trimmed;
+  const hex = afterAt.startsWith("sha256:") ? afterAt.slice("sha256:".length) : afterAt;
+  return /^[0-9a-f]{64}$/.test(hex) ? `sha256:${hex}` : null;
+}
 
 /**
  * The ONE place the HMAC secret-strength policy is decided. Runbook P1.3 gates on
@@ -355,18 +474,20 @@ function secretStrength(env: EnvMetadata): CheckOutcome {
 
 /* ── the suite ───────────────────────────────────────────────────────────── */
 
-export function createPreflightSuite(probe: HostProbe, options: PreflightOptions = {}): {
-  suite: Suite;
-  secrets: string[];
-} {
+export function createPreflightSuite(
+  probe: HostProbe,
+  options: PreflightOptions = {},
+): { suite: Suite; secrets: string[] } {
   const envFile = options.envFile ?? ENV_FILE;
-  const bundlePath = options.bundlePath ?? BUNDLE_PATH;
-  const unitPath = options.unitPath ?? UNIT_PATH;
-  const caddyfilePath = options.caddyfilePath ?? CADDYFILE_PATH;
+  const composePath = options.composePath ?? COMPOSE_PATH;
+  const imageRef = options.image ?? IMAGE_REF_DEFAULT;
   const minFreeMiB = options.minFreeMiB ?? MIN_FREE_MIB;
 
   const envRead = probe.read(envFile);
   const env = envRead.ok && envRead.content !== null ? parseEnvMetadata(envRead.content) : null;
+
+  const composeRead = probe.read(composePath);
+  const compose = composeRead.ok && composeRead.content !== null ? composeRead.content : null;
 
   const listeners = (): { ran: boolean; list: Listener[]; reason?: string } => {
     const withPids = probe.run("ss", ["-ltnp"]);
@@ -376,178 +497,327 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
     return { ran: true, list: parseListeners(plain.stdout) };
   };
 
-  const bundleDigest = (): { ran: boolean; digest: string | null; reason?: string } => {
-    const result = probe.run("sha256sum", [bundlePath]);
-    if (!result.ran) return { ran: false, digest: null, reason: result.reason ?? "sha256sum could not be executed" };
-    if (result.code !== 0) return { ran: false, digest: null, reason: `sha256sum exited ${result.code}` };
-    const digest = (result.stdout.trim().split(/\s+/)[0] ?? "").toLowerCase();
-    return /^[0-9a-f]{64}$/.test(digest) ? { ran: true, digest } : { ran: false, digest: null, reason: "unparseable digest" };
+  const containerRunning = (name: string): boolean | null => {
+    const result = probe.run("docker", ["inspect", "-f", "{{.State.Running}}", name]);
+    if (!result.ran) return null;
+    if (result.code !== 0) return false;
+    return firstLine(result.stdout) === "true";
+  };
+
+  /** The image digest the host actually holds, from its repo digest. */
+  const hostImageDigest = (): { ran: boolean; digest: string | null; reason?: string } => {
+    const result = probe.run("docker", ["image", "inspect", "--format", "{{index .RepoDigests 0}}", imageRef]);
+    if (!result.ran) return { ran: false, digest: null, reason: result.reason ?? "docker could not be executed" };
+    if (result.code !== 0) return { ran: false, digest: null, reason: `docker image inspect exited ${result.code}` };
+    const digest = normalizeDigest(firstLine(result.stdout));
+    return digest ? { ran: true, digest } : { ran: false, digest: null, reason: `unparseable digest from "${firstLine(result.stdout)}"` };
   };
 
   const checks: Check[] = [
-    /* P0 — workspace, build, artifact integrity (runbook ids P0.1–P0.7) */
+    /* P0 — release artifact and deployment definition (runbook ids P0.1–P0.7) */
     advisory("P0.1", "Build gate: bridge typecheck and test suite are green at the recorded SHA", () =>
       skip(
         "run on the build machine, not the host: `npx tsc -p tsconfig.json --noEmit` and " +
-          "`npx vitest run --config vitest.config.ts` at the recorded HEAD, then record the result. The VPS has " +
-          "no repository checkout, so this probe cannot run the suite itself (runbook P0.1)",
+          "`npx vitest run --config vitest.config.ts` at the recorded HEAD, then build the image and record " +
+          "its digest. The VPS has no repository checkout, so this probe cannot run the suite itself (runbook P0.1)",
       ),
     ),
 
-    safety("P0.2a", `Bundle present at ${bundlePath}`, () => {
-      const info = probe.stat(bundlePath);
-      return info.exists
-        ? pass(`present${info.size !== undefined ? `, ${info.size} bytes` : ""}`)
-        : fail(`${bundlePath} is absent; install §2 has not run or the path is wrong`);
+    safety("P0.2a", `The bridge image ${imageRef} is present on the host`, () => {
+      const result = probe.run("docker", ["image", "inspect", "--format", "{{.Id}}", imageRef]);
+      if (!result.ran) return skip(`docker is not executable (${result.reason})`);
+      return result.code === 0
+        ? pass(`present: ${firstLine(result.stdout) || "<no id>"}`)
+        : fail(`docker has no image ${imageRef}; build it and pin it before deploying (§2)`);
     }),
 
-    safety("P0.2b", "Host bundle digest matches the recorded build digest", () => {
+    safety("P0.2b", "Host image digest matches the digest recorded at build time", () => {
       if (!options.expectedDigest) {
         return skip(
-          "no --expected-digest supplied. Runbook P0 records the local digest and §2 compares it after the copy; " +
-            "without it a tampered or stale artifact cannot be detected",
+          "no --expected-digest supplied. Runbook P0 records the digest produced by the build; without it a " +
+            "stale or replaced image cannot be detected",
         );
       }
-      const digest = bundleDigest();
+      const expected = normalizeDigest(options.expectedDigest);
+      if (!expected) return fail(`--expected-digest is not a sha256 digest: "${options.expectedDigest}"`);
+      const digest = hostImageDigest();
       if (!digest.ran || !digest.digest) return skip(`digest unavailable (${digest.reason})`);
-      return digest.digest === options.expectedDigest.toLowerCase()
-        ? pass(`sha256 ${digest.digest}`)
-        : fail("the host digest differs from the recorded local digest — do not start this artifact", `host=${digest.digest}`);
+      return digest.digest === expected
+        ? pass(`${digest.digest} on ${imageRef}`)
+        : fail(
+            `the host image digest differs from the recorded build digest — do not deploy this image`,
+            `host=${digest.digest} recorded=${expected}`,
+          );
     }),
 
-    safety("P0.2c", "Method-allowlist guard survived bundling (part of runbook P0.2)", () => {
-      const read = probe.read(bundlePath);
-      if (!read.ok || read.content === null) return skip(`bundle not readable (${read.reason})`);
-      const count = read.content.split(BUNDLE_GUARD_STRING).length - 1;
+    safety("P0.2c", "Method-allowlist guard survived into the shipped image (opt-in)", () => {
+      if (!options.execProbes) {
+        return skip(
+          `not run: this check reads the bundle INSIDE the image (no network, no port, no config). Re-run with ` +
+            `--exec-probes to prove the compile-time allowlist refusal is in the artifact`,
+        );
+      }
+      const result = probe.run("docker", [
+        "run",
+        "--rm",
+        "--entrypoint",
+        "/bin/sh",
+        imageRef,
+        "-c",
+        `grep -c '${BUNDLE_GUARD_STRING}' ${IMAGE_BUNDLE_PATH}`,
+      ]);
+      if (!result.ran) return skip(`could not execute the image (${result.reason})`);
+      const count = Number.parseInt(firstLine(result.stdout), 10);
+      if (!Number.isFinite(count)) {
+        return fail(`could not read a match count out of the image`, firstLine(result.stderr));
+      }
       return count >= 1
-        ? pass(`refusal string present ${count}x in the shipped bundle`)
-        : fail("the method-allowlist refusal is absent from the bundle; the compile-time guarantee is not evidenced");
+        ? pass(`refusal string present ${count}x in ${IMAGE_BUNDLE_PATH} inside the image`)
+        : fail(
+            `the method-allowlist refusal is absent from the bundle in the image; the compile-time guarantee is not evidenced`,
+          );
     }),
 
     advisory("P0.3", "Build-machine toolchain is available (runbook P0.3 — run P0 from a full checkout)", () =>
       skip(
-        "a build-machine property, not host state: `bridge/` has no `node_modules` of its own, so the build and the suite " +
-          "resolve esbuild/vitest from the repository root. Run P0 from a full checkout (or `npm i` at the root first) and " +
-          "record it (runbook P0.3)",
+        "a build-machine property, not host state: `bridge/` has no `node_modules` of its own, so the build, the " +
+          "suite and `docker build` resolve from the repository root. Run P0 from a full checkout (or `npm i` at " +
+          "the root first) and record it (runbook P0.3)",
       ),
     ),
 
-    safety("P0.4a", `Node on the host is >= v${MIN_NODE_MAJOR} (the VPS needs only /usr/bin/node — runbook P0.4)`, () => {
-      const systemdNode = probe.run("/usr/bin/node", ["--version"]);
-      const anyNode = systemdNode.ran ? systemdNode : probe.run("node", ["--version"]);
-      if (!anyNode.ran) return skip(`node is not executable (${anyNode.reason ?? "not found"})`);
-      if (anyNode.code !== 0) return fail(`node --version exited ${anyNode.code}`, firstLine(anyNode.stderr));
-      const version = firstLine(anyNode.stdout);
-      const major = Number.parseInt(/v?(\d+)/.exec(version)?.[1] ?? "", 10);
-      if (!Number.isFinite(major)) return fail(`could not parse a version from "${version}"`);
-      return major >= MIN_NODE_MAJOR
-        ? pass(`${version} via ${systemdNode.ran ? "/usr/bin/node" : "node on PATH"}`)
-        : fail(`${version} is below v${MIN_NODE_MAJOR}; the bundle is built for node22`);
+    safety("P0.4a", "The Docker CLI is present and its daemon answers", () => {
+      const result = probe.run("docker", ["version", "--format", "{{.Server.Version}}"]);
+      if (!result.ran) return skip(`docker is not executable (${result.reason})`);
+      return result.code === 0
+        ? pass(`server ${firstLine(result.stdout)}`)
+        : fail(`\`docker version\` exited ${result.code}: the daemon is unreachable`, firstLine(result.stderr));
     }),
 
-    safety("P0.4b", "The shipped bundle is self-contained (no package manager needed on the host)", () => {
-      const read = probe.read(bundlePath);
-      if (!read.ok || read.content === null) return skip(`bundle not readable (${read.reason})`);
-      const specifiers = [...read.content.matchAll(/require\(\s*["']([^"']+)["']\s*\)/g)].map((match) => match[1]);
-      const external = [...new Set(specifiers)].filter((specifier) => !isNodeBuiltin(specifier));
-      return external.length === 0
-        ? pass(
-            `${specifiers.length} require() site(s), all node builtins — the VPS needs no package manager (runbook P0.4)`,
-          )
-        : fail(`the bundle requires ${external.join(", ")}; it is not self-contained and the VPS must not npm install`);
-    }),
-
-    advisory("P0.5", "systemd unit launches the shipped bundle (runbook P0.5)", () => {
-      const read = probe.read(unitPath);
-      if (!read.ok || read.content === null) {
-        return skip(`unit not readable at ${unitPath} (${read.reason}) — install I.5 places it`);
+    safety("P0.4b", "Docker Compose v2 is available (v1 is not supported by this definition)", () => {
+      const result = probe.run("docker", ["compose", "version"]);
+      if (!result.ran) return skip(`docker is not executable (${result.reason})`);
+      if (result.code !== 0) {
+        return fail(`\`docker compose version\` exited ${result.code}`, firstLine(result.stderr));
       }
-      // Live directives only, and the LAST assignment is the effective one. A `-`
-      // prefix on ExecStart ("ignore failure") does not change WHAT runs, so it is
-      // stripped before the argument list is assembled.
-      const execStarts = unitDirectives(read.content, "ExecStart").map((value) =>
-        value.startsWith("-") ? value.slice(1) : value,
-      );
-      const effectiveExecStart = execStarts.length > 0 ? (execStarts[execStarts.length - 1] as string) : null;
-      const execArgs = effectiveExecStart === null ? [] : unitArgs(effectiveExecStart);
-      const launches = execArgs[0] === "/usr/bin/node" && launchesBundle(execArgs.slice(1), bundlePath);
+      const version = firstLine(result.stdout);
+      const major = Number.parseInt(/(\d+)/.exec(version)?.[1] ?? "", 10);
+      return major >= 2
+        ? pass(version)
+        : fail(`compose version "${version}" is not v2 or later; the definition uses v2 syntax`);
+    }),
 
-      const workingDirs = unitArgs(lastUnitDirective(read.content, "WorkingDirectory") ?? "");
-      const missing = [
-        launches ? null : `ExecStart \`/usr/bin/node ${bundlePath}\``,
-        workingDirs.length === 1 && workingDirs[0] === "/opt/nexup-bridge"
-          ? null
-          : "WorkingDirectory=/opt/nexup-bridge",
+    safety("P0.5a", "The deployment definition shares the Hermes network namespace and publishes nothing", () => {
+      if (compose === null) return skip(`compose file not readable at ${composePath} (${composeRead.reason})`);
+      const networkMode = composeValue(compose, "network_mode");
+      const ownerCorrect =
+        networkMode !== null &&
+        (/^\$\{NEXUP_HERMES_CONTAINER(:-|:\?)?/.test(networkMode) || networkMode.includes(HERMES_CONTAINER)) &&
+        !networkMode.includes("some-other");
+      const problems = [
+        ownerCorrect ? null : `network_mode "container:${HERMES_CONTAINER}" (observed ${networkMode ?? "<absent>"})`,
+        composePublishesPorts(compose) ? "the definition declares `ports:`, which publishes the bridge on the host" : null,
       ].filter((entry): entry is string => entry !== null);
+      return problems.length === 0
+        ? pass(
+            `network_mode ${networkMode} (the Hermes container's namespace); nothing is published, so the edge reaches ` +
+              `the bridge at the owner's address`,
+          )
+        : fail(`the bridge would not join the Hermes namespace privately — ${problems.join("; ")}`);
+    }),
+
+    safety("P0.5b", "The definition runs the digest-pinned image as an unprivileged container", () => {
+      if (compose === null) return skip(`compose file not readable at ${composePath} (${composeRead.reason})`);
+      const declaredImage = composeValue(compose, "image");
+
+      // Resolve the image the way the DEPLOYMENT resolves it, not by reading the
+      // file text: `docker compose config` interpolates `${NEXUP_BRIDGE_IMAGE}`
+      // from the deployment environment, which is exactly what the supervisor's
+      // own `up -d` does on the recovery path. A definition that names the image
+      // literally needs no resolution; one that names the environment must be
+      // resolvable, and an unresolvable identity FAILS CLOSED (the deployed
+      // digest cannot be compared with the recorded build digest).
+      let resolvedImage: string | null = null;
+      let resolveNote = "the definition names no ${NEXUP_BRIDGE_IMAGE}";
+      if (declaredImage !== null && declaredImage.includes("${NEXUP_BRIDGE_IMAGE")) {
+        const rendered = probe.run("docker", ["compose", "-f", composePath, "config"]);
+        if (!rendered.ran) {
+          resolveNote = `\`docker compose config\` could not run (${rendered.reason})`;
+        } else if (rendered.code !== 0) {
+          resolveNote = `\`docker compose config\` exited ${rendered.code}: ${firstLine(rendered.stderr)}`;
+        } else {
+          resolvedImage = composeValue(rendered.stdout, "image");
+          resolveNote = resolvedImage ?? "the rendered configuration carries no image";
+        }
+      }
+
+      const assessment = assessComposeSecurity({
+        compose,
+        expectedDigest: options.expectedDigest ?? null,
+        resolvedImage,
+      });
+      const { missing } = assessment;
       return missing.length === 0
         ? pass(
-            `ExecStart /usr/bin/node ${bundlePath}; WorkingDirectory=/opt/nexup-bridge ` +
-              "(last live assignment of each directive; comments ignored)",
+            `deployed image ${assessment.resolvedDigest} (resolved from the definition${declaredImage && declaredImage.includes("${NEXUP_BRIDGE_IMAGE") ? " and the deployment environment" : ""}), ` +
+              `env_file ${ENV_FILE}, user ${composeValue(compose, "user")}, read-only root, all capabilities ` +
+              `dropped, no-new-privileges, restart ${composeValue(compose, "restart")}`,
           )
         : fail(
-            `the unit does not launch the shipped bundle as written — missing ${missing.join(", ")}` +
-              (execStarts.length === 0
-                ? " (no ExecStart directive found)"
-                : `; observed ExecStart: ${execStarts.join(" | ")}` +
-                  (execStarts.length > 1
-                    ? ` — systemd applies the LAST assignment (\`${effectiveExecStart}\`)`
-                    : "")),
+            `the definition would run an unpinned or privileged container — missing ${missing.join(", ")}`,
+            `image resolution: ${resolveNote}`,
           );
     }),
 
-    safety("P0.6", "A non-loopback NEXUP_BRIDGE_HOST is refused before any listener opens (opt-in)", () => {
+    safety("P0.6", "The bind and profile guards hold inside the shipped image (opt-in)", () => {
       if (!options.execProbes) {
         return skip(
-          "not run: this check executes the bundle once with NEXUP_BRIDGE_HOST=0.0.0.0 (it exits before `listen` and " +
-            "writes nothing). Re-run with --exec-probes to prove the loopback-only bind is enforced",
+          "not run: this check executes the bridge image three times with configurations it must REFUSE, and each run " +
+            "exits BEFORE `listen` (no port, no config, no state). Re-run with --exec-probes to prove the guards",
         );
       }
-      const result = probe.run("node", [bundlePath], {
-        env: {
-          NEXUP_BRIDGE_HOST: "0.0.0.0",
-          NEXUP_BRIDGE_HMAC_SECRET: SYNTHETIC_SECRET,
-          NEXUP_BRIDGE_ALLOWED_KEY_IDS: EXPECTED_KEY_ID,
-          HERMES_SESSION_TOKEN: SYNTHETIC_TOKEN,
-          HERMES_PROFILE: TARGET_PROFILE,
-          HERMES_RPC_URL: `ws://127.0.0.1:${HERMES_PORT}/api/ws`,
-        },
-      });
-      if (!result.ran) return skip(`could not execute the bundle (${result.reason})`);
-      const refused = result.code === 1 && /loopback/i.test(result.stderr);
-      return refused
-        ? pass(`exit=1 with "loopback" refusal on stderr — no listener was opened`)
+      // NOTE: the image's OWN entrypoint is used (`node /app/dist/main.js`). Adding
+      // `--entrypoint /usr/local/bin/node` REPLACES the entrypoint and drops the
+      // bundle argument, so node would start a REPL, read EOF and exit 0 — a check
+      // that could never observe a refusal. Found against the real daemon.
+      const base = ["run", "--rm", "-e", "NEXUP_BRIDGE_HOST=0.0.0.0"];
+      const shared = [
+        "-e",
+        `NEXUP_BRIDGE_HMAC_SECRET=${SYNTHETIC_SECRET}`,
+        "-e",
+        `NEXUP_BRIDGE_ALLOWED_KEY_IDS=${EXPECTED_KEY_ID}`,
+        "-e",
+        `HERMES_SESSION_TOKEN=${SYNTHETIC_TOKEN}`,
+        "-e",
+        `HERMES_PROFILE=${TARGET_PROFILE}`,
+        "-e",
+        `HERMES_RPC_URL=ws://127.0.0.1:${HERMES_PORT}/api/ws`,
+        imageRef,
+      ];
+
+      const withoutOptIn = probe.run("docker", [...base, ...shared]);
+      if (!withoutOptIn.ran) return skip(`could not execute the image (${withoutOptIn.reason})`);
+      if (!(withoutOptIn.code === 1 && /loopback/i.test(withoutOptIn.stderr))) {
+        return fail(
+          `expected exit=1 with a loopback refusal for NEXUP_BRIDGE_HOST=0.0.0.0 without the opt-in, got ` +
+            `exit=${withoutOptIn.code}`,
+          firstLine(withoutOptIn.stderr),
+        );
+      }
+
+      const withLoopbackBoundary = probe.run("docker", [
+        ...base,
+        "-e",
+        "NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND=true",
+        "-e",
+        "NEXUP_BRIDGE_TRUSTED_PROXIES=127.0.0.1,::1",
+        ...shared,
+      ]);
+      if (!withLoopbackBoundary.ran) return skip(`could not execute the image (${withLoopbackBoundary.reason})`);
+      if (!(withLoopbackBoundary.code === 1 && /TRUSTED_PROXIES/.test(withLoopbackBoundary.stderr))) {
+        return fail(
+          `the opt-in was honoured without naming the edge boundary: expected exit=1 mentioning ` +
+            `NEXUP_BRIDGE_TRUSTED_PROXIES, got exit=${withLoopbackBoundary.code}`,
+          firstLine(withLoopbackBoundary.stderr),
+        );
+      }
+
+      // The profile allowlist is proved on the ARTIFACT, not just in the config
+      // tests: the real daemon accepted `HERMES_PROFILE=adel` before this row was
+      // added, and `adel` names the same `/opt/data` root as `default`.
+      const offScopeProfile = probe.run("docker", [
+        "run",
+        "--rm",
+        "-e",
+        `HERMES_PROFILE=${FORBIDDEN_OFF_SCOPE_PROFILE}`,
+        ...shared,
+      ]);
+      if (!offScopeProfile.ran) return skip(`could not execute the image (${offScopeProfile.reason})`);
+      if (!(offScopeProfile.code === 1 && /ALLOWED_PROFILES|forbidden/i.test(offScopeProfile.stderr))) {
+        return fail(
+          `expected exit=1 refusing HERMES_PROFILE=${FORBIDDEN_OFF_SCOPE_PROFILE} (only ${TARGET_PROFILE} may be ` +
+            `addressed), got exit=${offScopeProfile.code}`,
+          firstLine(offScopeProfile.stderr),
+        );
+      }
+
+      return pass(
+        `exit=1 without the opt-in ("loopback" refusal), exit=1 with it while the trusted boundary is still ` +
+          `loopback-only (so client identity cannot collapse into one bucket), and exit=1 for ` +
+          `HERMES_PROFILE=${FORBIDDEN_OFF_SCOPE_PROFILE}`,
+      );
+    }),
+
+    safety("P0.7a", "Traefik is running and owns the web entrypoints on the host", () => {
+      const running = containerRunning(TRAEFIK_CONTAINER);
+      if (running === null) return skip("docker could not inspect the Traefik container");
+      if (!running) {
+        return fail(`${TRAEFIK_CONTAINER} is not running; the bridge hostname has no route and no TLS`);
+      }
+      const scan = listeners();
+      if (!scan.ran) return skip(`listen table unavailable (${scan.reason})`);
+      const web = scan.list.filter((listener) => listener.port === 80 || listener.port === 443);
+      return [80, 443].every((port) => web.some((listener) => listener.port === port))
+        ? pass(`${TRAEFIK_CONTAINER} is running and the host listens on :80 and :443 — Traefik owns the edge`)
         : fail(
-            `expected exit=1 with a loopback refusal for NEXUP_BRIDGE_HOST=0.0.0.0, got exit=${result.code}`,
-            firstLine(result.stderr),
+            `Traefik is running but the host does not listen on both :80 and :443; the ACME challenge and TLS ` +
+              `entrypoints are not reachable`,
+            web.map((listener) => `${listener.address}:${listener.port}`).join(", ") || "no :80/:443 listener",
           );
     }),
 
-    safety("P0.7a", `Caddy is >= v${MIN_CADDY_MAJOR}.${MIN_CADDY_MINOR} (request_body needs it)`, () => {
-      const result = probe.run("caddy", ["version"]);
-      if (!result.ran) return skip(`caddy is not executable (${result.reason})`);
-      if (result.code !== 0) return fail(`caddy version exited ${result.code}`, firstLine(result.stderr));
-      const version = firstLine(result.stdout);
-      const match = /v?(\d+)\.(\d+)/.exec(version);
-      if (!match) return fail(`could not parse a version from "${version}"`);
-      const major = Number.parseInt(match[1], 10);
-      const minor = Number.parseInt(match[2], 10);
-      const ok = major > MIN_CADDY_MAJOR || (major === MIN_CADDY_MAJOR && minor >= MIN_CADDY_MINOR);
-      return ok
-        ? pass(version)
-        : fail(`${version} is below v${MIN_CADDY_MAJOR}.${MIN_CADDY_MINOR}: the edge body cap would not be applied`);
+    safety("P0.7b", "The definition routes the bridge on its own hostname without buffering the run stream", () => {
+      if (compose === null) return skip(`compose file not readable at ${composePath} (${composeRead.reason})`);
+      const labels = composeLabelText(compose).filter((label) => label.startsWith("traefik."));
+      const routerPrefix = "traefik.http.routers.nexup-bridge.";
+      /**
+       * A LABEL LIST is applied in order, so the LAST value of a key is the
+       * effective one — the same rule `composeValue` applies to scalar keys. A
+       * later wrong value must therefore win, not be shadowed by the earlier one.
+       */
+      const lastLabel = (prefix: string): string | null => {
+        let found: string | null = null;
+        for (const label of labels) if (label.startsWith(prefix)) found = label.slice(prefix.length);
+        return found;
+      };
+      const rule = lastLabel(`${routerPrefix}rule=`);
+      const entrypoints = lastLabel(`${routerPrefix}entrypoints=`);
+      const hostOk =
+        rule !== null &&
+        /Host\(/.test(rule) &&
+        (options.bridgeHostname === undefined ||
+          rule.includes(options.bridgeHostname) ||
+          rule.includes("NEXUP_BRIDGE_HOSTNAME"));
+      const missing = [
+        hostOk ? null : `rule=Host(\`<bridge hostname>\`)`,
+        entrypoints === SECURE_ENTRYPOINT ? null : `entrypoints=${SECURE_ENTRYPOINT}`,
+        lastLabel(`${routerPrefix}tls=`) === "true" ? null : "tls=true",
+        lastLabel(`${routerPrefix}tls.certresolver=`) ? null : "tls.certresolver",
+        lastLabel("traefik.http.services.nexup-bridge.loadbalancer.server.port=") === String(BRIDGE_PORT)
+          ? null
+          : `loadbalancer.server.port=${BRIDGE_PORT}`,
+        labels.some((label) => label.includes(`middlewares.${HEADERS_MIDDLEWARE}.headers.stsSeconds`))
+          ? null
+          : `the ${HEADERS_MIDDLEWARE} security-header middleware`,
+        labels.some((label) => label.includes("buffering"))
+          ? "NO buffering middleware (it would hold SSE frames)"
+          : null,
+      ].filter((entry): entry is string => entry !== null);
+
+      const route = labels.length === 0 ? "no traefik labels at all" : `${labels.length} traefik label(s)`;
+      return missing.length === 0
+        ? pass(
+            `rule ${rule} on entrypoint ${entrypoints} with TLS via certresolver, service port ${BRIDGE_PORT}, ` +
+              `${HEADERS_MIDDLEWARE} headers, and no buffering middleware (${route})`,
+          )
+        : fail(`the edge would not route or protect the bridge — missing ${missing.join(", ")}`);
     }),
 
-    safety("P0.7b", "The Caddy site validates", () => {
-      const result = probe.run("caddy", ["validate", "--config", caddyfilePath]);
-      if (!result.ran) return skip(`caddy is not executable (${result.reason})`);
-      return result.code === 0
-        ? pass(`caddy validate: ok (${caddyfilePath})`)
-        : fail(`caddy validate failed for ${caddyfilePath}`, firstLine(result.stderr) || firstLine(result.stdout));
-    }),
-
-    /* P1 — environment and secret NAMES (runbook ids P1.1–P1.7) */
+    /* P1 — environment and secret NAMES (runbook ids P1.0–P1.8) */
     safety("P1.0a", `Bridge env file is present at ${envFile}`, () =>
-      envRead.ok ? pass(`${(envRead.content ?? "").split("\n").length} line(s) read`) : fail(`${envFile} is not readable (${envRead.reason})`),
+      envRead.ok
+        ? pass(`${(envRead.content ?? "").split("\n").length} line(s) read`)
+        : fail(`${envFile} is not readable (${envRead.reason})`),
     ),
 
     safety("P1.0b", `Every required env name is present (${REQUIRED_ENV_NAMES.length} names)`, () => {
@@ -559,24 +829,31 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
         : fail(`missing ${missing.length}: ${missing.join(", ")}`);
     }),
 
-    advisory("P1.1", `NEXUP_BRIDGE_MAX_BODY_BYTES reconciles with the edge cap (${DEFAULT_MAX_BODY_BYTES})`, () => {
+    safety("P1.1", `The bridge request-body cap is ${DEFAULT_MAX_BODY_BYTES} bytes (the control of record)`, () => {
       if (!env) return skip(`${envFile} could not be parsed`);
       if (!env.names.has("NEXUP_BRIDGE_MAX_BODY_BYTES")) {
-        return pass(`absent; the code default ${DEFAULT_MAX_BODY_BYTES} B is in use and matches Caddy's max_size 256KB (record this)`);
+        return pass(
+          `absent; the code default ${DEFAULT_MAX_BODY_BYTES} B is in use. This bridge is the ONLY body limit — ` +
+            `Traefik core cannot cap a request body without a plugin, and the built-in that can would buffer the SSE ` +
+            `run stream (P0.7b refuses it)`,
+        );
       }
       return env.equals("NEXUP_BRIDGE_MAX_BODY_BYTES", DEFAULT_MAX_BODY_BYTES)
-        ? pass(`set to ${DEFAULT_MAX_BODY_BYTES}, matching Caddy's max_size 256KB`)
-        : fail(`set to a value other than ${DEFAULT_MAX_BODY_BYTES}; reconcile it with Caddy or the larger body is truncated at the edge`);
+        ? pass(`set to ${DEFAULT_MAX_BODY_BYTES}, the value the edge policy assumes`)
+        : fail(
+            `set to a value other than ${DEFAULT_MAX_BODY_BYTES} while no edge cap exists: this IS the limit, so ` +
+              `change it only with the runbook`,
+          );
     }),
 
-    safety("P1.2", `Env file permissions are 600 ${SERVICE_USER}:${SERVICE_USER}`, () => {
+    safety("P1.2", "Env file permissions are 600 root:root", () => {
       const result = probe.run("stat", ["-c", "%a %U:%G", envFile]);
       if (!result.ran) return skip(`stat is not executable (${result.reason})`);
       if (result.code !== 0) return fail(`stat exited ${result.code} for ${envFile}`, firstLine(result.stderr));
       const observed = firstLine(result.stdout);
-      return observed === `600 ${SERVICE_USER}:${SERVICE_USER}`
+      return observed === "600 root:root"
         ? pass(observed)
-        : fail(`expected "600 ${SERVICE_USER}:${SERVICE_USER}", observed "${observed}"`);
+        : fail(`expected "600 root:root", observed "${observed}"`);
     }),
 
     safety("P1.3", `HMAC secret is >= ${MIN_SECRET_CHARS} characters (length only — never the value)`, () => {
@@ -591,14 +868,29 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
         : fail(`NEXUP_BRIDGE_ALLOWED_KEY_IDS does not contain ${EXPECTED_KEY_ID}; every signed request would be rejected`);
     }),
 
-    safety("P1.5", `Profile is pinned to ${TARGET_PROFILE} and ${FORBIDDEN_PROFILE} is never assigned`, () => {
+    safety("P1.5", `Only ${TARGET_PROFILE} is addressable: profile pinned AND allowlisted`, () => {
       if (!env) return skip(`${envFile} could not be parsed, so profile pinning cannot be checked`);
       if (env.assignsDefaultProfile) {
-        return fail(`a PROFILE assignment in ${envFile} is "${FORBIDDEN_PROFILE}" — that is Adel's profile and is refused at startup`);
+        return fail(
+          `a PROFILE assignment in ${envFile} is "${FORBIDDEN_PROFILE}" — that is Adel's profile and is refused at startup`,
+        );
       }
-      return env.equals("HERMES_PROFILE", TARGET_PROFILE)
-        ? pass(`HERMES_PROFILE=${TARGET_PROFILE}; no ${FORBIDDEN_PROFILE} assignment found`)
-        : fail(`HERMES_PROFILE is not ${TARGET_PROFILE}`);
+      if (!env.equals("HERMES_PROFILE", TARGET_PROFILE)) {
+        return fail(`HERMES_PROFILE is not ${TARGET_PROFILE}`);
+      }
+      // The allowlist is what the config HONOURS, so pinning the requested name
+      // alone is not enough: a widened allowlist makes an off-scope profile such
+      // as `adel` addressable (`adel` names the same /opt/data root as `default`).
+      if (!env.equals("NEXUP_BRIDGE_ALLOWED_PROFILES", TARGET_PROFILE)) {
+        return fail(
+          `NEXUP_BRIDGE_ALLOWED_PROFILES is not exactly ${TARGET_PROFILE}; any other name in it would be addressable ` +
+            `(and ${FORBIDDEN_PROFILE} could never be, since the config refuses it) — re-check that this is intentional`,
+        );
+      }
+      return pass(
+        `HERMES_PROFILE=${TARGET_PROFILE} with NEXUP_BRIDGE_ALLOWED_PROFILES=${TARGET_PROFILE}; no ` +
+          `${FORBIDDEN_PROFILE} assignment found, so no other profile is reachable`,
+      );
     }),
 
     advisory("P1.6", "Host clock (compare against the signing host; must agree within 60 s)", () => {
@@ -607,7 +899,8 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
       const skew = probe.run("date", ["-u", "+%Y-%m-%dT%H:%M:%SZ"]);
       return pass(
         `VPS epoch ${epoch || "<unreadable>"} (${skew.ran ? firstLine(skew.stdout) : "?"}); ` +
-          "compare with `date -u +%s` on the signing host — a difference over NEXUP_BRIDGE_CLOCK_SKEW_SECONDS (default 300 s) is the usual cause of a REPLAY 401",
+          "compare with `date -u +%s` on the signing host — a difference over NEXUP_BRIDGE_CLOCK_SKEW_SECONDS " +
+          "(default 300 s) is the usual cause of a REPLAY 401",
       );
     }),
 
@@ -619,14 +912,51 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
       ),
     ),
 
-    advisory("P1.8", "Trusted-proxy identity env matches the Caddy header the edge overwrites", () => {
+    safety("P1.8", "The client-identity boundary matches the bind (the E4 decision, enforced in config)", () => {
       if (!env) return skip(`${envFile} could not be parsed`);
-      const headerSet = env.names.has("NEXUP_BRIDGE_CLIENT_IP_HEADER");
-      const trusted = env.names.has("NEXUP_BRIDGE_TRUSTED_PROXIES");
+      const optedIn = envTruthy(env, "NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND");
+      const loopbackOnly = env.loopbackOnlyOf("NEXUP_BRIDGE_TRUSTED_PROXIES");
+      const header = env.names.has("NEXUP_BRIDGE_CLIENT_IP_HEADER");
+      const headerName = env.equals("NEXUP_BRIDGE_CLIENT_IP_HEADER", "x-forwarded-for")
+        ? "x-forwarded-for"
+        : "a single-value overwrite header";
+
+      if (!optedIn) {
+        return loopbackOnly === false
+          ? fail(
+              "the bind is loopback but NEXUP_BRIDGE_TRUSTED_PROXIES names an off-loopback boundary: the real proxy " +
+                "would not be trusted and the header would be ignored",
+            )
+          : pass(
+              "loopback bind: the edge boundary defaults to 127.0.0.1,::1, the only hop that can reach a loopback " +
+                "bridge. The bridge is never published",
+            );
+      }
+
+      if (loopbackOnly === null) {
+        return fail(
+          "NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND is set but NEXUP_BRIDGE_TRUSTED_PROXIES is not: off-loopback no peer " +
+            "is trusted, so every caller shares ONE pre-auth bucket (the bridge refuses this exact combination)",
+        );
+      }
+      if (loopbackOnly) {
+        return fail(
+          `NEXUP_BRIDGE_TRUSTED_PROXIES is loopback-only while the bridge binds off-loopback: the loopback default ` +
+            `trusts no peer, so all callers collapse into one pre-auth bucket and one client starves the rest`,
+        );
+      }
+      if (!header) {
+        return fail(
+          "NEXUP_BRIDGE_CLIENT_IP_HEADER is not set: with an off-loopback bind the address header is a decision, not " +
+            "a default (the bridge refuses to run without it)",
+        );
+      }
       return pass(
-        `${headerSet ? "NEXUP_BRIDGE_CLIENT_IP_HEADER is set" : "NEXUP_BRIDGE_CLIENT_IP_HEADER defaults to x-nexup-client-ip"}; ` +
-          `${trusted ? "NEXUP_BRIDGE_TRUSTED_PROXIES is set" : "NEXUP_BRIDGE_TRUSTED_PROXIES defaults to 127.0.0.1,::1"}. ` +
-          "deploy/Caddyfile must overwrite exactly this header name (header_up X-Nexup-Client-IP)",
+        `off-loopback bind with an explicit, non-loopback boundary and header ${headerName}. ` +
+          (headerName === "x-forwarded-for"
+            ? "Traefik APPENDS the peer to X-Forwarded-For, so the bridge reads the RIGHTMOST entry: anything to its " +
+              "left is caller-supplied and cannot mint a fresh pre-auth bucket"
+            : "the edge must OVERWRITE this header, never forward a caller-supplied value"),
       );
     }),
 
@@ -635,16 +965,15 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
      * and its single result feeds every P2 check. */
     ...compatChecks(analyze(probe, options)),
 
-    /* P3 — the four deployment-dependent findings, one result each so an
-     * operator can tick every runbook P3.x row. All advisory: none gates the
-     * deployment on its own (P3.2's gate is P1.3). */
-    advisory("P3.1", "Client identity behind the proxy: trusted-peer header with a socket fallback", () => {
+    /* P3 — the recorded findings, one result each so an operator can tick every
+     * runbook P3.x row. All advisory: none gates the deployment on its own
+     * (P3.2's gate is P1.3). */
+    advisory("P3.1", "Client identity behind the edge: a trusted peer plus a rightmost forwarded address", () => {
       const app = probe.read("bridge/src/api/app.ts");
       const identity = probe.read("bridge/src/auth/client-identity.ts");
-      const caddy = probe.read("bridge/deploy/Caddyfile");
-      if (!app.ok || app.content === null || !identity.ok || identity.content === null || !caddy.ok || caddy.content === null) {
+      if (!app.ok || app.content === null || !identity.ok || identity.content === null) {
         return skip(
-          "app.ts / client-identity.ts / Caddyfile are not all readable from this checkout; verify them from the build machine",
+          "app.ts / client-identity.ts are not readable from this checkout; verify them from the build machine",
         );
       }
       const missing = [
@@ -652,15 +981,19 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
         identity.content.includes("trustedProxies") && identity.content.includes("socketAddress")
           ? null
           : "client-identity.ts lacks the trusted-peer/socket-fallback pair",
-        /header_up\s+X-Nexup-Client-IP/.test(caddy.content)
+        identity.content.includes("rightmost") || identity.content.includes("EDGE_APPENDED_HEADERS")
           ? null
-          : "the Caddyfile does not overwrite X-Nexup-Client-IP",
+          : "client-identity.ts does not take the RIGHTMOST forwarded entry",
+        compose !== null && composePublishesPorts(compose)
+          ? "the deployment definition publishes a port, which bypasses the edge entirely"
+          : null,
       ].filter((entry): entry is string => entry !== null);
       return missing.length === 0
         ? pass(
-            "app.ts resolves the identity through client-identity.ts: the forwarded header is believed only from a trusted " +
-              "proxy peer and a bare IP literal, otherwise the socket address is used; the Caddyfile overwrites " +
-              "X-Nexup-Client-IP. Pre-auth bucket and audit remote are per client, not one global bucket. Residual: §8 L3",
+            "app.ts resolves the identity through client-identity.ts: the forwarded address is believed only from a " +
+              "trusted PROXY NETWORK, and for an edge-appended list only its rightmost entry is used, otherwise the " +
+              "socket address is used. The pre-auth bucket and audit remote are per client, not one global bucket. " +
+              "The bridge publishes no port. Residual: §8 L3",
           )
         : fail(`the proxy-identity chain is incomplete: ${missing.join("; ")}`);
     }),
@@ -703,60 +1036,108 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
           );
     }),
 
+    advisory("P3.5", "Supervisor invariants: fixed token from a file, no argv exposure, recreate via compose", () => {
+      const read = probe.read("bridge/deploy/nexup-bridge-supervisor.sh");
+      if (!read.ok || read.content === null) {
+        return skip("the supervisor script is not readable from this checkout; verify it from the build machine");
+      }
+      const body = read.content;
+      const missing = [
+        body.includes("TOKEN_FILE") ? null : "the token is read from a root-only file (TOKEN_FILE)",
+        /openssl rand|randomBytes|uuidgen/.test(body) ? "the token must not be generated per start" : null,
+        /-e\s+HERMES_DASHBOARD_SESSION_TOKEN=/.test(body)
+          ? "the token must be passed by NAME, never by value (argv is world-readable)"
+          : null,
+        body.includes("compose") && body.includes("up -d") ? null : "the bridge is re-created through the compose file",
+        /rm -f[^\n]*BRIDGE_CONTAINER/.test(body) ? null : "the stale bridge is removed before the replacement",
+        body.includes("ALLOWED_PROFILES") && body.includes("saieed") && !/-p\s+default/.test(body)
+          ? null
+          : "the profile is allowlisted to saieed and default is never addressed",
+        body.includes("/docker/hermes-agent-r3j1") || body.includes("--network host")
+          ? "the supervisor must not touch the managed Hermes deployment or bind a host network"
+          : null,
+      ].filter((entry): entry is string => entry !== null);
+      return missing.length === 0
+        ? pass(
+            "the supervisor reads the fixed token from a root-only file, passes it by name (never as an argument), " +
+              "re-creates the bridge through the compose file after removing the orphan, allowlists the profile to " +
+              "saieed, and touches neither the Hermes compose nor a host network",
+          )
+        : fail(`the supervisor would not recover safely: ${missing.join("; ")}`);
+    }),
+
     /* P4 — host state capture */
-    safety("P4.1", `Hermes listens on loopback only (:${HERMES_PORT})`, () => {
+    safety("P4.1", `Hermes (:${HERMES_PORT}) is namespace-local — nothing on the host reaches it`, () => {
+      const running = containerRunning(HERMES_CONTAINER);
+      if (running === null) return skip("docker could not inspect the Hermes container");
+      if (!running) return fail(`${HERMES_CONTAINER} is not running; the serve endpoint cannot exist`);
       const scan = listeners();
       if (!scan.ran) {
-        return skip(`listen table unavailable (${scan.reason}) — cannot prove Hermes is loopback-only, so this is NO-GO`);
+        return skip(`listen table unavailable (${scan.reason}) — cannot prove Hermes is not host-exposed, so this is NO-GO`);
       }
-      const hermes = scan.list.filter((listener) => listener.port === HERMES_PORT);
-      if (hermes.length === 0) return fail(`nothing is listening on ${HERMES_PORT}; Hermes is not running`);
-      const exposed = hermes.filter((listener) => !isLoopbackAddress(listener.address));
+      const exposed = scan.list.filter((listener) => listener.port === HERMES_PORT);
       return exposed.length === 0
-        ? pass(`loopback only: ${hermes.map((listener) => `${listener.address}:${listener.port}`).join(", ")}`)
+        ? pass(
+            `${HERMES_CONTAINER} is running and the host listens on :${HERMES_PORT} nowhere: the serve endpoint is ` +
+              `reachable only inside that namespace, which is what the bridge shares`,
+          )
         : fail(
-            `Hermes is exposed on a non-loopback address: ${exposed.map((listener) => `${listener.address}:${listener.port}`).join(", ")}`,
+            `the host listens on :${HERMES_PORT} (${exposed.map((listener) => `${listener.address}:${listener.port}`).join(", ")}), ` +
+              `so Hermes is reachable without the bridge`,
           );
     }),
 
-    safety("P4.2", `Bridge port ${BRIDGE_PORT} is free, or already loopback-bound`, () => {
+    safety("P4.2", `Bridge port ${BRIDGE_PORT} is never published on the host`, () => {
       const scan = listeners();
       if (!scan.ran) return skip(`listen table unavailable (${scan.reason})`);
-      const bridge = scan.list.filter((listener) => listener.port === BRIDGE_PORT);
-      if (bridge.length === 0) return pass(`free (nothing listening on ${BRIDGE_PORT})`);
-      const exposed = bridge.filter((listener) => !isLoopbackAddress(listener.address));
-      return exposed.length === 0
-        ? pass(`already bound on loopback (${bridge.map((listener) => listener.address).join(", ")}) — expected after install`)
-        : fail(`bound on a PUBLIC address: ${exposed.map((listener) => listener.address).join(", ")} — stop (abort criterion §6.1)`);
+      const published = scan.list.filter((listener) => listener.port === BRIDGE_PORT);
+      return published.length === 0
+        ? pass(
+            `nothing on the host listens on ${BRIDGE_PORT}: the bridge is reachable only through Traefik inside the ` +
+              `shared namespace (abort criterion §6.1 if this ever changes)`,
+          )
+        : fail(
+            `${BRIDGE_PORT} is published on the host: ${published.map((listener) => listener.address).join(", ")} — ` +
+              `stop (abort criterion §6.1)`,
+          );
     }),
 
     advisory("P4.3", `Dashboard state on port ${DASHBOARD_PORT} captured (must stay unchanged)`, () => {
       const scan = listeners();
+      const running = containerRunning(HERMES_CONTAINER);
       if (!scan.ran) return skip(`listen table unavailable (${scan.reason})`);
-      const dashboard = scan.list.filter((listener) => listener.port === DASHBOARD_PORT);
+      const published = scan.list.filter((listener) => listener.port === DASHBOARD_PUBLISHED_PORT);
       return pass(
-        dashboard.length === 0
-          ? `nothing listening on ${DASHBOARD_PORT} — record that and re-check in S14`
-          : `${dashboard.map((listener) => `${listener.address}:${listener.port}`).join(", ")} — record PID/start time and re-check in S14. Do NOT touch it`,
+        `${HERMES_CONTAINER} ${running === null ? "unknown" : running ? "running" : "NOT running"}; the host publishes ` +
+          `${published.length > 0 ? `${DASHBOARD_PUBLISHED_PORT} (the managed compose's dashboard mapping)` : `no :${DASHBOARD_PUBLISHED_PORT}`} — ` +
+          `record this and re-check in S14. The dashboard runs on :${DASHBOARD_PORT} inside the container and must stay up. Do NOT touch it`,
       );
     }),
 
-    advisory("P4.4", `Service user ${SERVICE_USER} exists`, () => {
-      const result = probe.run("id", [SERVICE_USER]);
-      if (!result.ran) return skip(`id is not executable (${result.reason})`);
-      return result.code === 0
-        ? pass(firstLine(result.stdout))
-        : pass(`absent — install §3.1 creates it idempotently`);
+    advisory("P4.4", "The bridge container runs as a non-root user", () => {
+      if (compose === null) return skip(`compose file not readable at ${composePath} (${composeRead.reason})`);
+      const user = composeValue(compose, "user");
+      return user !== null && !/^(0|root)(:|$)/.test(user) && user !== ""
+        ? pass(`user ${user} (the image declares the same numeric uid, so no override is needed)`)
+        : pass(`no non-root user is declared ("${user ?? "<absent>"}") — the image's USER applies; record which`);
     }),
 
     advisory("P4.5", "Install directories exist", () => {
-      const missing = [probe.stat("/opt/nexup-bridge"), probe.stat("/etc/nexup-bridge")].filter((info) => !info.exists).length;
-      return pass(missing === 0 ? "both /opt/nexup-bridge and /etc/nexup-bridge present" : `${missing} absent — install §3.2 creates them`);
+      const missing = [probe.stat("/opt/nexup-bridge"), probe.stat("/etc/nexup-bridge")].filter(
+        (info) => !info.exists,
+      ).length;
+      return pass(
+        missing === 0
+          ? "both /opt/nexup-bridge (compose file and build context) and /etc/nexup-bridge (env + token) present"
+          : `${missing} absent — §3.2 creates them`,
+      );
     }),
 
-    safety("P4.6", "systemd is available", () => {
+    safety("P4.6", "systemd is available (it owns the supervisor)", () => {
       const result = probe.run("systemctl", ["--version"]);
-      return result.ran && result.code === 0 ? pass(firstLine(result.stdout)) : skip(`systemctl not usable (${result.reason ?? `exit ${result.code}`})`);
+      return result.ran && result.code === 0
+        ? pass(firstLine(result.stdout))
+        : skip(`systemctl not usable (${result.reason ?? `exit ${result.code}`})`);
     }),
 
     safety("P4.7", `At least ${minFreeMiB} MiB free on /`, () => {
@@ -771,7 +1152,7 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
         : fail(`${availableMiB} MiB available, below the ${minFreeMiB} MiB floor`);
     }),
 
-    safety("P4.8", "Required binaries are on PATH", () => {
+    safety("P4.8", "Required binaries are on PATH (no host Node, no Caddy)", () => {
       const missing: string[] = [];
       const unavailable: string[] = [];
       for (const binary of REQUIRED_BINARIES) {
@@ -783,22 +1164,24 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
         return skip(`no PATH lookup could be executed (${unavailable.length} unavailable)`);
       }
       return missing.length === 0
-        ? pass(`${REQUIRED_BINARIES.length}/${REQUIRED_BINARIES.length} present`)
+        ? pass(`${REQUIRED_BINARIES.length}/${REQUIRED_BINARIES.length} present: ${REQUIRED_BINARIES.join(", ")}`)
         : fail(`missing: ${missing.join(", ")}`);
     }),
 
-    advisory("P4.9", "Firewall / listening-address evidence (best effort)", () => {
+    advisory("P4.9", "Listening-address evidence (best effort)", () => {
       const scan = listeners();
       if (!scan.ran) return skip(`listen table unavailable (${scan.reason})`);
       const exposed = scan.list.filter((listener) => !isLoopbackAddress(listener.address));
       return pass(
         exposed.length === 0
           ? "no non-loopback listeners observed in `ss` — record this as evidence"
-          : `${exposed.length} non-loopback listener(s): ${exposed.map((listener) => `${listener.address}:${listener.port}`).join(", ")} — confirm each is expected before proceeding`,
+          : `${exposed.length} non-loopback listener(s): ${exposed
+              .map((listener) => `${listener.address}:${listener.port}`)
+              .join(", ")} — confirm each is expected before proceeding`,
       );
     }),
 
-    advisory("P4.10", "Hermes source/install location discoverable (feeds the compatibility probe)", () => {
+    advisory("P4.10", "Hermes tree for the compatibility probe (it lives INSIDE the container now)", () => {
       if (options.hermesSrc) {
         return probe.stat(options.hermesSrc).exists
           ? pass(`${options.hermesSrc} exists (supplied via --hermes-src)`)
@@ -807,7 +1190,50 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
       const found = HERMES_SRC_GUESSES.filter((candidate) => probe.stat(candidate).exists);
       return found.length > 0
         ? pass(`candidate(s) present: ${found.join(", ")} — re-run with --hermes-src <dir> to run P2`)
-        : pass(`none of ${HERMES_SRC_GUESSES.join(", ")} exist; pass --hermes-src <dir> so P2 can search the installed build`);
+        : skip(
+            `none of ${HERMES_SRC_GUESSES.join(", ")} exist on the host: the installed tree is inside ${HERMES_CONTAINER}. ` +
+              `Materialize a read-only COPY (\`docker cp ${HERMES_CONTAINER}:/opt/hermes /tmp/nexup-hermes-src\`, then ` +
+              `remove it afterwards) and pass --hermes-src at it, so P2 can still read the emitted methods. The container ` +
+              `itself is never modified`,
+          );
+    }),
+
+    safety("P4.11", "The supervisor unit is installed, enabled and active (it owns recovery)", () => {
+      const enabled = probe.run("systemctl", ["is-enabled", SUPERVISOR_SERVICE]);
+      if (!enabled.ran) return skip(`systemctl is not usable (${enabled.reason})`);
+      const active = probe.run("systemctl", ["is-active", SUPERVISOR_SERVICE]);
+      const enabledState = firstLine(enabled.stdout) || `exit ${enabled.code}`;
+      const activeState = firstLine(active.stdout) || `exit ${active.code}`;
+      return enabled.code === 0 && enabledState === "enabled" && active.code === 0 && activeState === "active"
+        ? pass(`${SUPERVISOR_SERVICE} is enabled and active — the serve endpoint and the bridge lifecycle are supervised`)
+        : fail(
+            `${SUPERVISOR_SERVICE} is not installed and running (is-enabled: ${enabledState}, is-active: ${activeState}): ` +
+              `nothing would restart the serve endpoint or re-parent the bridge after a Hermes recreation`,
+          );
+    }),
+
+    safety("P4.12", "The serve endpoint accepts a connection on loopback inside the container (opt-in)", () => {
+      if (!options.execProbes) {
+        return skip(
+          `not run: this check opens one TCP connection to ${HERMES_PORT} from inside ${HERMES_CONTAINER} and invokes ` +
+            `no RPC method. Re-run with --exec-probes to prove the endpoint the bridge authenticates to actually answers`,
+        );
+      }
+      const result = probe.run("docker", [
+        "exec",
+        HERMES_CONTAINER,
+        HERMES_PYTHON,
+        "-c",
+        `import socket;socket.create_connection(('127.0.0.1',${HERMES_PORT}),2).close()`,
+      ]);
+      if (!result.ran) return skip(`could not exec into the Hermes container (${result.reason})`);
+      return result.code === 0
+        ? pass(`a TCP connection to 127.0.0.1:${HERMES_PORT} inside ${HERMES_CONTAINER} succeeded`)
+        : fail(
+            `${HERMES_CONTAINER} does not accept a connection on 127.0.0.1:${HERMES_PORT}: the supervised serve is not ` +
+              `running, so the bridge has nothing to authenticate to`,
+            firstLine(result.stderr),
+          );
     }),
   ];
 

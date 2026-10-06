@@ -1,9 +1,9 @@
 import type { NonceStore } from "../auth/nonce-store";
+import { resolveClientIdentity } from "../auth/client-identity";
 import type { PreAuthGuard } from "../auth/pre-auth-guard";
 import type { RateLimiter } from "../auth/rate-limit";
 import { verifySignedRequest } from "../auth/signature";
 import type { BridgeConfig } from "../config";
-import { assertNoCallerProfile } from "../hermes/profile-policy";
 import { isTerminalRunStatus, type RunManager, type RunSpec } from "../hermes/run-manager";
 import type { AuditLog } from "../observability/audit";
 import type { Logger } from "../observability/logger";
@@ -12,6 +12,7 @@ import type { Redactor } from "../redaction";
 import type { SseStream } from "../stream/sse";
 import { BRIDGE_ALLOWED_HERMES_METHODS, BRIDGE_EXCLUDED_HERMES_METHODS } from "../hermes/allowlist";
 import { BridgeError, toErrorEnvelope } from "./errors";
+import { parseRunSubmission } from "./run-request";
 
 /**
  * The bridge HTTP application.
@@ -69,13 +70,6 @@ export type BridgeAppDeps = {
 export type BridgeApp = { handle(request: BridgeRequest): Promise<BridgeResult> };
 
 const RUN_PATH = /^\/v1\/runs\/([^/]+)(?:\/(stream|cancel))?$/;
-
-/** Max length of a correlation field, so it cannot inflate a log or audit line. */
-const MAX_CORRELATION_FIELD_LENGTH = 128;
-
-function capField(value: string): string {
-  return value.length > MAX_CORRELATION_FIELD_LENGTH ? value.slice(0, MAX_CORRELATION_FIELD_LENGTH) : value;
-}
 
 type RunPathMatch = { id: string | null; action: "status" | "stream" | "cancel" } | null;
 
@@ -167,36 +161,16 @@ export function createBridgeApp(deps: BridgeAppDeps): BridgeApp {
     }
 
     if (method === "POST" && request.path === "/v1/runs") {
-      const body = parseJsonBody(request.body);
-      assertNoCallerProfile(body);
-
-      const instruction = typeof body.instruction === "string" ? body.instruction.trim() : "";
-      if (!instruction) throw new BridgeError("BAD_REQUEST", "instruction is required");
-      const contextJson =
-        typeof body.contextJson === "string" && body.contextJson.trim() ? body.contextJson : undefined;
-
-      const correlation = (body.correlation ?? {}) as Record<string, unknown>;
-      const actorId = capField(typeof correlation.actorId === "string" ? correlation.actorId : "");
-      const traceId = capField(typeof correlation.traceId === "string" ? correlation.traceId : "");
-      if (!actorId) throw new BridgeError("BAD_REQUEST", "correlation.actorId is required");
-      if (!traceId) throw new BridgeError("BAD_REQUEST", "correlation.traceId is required");
+      // Strict, declarative schema: an undeclared field is refused rather than
+      // ignored, so the bridge never accepts a scope it cannot honour.
+      const submission = parseRunSubmission(parseJsonBody(request.body), { maxTimeoutMs: config.timeoutMs });
 
       const spec: RunSpec = {
         // The authenticated key id travels with the run so its outcome is
         // attributed to the real caller, not to the run id.
         keyId,
-        instruction,
-        correlation: {
-          actorId,
-          traceId,
-          ...(typeof correlation.jobId === "string" ? { jobId: capField(correlation.jobId) } : {}),
-          ...(typeof correlation.missionId === "string" ? { missionId: capField(correlation.missionId) } : {}),
-        },
+        ...submission,
       };
-      if (contextJson) spec.contextJson = contextJson;
-      if (typeof body.timeoutMs === "number" && Number.isFinite(body.timeoutMs) && body.timeoutMs > 0) {
-        spec.timeoutMs = Math.min(body.timeoutMs, config.timeoutMs);
-      }
 
       const record = runManager.submit(spec);
       return {
@@ -265,7 +239,15 @@ export function createBridgeApp(deps: BridgeAppDeps): BridgeApp {
     async handle(request: BridgeRequest): Promise<BridgeResult> {
       const startedAt = Date.now();
       const nowMs = now().getTime();
-      const remoteKey = request.remote ?? "unknown";
+      // Behind the loopback proxy the socket peer is always the proxy, so the
+      // caller identity comes from the proxy-overwritten header — and only when
+      // the peer really is the proxy. Otherwise this is the peer address.
+      const remoteKey = resolveClientIdentity({
+        headers: request.headers,
+        socketAddress: request.remote,
+        trustedProxies: config.trustedProxyAddresses,
+        headerName: config.clientIpHeader,
+      });
       deps.metrics.inc("bridge_requests");
 
       // PRE-AUTHENTICATION GUARD. Runs before any signature/HMAC work so an
@@ -282,7 +264,7 @@ export function createBridgeApp(deps: BridgeAppDeps): BridgeApp {
             statusCode: 429,
             durationMs: Date.now() - startedAt,
             detail: "PREAUTH_RATE_LIMITED",
-            ...(request.remote ? { remote: request.remote } : {}),
+            remote: remoteKey,
           });
         }
         const throttled = toErrorEnvelope(
@@ -326,7 +308,7 @@ export function createBridgeApp(deps: BridgeAppDeps): BridgeApp {
           outcome: "allowed",
           statusCode: result.status,
           durationMs: Date.now() - startedAt,
-          ...(request.remote ? { remote: request.remote } : {}),
+          remote: remoteKey,
         });
         return result;
       } catch (error) {
@@ -349,7 +331,7 @@ export function createBridgeApp(deps: BridgeAppDeps): BridgeApp {
             statusCode: status,
             durationMs: Date.now() - startedAt,
             detail: envelope.error.code,
-            ...(request.remote ? { remote: request.remote } : {}),
+            remote: remoteKey,
           });
         }
         return { kind: "json", status, body: deps.redactor.value(envelope) };

@@ -1,5 +1,7 @@
 import { assertAddressableProfile, toWebSocketEndpoint } from "@/modules/workforce/runtimes/hermes/hermes-config";
 
+import { DEFAULT_CLIENT_IP_HEADER, DEFAULT_TRUSTED_PROXIES } from "./auth/client-identity";
+
 /**
  * Bridge configuration.
  *
@@ -42,6 +44,10 @@ export type BridgeConfig = {
   /** Max accepted |now - timestamp| for a signed request. */
   clockSkewSeconds: number;
   maxBodyBytes: number;
+  /** TCP peers whose client-address header is believed (the proxy boundary). */
+  trustedProxyAddresses: readonly string[];
+  /** Header the trusted proxy overwrites with the client address. */
+  clientIpHeader: string;
 };
 
 export type BridgeConfigResolution =
@@ -64,6 +70,10 @@ export const BRIDGE_DEFAULTS = {
   clockSkewSeconds: 300,
   maxBodyBytes: 256 * 1024,
   keyId: "nexup-vercel",
+  // Behind the loopback proxy every request shares one TCP peer, so the client
+  // address only has a trustworthy source once the peer is the proxy itself.
+  trustedProxyAddresses: DEFAULT_TRUSTED_PROXIES,
+  clientIpHeader: DEFAULT_CLIENT_IP_HEADER,
 } as const;
 
 function readBool(value: string | undefined, fallback: boolean): boolean {
@@ -179,6 +189,8 @@ export function resolveBridgeConfig(env: BridgeEnv = process.env): BridgeConfigR
     preAuthGlobalPerMinute: readPositiveInt(env.NEXUP_BRIDGE_PREAUTH_GLOBAL_PER_MINUTE, BRIDGE_DEFAULTS.preAuthGlobalPerMinute),
     clockSkewSeconds: readPositiveInt(env.NEXUP_BRIDGE_CLOCK_SKEW_SECONDS, BRIDGE_DEFAULTS.clockSkewSeconds),
     maxBodyBytes: readPositiveInt(env.NEXUP_BRIDGE_MAX_BODY_BYTES, BRIDGE_DEFAULTS.maxBodyBytes),
+    trustedProxyAddresses: readCsv(env.NEXUP_BRIDGE_TRUSTED_PROXIES, DEFAULT_TRUSTED_PROXIES),
+    clientIpHeader: env.NEXUP_BRIDGE_CLIENT_IP_HEADER?.trim() || BRIDGE_DEFAULTS.clientIpHeader,
   };
 
   return {

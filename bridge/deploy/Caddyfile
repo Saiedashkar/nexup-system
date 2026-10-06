@@ -16,6 +16,12 @@ bridge.hymanna.com {
 	# Streaming: disable response buffering so SSE frames flush immediately.
 	reverse_proxy 127.0.0.1:9220 {
 		flush_interval -1
+
+		# OVERWRITE the client-address header (never forward the caller's value).
+		# The bridge trusts this header only when the TCP peer is loopback, so an
+		# inbound spoof is both replaced here and unusable if this hop is bypassed.
+		header_up X-Nexup-Client-IP {http.request.remote.host}
+
 		transport http {
 			read_timeout 10m
 		}

@@ -20,6 +20,20 @@ const MIN_SECRET_LENGTH = 8;
 
 export const REDACTED = "[REDACTED]";
 
+/**
+ * The mission's scope declaration. It is part of the REPORT, not decoration:
+ * both probes print it in text AND carry it in `--json`, so a machine reader is
+ * told the same thing a human reader is (DEFAULT/Adel is out of scope; the only
+ * profile in scope is `saieed`).
+ */
+export const SCOPE_BANNER = [
+  "DEFAULT / ADEL:",
+  "OUT OF SCOPE — DO NOT TOUCH",
+  "",
+  "TARGET PROFILE:",
+  "saieed",
+].join("\n");
+
 export type Redactor = {
   /** Registers a value to be masked everywhere. Ignores short/empty values. */
   add(value: string | undefined | null): void;
@@ -68,6 +82,9 @@ export function renderReport(report: import("./runner").SuiteReport, options: Re
       suite: report.suite,
       title: scrub(report.title),
       host: scrub(report.host),
+      // The scope banner is part of the report, not decoration: a machine reader
+      // must see the same DEFAULT/ADEL out-of-scope warning the operator sees.
+      banner: options.banner ? scrub(options.banner) : "",
       verdict: report.verdict,
       exitCode: report.exitCode,
       counts: { pass: report.counts.pass, fail: report.counts.fail, skip: report.counts.skip },
@@ -79,12 +96,7 @@ export function renderReport(report: import("./runner").SuiteReport, options: Re
         severity: result.check.severity,
         status: result.outcome.status,
         blocking: result.blocking,
-        detail:
-          result.outcome.status === "pass"
-            ? scrub(result.outcome.evidence)
-            : result.outcome.status === "fail"
-              ? scrub(result.outcome.reason)
-              : scrub(result.outcome.reason),
+        detail: scrub(result.outcome.status === "pass" ? result.outcome.evidence : result.outcome.reason),
       })),
     };
     return JSON.stringify(payload, null, 2);
@@ -100,26 +112,22 @@ export function renderReport(report: import("./runner").SuiteReport, options: Re
   }
 
   for (const result of report.results) {
-    // The marker shows the GATE outcome, not just the check outcome: a
-    // safety-critical skip is as blocking as a failure, so it is labelled NOGO.
+    // The marker shows the GATE outcome, not just the check outcome. A failed
+    // check blocks at any severity ("do not proceed on a warning"), so it is
+    // always FAIL — the `(advisory)` suffix on the title still tells the reader
+    // which kind of row it is. A safety-critical skip is as blocking as a
+    // failure, so it is labelled NOGO.
     const marker =
       result.outcome.status === "pass"
         ? "PASS"
         : result.outcome.status === "fail"
-          ? result.blocking
-            ? "FAIL"
-            : "warn"
+          ? "FAIL"
           : result.blocking
             ? "NOGO"
             : "skip";
     const gated = result.check.severity === "safety" ? "" : " (advisory)";
     lines.push(`[${marker.padEnd(4)}] ${result.check.id.padEnd(6)} ${scrub(result.check.title)}${gated}`);
-    const detail =
-      result.outcome.status === "pass"
-        ? result.outcome.evidence
-        : result.outcome.status === "fail"
-          ? result.outcome.reason
-          : result.outcome.reason;
+    const detail = result.outcome.status === "pass" ? result.outcome.evidence : result.outcome.reason;
     if (detail) lines.push(`         ${result.outcome.status === "skip" ? "could not run: " : ""}${scrub(detail)}`);
     if (result.outcome.status === "fail" && result.outcome.evidence) {
       lines.push(`         evidence: ${scrub(result.outcome.evidence)}`);
@@ -137,7 +145,9 @@ export function renderReport(report: import("./runner").SuiteReport, options: Re
       `${report.counts.skip} could-not-run · gating failures: ${report.counts.blocking.length}`,
   );
   if (report.counts.blocking.length > 0) {
-    lines.push(`NO-GO — safety-critical checks did not pass: ${report.counts.blocking.join(", ")}`);
+    // "gating", not "safety-critical": a failed advisory row gates too (§1 P0
+    // do-not-proceed-on-a-warning), so the label must cover both kinds of row.
+    lines.push(`NO-GO — gating checks did not pass: ${report.counts.blocking.join(", ")}`);
   }
   lines.push(`${report.suite}: ${report.verdict}`);
   return lines.join("\n");

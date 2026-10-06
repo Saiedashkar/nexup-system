@@ -1,3 +1,4 @@
+import { SCOPE_BANNER } from "./output";
 import type { Check, CheckOutcome, HostProbe, Suite, TreeSearch } from "./runner";
 
 /**
@@ -110,9 +111,12 @@ export function analyze(probe: HostProbe, options: CompatOptions): CompatAnalysi
   return { search, rows, discovered: [...discovered].sort() };
 }
 
-export function compatChecks(probe: HostProbe, options: CompatOptions): Check[] {
-  const analysis = analyze(probe, options);
-
+/**
+ * The checks read a PRE-COMPUTED analysis. `analyze` walks the installed tree,
+ * so it must be called once per run and its result shared — `createHermesCompatSuite`
+ * is the single owner of that call.
+ */
+export function compatChecks(analysis: CompatAnalysis): Check[] {
   const notRunnable = (): CheckOutcome | null =>
     analysis.search.ran
       ? null
@@ -145,12 +149,15 @@ export function compatChecks(probe: HostProbe, options: CompatOptions): Check[] 
       id: "P2.5",
       title: `Hermes exposes ${LIVENESS_METHOD} (liveness) — degraded readiness if absent`,
       severity: "safety",
+      // The acceptance decision is made in exactly ONE place — `analyze()` sets
+      // the row verdict. This check only reports that verdict; it must not
+      // re-derive the rule from `options`, or the two could disagree.
       run: () => {
         const blocked = notRunnable();
         if (blocked) return blocked;
         const row = analysis.rows.find((candidate) => candidate.method === LIVENESS_METHOD);
         if (row?.found) return { status: "pass", evidence: row.evidence };
-        if (options.acceptedDegraded) {
+        if (row?.verdict === "ACCEPTED-DEGRADED") {
           return {
             status: "pass",
             evidence:
@@ -188,8 +195,7 @@ export function compatChecks(probe: HostProbe, options: CompatOptions): Check[] 
   return checks;
 }
 
-export function methodMatrix(probe: HostProbe, options: CompatOptions): string[] {
-  const analysis = analyze(probe, options);
+export function methodMatrix(analysis: CompatAnalysis, options: CompatOptions): string[] {
   const header = ["METHOD".padEnd(22), "EXPECTED".padEnd(9), "FOUND".padEnd(6), "VERDICT".padEnd(18), "EVIDENCE"].join("");
   const lines = [header, "-".repeat(header.length)];
   for (const row of analysis.rows) {
@@ -219,10 +225,15 @@ export function methodMatrix(probe: HostProbe, options: CompatOptions): string[]
 }
 
 export function createHermesCompatSuite(probe: HostProbe, options: CompatOptions): Suite {
+  // ONE tree walk per run: the checks and the printed matrix share this result.
+  const analysis = analyze(probe, options);
   return {
     name: HERMES_COMPAT,
     title: "HERMES METHOD COMPATIBILITY PROBE",
-    checks: compatChecks(probe, options),
-    notes: () => methodMatrix(probe, options),
+    // Same scope declaration as the pre-flight: the compat probe runs in the
+    // same mission context and must say so in text and in `--json`.
+    banner: SCOPE_BANNER,
+    checks: compatChecks(analysis),
+    notes: () => methodMatrix(analysis, options),
   };
 }

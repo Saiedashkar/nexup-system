@@ -41,17 +41,35 @@ describe("release runner — fail-closed policy", () => {
     expect(report.exitCode).toBe(1);
   });
 
-  it("lets an advisory check fail or skip without blocking", () => {
+  it("lets an advisory check that CANNOT RUN through without blocking", () => {
+    // The advisory rows that legitimately cannot run on the host (P0.1 build
+    // gate, P0.3 toolchain, P1.7 Vercel) are assigned to another venue by the
+    // runbook: they are reported and must not gate the host run.
     const report = evaluate(
       suiteOf(
-        { id: "A1", title: "advisory fail", severity: "advisory", run: () => ({ status: "fail", reason: "meh" }) },
-        { id: "A2", title: "advisory skip", severity: "advisory", run: () => ({ status: "skip", reason: "meh" }) },
+        { id: "A1", title: "advisory pass", severity: "advisory", run: () => ({ status: "pass", evidence: "fine" }) },
+        { id: "A2", title: "advisory skip", severity: "advisory", run: () => ({ status: "skip", reason: "off-host by design" }) },
       ),
       inertProbe,
     );
     expect(report.verdict).toBe("PASS");
     expect(report.exitCode).toBe(0);
     expect(report.counts.blocking).toEqual([]);
+  });
+
+  it("treats an advisory FAILURE as a warning that stops the run", () => {
+    // §1 P0: "Every check has a stated pass signal. Do not proceed on a
+    // warning." An advisory row that FAILS is a warning, so it gates exactly
+    // like a safety failure. (Previously it rendered as a cosmetic `warn` and
+    // the run still returned PASS — the defect this pins.)
+    const report = evaluate(
+      suiteOf({ id: "A3", title: "advisory fail", severity: "advisory", run: () => ({ status: "fail", reason: "wrong unit" }) }),
+      inertProbe,
+    );
+    expect(report.verdict).toBe("FAIL");
+    expect(report.exitCode).toBe(1);
+    expect(report.counts.blocking).toEqual(["A3"]);
+    expect(renderReport(report, { redactor: createRedactor() })).toContain("[FAIL] A3");
   });
 
   it("counts a check that throws as could-not-run rather than a pass", () => {

@@ -43,7 +43,13 @@
   },
   "files": {
     "/etc/nexup-bridge/bridge.env": "NEXUP_BRIDGE_ENABLED=true\nNEXUP_BRIDGE_HOST=127.0.0.1\nNEXUP_BRIDGE_PORT=9220\nNEXUP_BRIDGE_HMAC_SECRET=short-secret\nNEXUP_BRIDGE_ALLOWED_KEY_IDS=some-other-key\nHERMES_SESSION_TOKEN=SENTINEL_session_token_that_must_never_be_printed_abcdef\nHERMES_PROFILE=default\n",
-    "/opt/nexup-bridge/dist/main.js": "// recorded bundle excerpt\nexports.assertAllowedHermesMethod = function (method) {\n  if (!ALLOWED.includes(method)) throw new Error('Hermes method \"' + method + '\" is not permitted by the NEXUP bridge');\n};\n"
+    "/opt/nexup-bridge/dist/main.js": "// recorded bundle excerpt\nexports.assertAllowedHermesMethod = function (method) {\n  if (!ALLOWED.includes(method)) throw new Error('Hermes method \"' + method + '\" is not permitted by the NEXUP bridge');\n};\n",
+    "bridge/src/auth/client-identity.ts": "export function resolveClientIdentity(input) {\n  const socket = normalizeIp(input.socketAddress);\n  const peerIsProxy = input.trustedProxies.some((proxy) => normalizeIp(proxy) === socket);\n  return peerIsProxy ? normalizeIp(singleHeaderValue(input.headers, input.headerName)) ?? socket : socket;\n}\n",
+    "bridge/src/api/app.ts": "const request = { method: req.method, headers: req.headers, ...(req.socket.remoteAddress ? { remote: req.socket.remoteAddress } : {}) };\n",
+    "bridge/deploy/Caddyfile": "bridge.hymanna.com {\n\treverse_proxy 127.0.0.1:9220\n}\n",
+    "/etc/systemd/system/nexup-bridge.service": "[Unit]\nDescription=NEXUP VPS Bridge\n[Service]\nUser=nexup-bridge\nWorkingDirectory=/opt/nexup-bridge\n# ExecStart=/usr/bin/node /opt/nexup-bridge/dist/main.js\nExecStart=/usr/bin/node /srv/WRONG/main.js\nEnvironmentFile=/etc/nexup-bridge/bridge.env\n",
+    "bridge/src/auth/pre-auth-guard.ts": "  private sweepBuckets(nowMs: number): void {\n    for (const [key, bucket] of this.buckets) {\n      this.buckets.delete(key);\n    }\n  }\n",
+    "src/modules/workforce/runtimes/hermes/hermes-spawn.ts": "export function boundText(text: string, maxBytes: number) {\n  return { text, truncated: false };\n}\n"
   },
   "stats": {
     "/opt/nexup-bridge/dist/main.js": { "exists": true, "mode": "755", "size": 182734 }

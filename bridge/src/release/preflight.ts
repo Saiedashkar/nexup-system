@@ -1,4 +1,5 @@
-import { compatChecks, type CompatOptions } from "./hermes-compat";
+import { analyze, compatChecks, type CompatOptions } from "./hermes-compat";
+import { SCOPE_BANNER } from "./output";
 import type { Check, CheckOutcome, HostProbe, Suite } from "./runner";
 
 /**
@@ -38,14 +39,25 @@ export const MIN_CADDY_MINOR = 10;
 export const DEFAULT_MAX_BODY_BYTES = "262144";
 export const MIN_FREE_MIB = 200;
 
-/** The banner an operator must see before any result. */
-export const PREFLIGHT_BANNER = [
-  "DEFAULT / ADEL:",
-  "OUT OF SCOPE — DO NOT TOUCH",
-  "",
-  "TARGET PROFILE:",
-  TARGET_PROFILE,
-].join("\n");
+/** Node builtins a self-contained bundle may require without a package manager. */
+const NODE_BUILTINS = new Set([
+  "assert", "async_hooks", "buffer", "child_process", "cluster", "console", "constants", "crypto", "dgram",
+  "diagnostics_channel", "dns", "domain", "events", "fs", "http", "http2", "https", "inspector", "module",
+  "net", "os", "path", "perf_hooks", "process", "punycode", "querystring", "readline", "repl", "stream",
+  "string_decoder", "sys", "timers", "tls", "trace_events", "tty", "url", "util", "v8", "vm", "wasi",
+  "worker_threads", "zlib",
+]);
+
+function isNodeBuiltin(specifier: string): boolean {
+  return specifier.startsWith("node:") || NODE_BUILTINS.has(specifier.split("/")[0]);
+}
+
+/**
+ * The banner an operator must see before any result. Defined once in `output.ts`
+ * so the pre-flight and the compat probe cannot disagree; the test suite pins it
+ * against TARGET_PROFILE so the two copies of "saieed" cannot drift.
+ */
+export const PREFLIGHT_BANNER = SCOPE_BANNER;
 
 /** The allowlist refusal planted into every run's method guard, used as a bundling probe. */
 const BUNDLE_GUARD_STRING = "is not permitted by the NEXUP bridge";
@@ -55,8 +67,8 @@ const SYNTHETIC_SECRET = "nexup-preflight-synthetic-secret-not-a-real-key";
 const SYNTHETIC_TOKEN = "nexup-preflight-synthetic-token-not-real";
 
 /** Names the bridge actually reads. `NEXUP_BRIDGE_MAX_BODY_BYTES` is deliberately
- * excluded: it is absent from the shipped example (runbook P1.1) and is covered
- * by the advisory P1.8 instead. */
+ * excluded: it is absent from the shipped example and is covered by the dedicated
+ * runbook-P1.1 reconciliation check instead. */
 export const REQUIRED_ENV_NAMES = [
   "NEXUP_BRIDGE_ENABLED",
   "NEXUP_BRIDGE_HOST",
@@ -178,6 +190,147 @@ function firstLine(text: string): string {
   return (text.split("\n")[0] ?? "").trim();
 }
 
+/**
+ * The unit-file grammar P0.5 needs, taken from `systemd.syntax(7)` / `systemd.exec(5)`
+ * and pinned by the runbook's P0.5 paragraph:
+ *
+ *   - "Whitespace immediately before or after the `=` is ignored."
+ *   - "Lines ending in a backslash are concatenated with the following line while
+ *     reading and the backslash is replaced by a space character" — and "when a
+ *     comment line or lines follow a line ending with a backslash, the comment
+ *     block is ignored, so the continued line is concatenated with whatever
+ *     follows the comment block".
+ *   - "Empty lines and lines starting with `#` or `;` are ignored."
+ *   - Quotes (`"…"`, `'…'`) wrap a whole item and are removed.
+ *
+ * Two readings genuinely cannot be settled from a Windows workstation, so each is
+ * stated in the runbook AND asserted by `tests/release-cli.test.ts` ("P0.5 unit
+ * grammar") rather than left implicit: the LAST assignment of a directive is the
+ * effective one, and a trailing inline `# …` is NOT a comment (systemd has only
+ * whole-line comments). An unrecognised ExecStart prefix (`@`, `+`, `!`) is not
+ * modelled and therefore fails closed.
+ */
+const isCommentLine = (line: string): boolean => {
+  const trimmed = line.trim();
+  return trimmed.startsWith("#") || trimmed.startsWith(";");
+};
+
+/** Physical lines joined into the logical lines systemd actually reads. */
+function logicalLines(content: string): string[] {
+  const logical: string[] = [];
+  let joined: string | null = null;
+
+  for (const raw of content.split(/\r?\n/)) {
+    if (joined === null) {
+      joined = raw;
+    } else if (isCommentLine(raw)) {
+      // A comment block inside a continuation is dropped, not appended.
+      continue;
+    } else {
+      joined = `${joined} ${raw.trim()}`;
+    }
+
+    const head = joined.trimEnd();
+    if (head.endsWith("\\")) {
+      joined = head.slice(0, -1);
+      continue;
+    }
+    logical.push(joined);
+    joined = null;
+  }
+  if (joined !== null) logical.push(joined);
+  return logical;
+}
+
+/**
+ * Reads the live `Key=Value` directives out of a systemd unit, ignoring whole-line
+ * comments (`#`, `;`) and any line that is not that key. Deliberately NOT a
+ * substring search: P0.5 is about what the unit actually EXECUTES, so a correct
+ * path that is merely mentioned — or commented out — must not satisfy it. That
+ * false negative is exactly why this parses instead of grepping.
+ */
+function unitDirectives(content: string, key: string): string[] {
+  const values: string[] = [];
+  for (const rawLine of logicalLines(content)) {
+    const line = rawLine.trim();
+    if (!line || isCommentLine(line)) continue;
+    const eq = line.indexOf("=");
+    if (eq <= 0) continue;
+    if (line.slice(0, eq).trim() !== key) continue;
+    values.push(line.slice(eq + 1).trim());
+  }
+  return values;
+}
+
+/** The effective value of a directive: systemd applies the LAST assignment. */
+function lastUnitDirective(content: string, key: string): string | null {
+  const values = unitDirectives(content, key);
+  return values.length > 0 ? (values[values.length - 1] as string) : null;
+}
+
+/**
+ * `systemd.syntax(7)` QUOTING, to the depth P0.5 needs: quotes wrap an item and
+ * are removed. C-style escapes are not modelled — the check only needs the item
+ * list so it can find the entry script, and an unmodelled escape fails closed.
+ */
+function unitArgs(value: string): string[] {
+  const args: string[] = [];
+  let current = "";
+  let quote: '"' | "'" | null = null;
+  let open = false;
+
+  for (const char of value) {
+    if (quote !== null) {
+      if (char === quote) quote = null;
+      else current += char;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      open = true;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      if (open) {
+        args.push(current);
+        current = "";
+        open = false;
+      }
+      continue;
+    }
+    current += char;
+    open = true;
+  }
+  if (open) args.push(current);
+  return args;
+}
+
+/** Node options whose NEXT item is a module node loads. */
+const NODE_LOAD_OPTIONS = new Set(["-r", "--require", "--import", "--loader", "--experimental-loader"]);
+/** Node options whose NEXT item is a value, not the entry script. */
+const NODE_VALUE_OPTIONS = new Set(["-e", "--eval", "-p", "--print", "--inspect-port"]);
+
+/**
+ * Does `node <items…>` launch `bundlePath`? True when the bundle is the entry
+ * script (the first item that is not a Node option) or the module of a preload /
+ * import option. Any other position does NOT count — `node other.js <bundle>`
+ * mentions the bundle without running it, so accepting it would be the same class
+ * of false pass this check exists to prevent.
+ */
+function launchesBundle(args: readonly string[], bundlePath: string): boolean {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg.startsWith("-")) return arg === bundlePath;
+    if (NODE_LOAD_OPTIONS.has(arg)) {
+      if (args[index + 1] === bundlePath) return true;
+      index += 1;
+    } else if (NODE_VALUE_OPTIONS.has(arg)) {
+      index += 1;
+    }
+  }
+  return false;
+}
+
 const pass = (evidence: string): CheckOutcome => ({ status: "pass", evidence });
 const fail = (reason: string, evidence?: string): CheckOutcome =>
   evidence ? { status: "fail", reason, evidence } : { status: "fail", reason };
@@ -186,6 +339,19 @@ const skip = (reason: string): CheckOutcome => ({ status: "skip", reason });
 
 const safety = (id: string, title: string, run: Check["run"]): Check => ({ id, title, severity: "safety", run });
 const advisory = (id: string, title: string, run: Check["run"]): Check => ({ id, title, severity: "advisory", run });
+
+/**
+ * The ONE place the HMAC secret-strength policy is decided. Runbook P1.3 gates on
+ * it and runbook P3.2 (the weak-secret-acceptance finding) re-reports the same
+ * decision rather than re-deriving it, so the two rows cannot disagree.
+ */
+function secretStrength(env: EnvMetadata): CheckOutcome {
+  const length = env.lengthOf("NEXUP_BRIDGE_HMAC_SECRET");
+  if (length === null) return fail("NEXUP_BRIDGE_HMAC_SECRET is not set");
+  return length >= MIN_SECRET_CHARS
+    ? pass(`${length} characters (value not read into evidence)`)
+    : fail(`NEXUP_BRIDGE_HMAC_SECRET is ${length} characters; >= ${MIN_SECRET_CHARS} is required (32 random bytes as hex)`);
+}
 
 /* ── the suite ───────────────────────────────────────────────────────────── */
 
@@ -219,19 +385,14 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
   };
 
   const checks: Check[] = [
-    /* P0 — workspace, build, artifact integrity */
-    safety("P0.1", `Node on the host is >= v${MIN_NODE_MAJOR} (the bundle targets node22)`, () => {
-      const systemdNode = probe.run("/usr/bin/node", ["--version"]);
-      const anyNode = systemdNode.ran ? systemdNode : probe.run("node", ["--version"]);
-      if (!anyNode.ran) return skip(`node is not executable (${anyNode.reason ?? "not found"})`);
-      if (anyNode.code !== 0) return fail(`node --version exited ${anyNode.code}`, firstLine(anyNode.stderr));
-      const version = firstLine(anyNode.stdout);
-      const major = Number.parseInt(/v?(\d+)/.exec(version)?.[1] ?? "", 10);
-      if (!Number.isFinite(major)) return fail(`could not parse a version from "${version}"`);
-      return major >= MIN_NODE_MAJOR
-        ? pass(`${version} via ${systemdNode.ran ? "/usr/bin/node" : "node on PATH"}`)
-        : fail(`${version} is below v${MIN_NODE_MAJOR}; the bundle is built for node22`);
-    }),
+    /* P0 — workspace, build, artifact integrity (runbook ids P0.1–P0.7) */
+    advisory("P0.1", "Build gate: bridge typecheck and test suite are green at the recorded SHA", () =>
+      skip(
+        "run on the build machine, not the host: `npx tsc -p tsconfig.json --noEmit` and " +
+          "`npx vitest run --config vitest.config.ts` at the recorded HEAD, then record the result. The VPS has " +
+          "no repository checkout, so this probe cannot run the suite itself (runbook P0.1)",
+      ),
+    ),
 
     safety("P0.2a", `Bundle present at ${bundlePath}`, () => {
       const info = probe.stat(bundlePath);
@@ -254,7 +415,7 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
         : fail("the host digest differs from the recorded local digest — do not start this artifact", `host=${digest.digest}`);
     }),
 
-    safety("P0.3", "Method-allowlist guard survived bundling (P0.2 integrity probe)", () => {
+    safety("P0.2c", "Method-allowlist guard survived bundling (part of runbook P0.2)", () => {
       const read = probe.read(bundlePath);
       if (!read.ok || read.content === null) return skip(`bundle not readable (${read.reason})`);
       const count = read.content.split(BUNDLE_GUARD_STRING).length - 1;
@@ -263,13 +424,75 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
         : fail("the method-allowlist refusal is absent from the bundle; the compile-time guarantee is not evidenced");
     }),
 
-    advisory("P0.4", "systemd unit points at the shipped bundle path", () => {
+    advisory("P0.3", "Build-machine toolchain is available (runbook P0.3 — run P0 from a full checkout)", () =>
+      skip(
+        "a build-machine property, not host state: `bridge/` has no `node_modules` of its own, so the build and the suite " +
+          "resolve esbuild/vitest from the repository root. Run P0 from a full checkout (or `npm i` at the root first) and " +
+          "record it (runbook P0.3)",
+      ),
+    ),
+
+    safety("P0.4a", `Node on the host is >= v${MIN_NODE_MAJOR} (the VPS needs only /usr/bin/node — runbook P0.4)`, () => {
+      const systemdNode = probe.run("/usr/bin/node", ["--version"]);
+      const anyNode = systemdNode.ran ? systemdNode : probe.run("node", ["--version"]);
+      if (!anyNode.ran) return skip(`node is not executable (${anyNode.reason ?? "not found"})`);
+      if (anyNode.code !== 0) return fail(`node --version exited ${anyNode.code}`, firstLine(anyNode.stderr));
+      const version = firstLine(anyNode.stdout);
+      const major = Number.parseInt(/v?(\d+)/.exec(version)?.[1] ?? "", 10);
+      if (!Number.isFinite(major)) return fail(`could not parse a version from "${version}"`);
+      return major >= MIN_NODE_MAJOR
+        ? pass(`${version} via ${systemdNode.ran ? "/usr/bin/node" : "node on PATH"}`)
+        : fail(`${version} is below v${MIN_NODE_MAJOR}; the bundle is built for node22`);
+    }),
+
+    safety("P0.4b", "The shipped bundle is self-contained (no package manager needed on the host)", () => {
+      const read = probe.read(bundlePath);
+      if (!read.ok || read.content === null) return skip(`bundle not readable (${read.reason})`);
+      const specifiers = [...read.content.matchAll(/require\(\s*["']([^"']+)["']\s*\)/g)].map((match) => match[1]);
+      const external = [...new Set(specifiers)].filter((specifier) => !isNodeBuiltin(specifier));
+      return external.length === 0
+        ? pass(
+            `${specifiers.length} require() site(s), all node builtins — the VPS needs no package manager (runbook P0.4)`,
+          )
+        : fail(`the bundle requires ${external.join(", ")}; it is not self-contained and the VPS must not npm install`);
+    }),
+
+    advisory("P0.5", "systemd unit launches the shipped bundle (runbook P0.5)", () => {
       const read = probe.read(unitPath);
-      if (!read.ok || read.content === null) return skip(`unit not readable at ${unitPath} (${read.reason})`);
-      const hasExec = read.content.includes(`/usr/bin/node`) && read.content.includes(bundlePath);
-      return hasExec
-        ? pass(`ExecStart references /usr/bin/node and ${bundlePath}`)
-        : fail("the unit does not reference the expected interpreter and bundle path");
+      if (!read.ok || read.content === null) {
+        return skip(`unit not readable at ${unitPath} (${read.reason}) — install I.5 places it`);
+      }
+      // Live directives only, and the LAST assignment is the effective one. A `-`
+      // prefix on ExecStart ("ignore failure") does not change WHAT runs, so it is
+      // stripped before the argument list is assembled.
+      const execStarts = unitDirectives(read.content, "ExecStart").map((value) =>
+        value.startsWith("-") ? value.slice(1) : value,
+      );
+      const effectiveExecStart = execStarts.length > 0 ? (execStarts[execStarts.length - 1] as string) : null;
+      const execArgs = effectiveExecStart === null ? [] : unitArgs(effectiveExecStart);
+      const launches = execArgs[0] === "/usr/bin/node" && launchesBundle(execArgs.slice(1), bundlePath);
+
+      const workingDirs = unitArgs(lastUnitDirective(read.content, "WorkingDirectory") ?? "");
+      const missing = [
+        launches ? null : `ExecStart \`/usr/bin/node ${bundlePath}\``,
+        workingDirs.length === 1 && workingDirs[0] === "/opt/nexup-bridge"
+          ? null
+          : "WorkingDirectory=/opt/nexup-bridge",
+      ].filter((entry): entry is string => entry !== null);
+      return missing.length === 0
+        ? pass(
+            `ExecStart /usr/bin/node ${bundlePath}; WorkingDirectory=/opt/nexup-bridge ` +
+              "(last live assignment of each directive; comments ignored)",
+          )
+        : fail(
+            `the unit does not launch the shipped bundle as written — missing ${missing.join(", ")}` +
+              (execStarts.length === 0
+                ? " (no ExecStart directive found)"
+                : `; observed ExecStart: ${execStarts.join(" | ")}` +
+                  (execStarts.length > 1
+                    ? ` — systemd applies the LAST assignment (\`${effectiveExecStart}\`)`
+                    : "")),
+          );
     }),
 
     safety("P0.6", "A non-loopback NEXUP_BRIDGE_HOST is refused before any listener opens (opt-in)", () => {
@@ -322,18 +545,28 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
         : fail(`caddy validate failed for ${caddyfilePath}`, firstLine(result.stderr) || firstLine(result.stdout));
     }),
 
-    /* P1 — environment and secret NAMES */
-    safety("P1.0", `Bridge env file is present at ${envFile}`, () =>
+    /* P1 — environment and secret NAMES (runbook ids P1.1–P1.7) */
+    safety("P1.0a", `Bridge env file is present at ${envFile}`, () =>
       envRead.ok ? pass(`${(envRead.content ?? "").split("\n").length} line(s) read`) : fail(`${envFile} is not readable (${envRead.reason})`),
     ),
 
-    safety("P1.1", `Every required env name is present (${REQUIRED_ENV_NAMES.length} names)`, () => {
+    safety("P1.0b", `Every required env name is present (${REQUIRED_ENV_NAMES.length} names)`, () => {
       if (!env) return skip(`${envFile} could not be parsed, so names cannot be checked`);
       if (env.parseError) return fail(env.parseError);
       const missing = REQUIRED_ENV_NAMES.filter((name) => !env.names.has(name));
       return missing.length === 0
         ? pass(`${REQUIRED_ENV_NAMES.length}/${REQUIRED_ENV_NAMES.length} present`)
         : fail(`missing ${missing.length}: ${missing.join(", ")}`);
+    }),
+
+    advisory("P1.1", `NEXUP_BRIDGE_MAX_BODY_BYTES reconciles with the edge cap (${DEFAULT_MAX_BODY_BYTES})`, () => {
+      if (!env) return skip(`${envFile} could not be parsed`);
+      if (!env.names.has("NEXUP_BRIDGE_MAX_BODY_BYTES")) {
+        return pass(`absent; the code default ${DEFAULT_MAX_BODY_BYTES} B is in use and matches Caddy's max_size 256KB (record this)`);
+      }
+      return env.equals("NEXUP_BRIDGE_MAX_BODY_BYTES", DEFAULT_MAX_BODY_BYTES)
+        ? pass(`set to ${DEFAULT_MAX_BODY_BYTES}, matching Caddy's max_size 256KB`)
+        : fail(`set to a value other than ${DEFAULT_MAX_BODY_BYTES}; reconcile it with Caddy or the larger body is truncated at the edge`);
     }),
 
     safety("P1.2", `Env file permissions are 600 ${SERVICE_USER}:${SERVICE_USER}`, () => {
@@ -348,11 +581,7 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
 
     safety("P1.3", `HMAC secret is >= ${MIN_SECRET_CHARS} characters (length only — never the value)`, () => {
       if (!env) return skip(`${envFile} could not be parsed, so the secret length cannot be checked`);
-      const length = env.lengthOf("NEXUP_BRIDGE_HMAC_SECRET");
-      if (length === null) return fail("NEXUP_BRIDGE_HMAC_SECRET is not set");
-      return length >= MIN_SECRET_CHARS
-        ? pass(`${length} characters (value not read into evidence)`)
-        : fail(`NEXUP_BRIDGE_HMAC_SECRET is ${length} characters; >= ${MIN_SECRET_CHARS} is required (32 random bytes as hex)`);
+      return secretStrength(env);
     }),
 
     safety("P1.4", `Allowed key ids include ${EXPECTED_KEY_ID}`, () => {
@@ -382,17 +611,15 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
       );
     }),
 
-    advisory("P1.8", `NEXUP_BRIDGE_MAX_BODY_BYTES reconciles with the edge cap (${DEFAULT_MAX_BODY_BYTES})`, () => {
-      if (!env) return skip(`${envFile} could not be parsed`);
-      if (!env.names.has("NEXUP_BRIDGE_MAX_BODY_BYTES")) {
-        return pass(`absent; the code default ${DEFAULT_MAX_BODY_BYTES} B is in use and matches Caddy's max_size 256KB (record this)`);
-      }
-      return env.equals("NEXUP_BRIDGE_MAX_BODY_BYTES", DEFAULT_MAX_BODY_BYTES)
-        ? pass(`set to ${DEFAULT_MAX_BODY_BYTES}, matching Caddy's max_size 256KB`)
-        : fail(`set to a value other than ${DEFAULT_MAX_BODY_BYTES}; reconcile it with Caddy or the larger body is truncated at the edge`);
-    }),
+    advisory("P1.7", "Vercel-side runtime variables are configured (not host-inspectable)", () =>
+      skip(
+        "these live in Vercel, not on this host: HERMES_RUNTIME_TRANSPORT=BRIDGE, HERMES_RUNTIME_BRIDGE_URL, " +
+          "HERMES_RUNTIME_BRIDGE_KEY_ID, HERMES_RUNTIME_BRIDGE_SECRET, HERMES_RUNTIME_PROFILE=saieed. " +
+          "Verify in the Vercel dashboard and record it; the app fails closed (runtime simply not registered)",
+      ),
+    ),
 
-    advisory("P1.9", "Trusted-proxy identity env matches the Caddy header the edge overwrites", () => {
+    advisory("P1.8", "Trusted-proxy identity env matches the Caddy header the edge overwrites", () => {
       if (!env) return skip(`${envFile} could not be parsed`);
       const headerSet = env.names.has("NEXUP_BRIDGE_CLIENT_IP_HEADER");
       const trusted = env.names.has("NEXUP_BRIDGE_TRUSTED_PROXIES");
@@ -403,28 +630,66 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
       );
     }),
 
-    advisory("P1.7", "Vercel-side runtime variables are configured (not host-inspectable)", () =>
-      skip(
-        "these live in Vercel, not on this host: HERMES_RUNTIME_TRANSPORT=BRIDGE, HERMES_RUNTIME_BRIDGE_URL, " +
-          "HERMES_RUNTIME_BRIDGE_KEY_ID, HERMES_RUNTIME_BRIDGE_SECRET, HERMES_RUNTIME_PROFILE=saieed. " +
-          "Verify in the Vercel dashboard and record it; the app fails closed (runtime simply not registered)",
-      ),
-    ),
+    /* P2 — Hermes method compatibility (shared with the standalone suite).
+     * `analyze` walks the installed tree, so it is called exactly ONCE per run
+     * and its single result feeds every P2 check. */
+    ...compatChecks(analyze(probe, options)),
 
-    /* P2 — Hermes method compatibility (shared with the standalone suite) */
-    ...compatChecks(probe, options),
-
-    /* P3 — deployment-dependent findings, recorded */
-    advisory("P3.1", "Client identity behind the proxy: trusted-peer header, socket fallback", () => {
-      const read = probe.read("bridge/src/auth/client-identity.ts");
-      if (!read.ok || read.content === null) {
-        return skip("client-identity.ts not readable from this checkout; verify from the build machine");
+    /* P3 — the four deployment-dependent findings, one result each so an
+     * operator can tick every runbook P3.x row. All advisory: none gates the
+     * deployment on its own (P3.2's gate is P1.3). */
+    advisory("P3.1", "Client identity behind the proxy: trusted-peer header with a socket fallback", () => {
+      const app = probe.read("bridge/src/api/app.ts");
+      const identity = probe.read("bridge/src/auth/client-identity.ts");
+      const caddy = probe.read("bridge/deploy/Caddyfile");
+      if (!app.ok || app.content === null || !identity.ok || identity.content === null || !caddy.ok || caddy.content === null) {
+        return skip(
+          "app.ts / client-identity.ts / Caddyfile are not all readable from this checkout; verify them from the build machine",
+        );
       }
-      const trustedPeer = read.content.includes("trustedProxies");
-      const fallback = read.content.includes("socketAddress");
-      return trustedPeer && fallback
-        ? pass("identity is believed only from a trusted peer and otherwise falls back to the socket address (F1 hardening)")
-        : fail("the trusted-peer/fallback pair is not present; the pre-auth bucket would collapse behind the proxy");
+      const missing = [
+        app.content.includes("resolveClientIdentity(") ? null : "app.ts does not resolve the identity (still raw socket)",
+        identity.content.includes("trustedProxies") && identity.content.includes("socketAddress")
+          ? null
+          : "client-identity.ts lacks the trusted-peer/socket-fallback pair",
+        /header_up\s+X-Nexup-Client-IP/.test(caddy.content)
+          ? null
+          : "the Caddyfile does not overwrite X-Nexup-Client-IP",
+      ].filter((entry): entry is string => entry !== null);
+      return missing.length === 0
+        ? pass(
+            "app.ts resolves the identity through client-identity.ts: the forwarded header is believed only from a trusted " +
+              "proxy peer and a bare IP literal, otherwise the socket address is used; the Caddyfile overwrites " +
+              "X-Nexup-Client-IP. Pre-auth bucket and audit remote are per client, not one global bucket. Residual: §8 L3",
+          )
+        : fail(`the proxy-identity chain is incomplete: ${missing.join("; ")}`);
+    }),
+
+    advisory("P3.2", `Weak-secret acceptance: the code refuses only < 16 characters, so the policy is P1.3 (>= ${MIN_SECRET_CHARS})`, () => {
+      if (!env) return skip(`${envFile} could not be parsed, so the secret-strength finding cannot be re-reported`);
+      // Same finding as P1.3, reported from the SAME owner so the two rows can
+      // never disagree; P1.3 is the one that gates.
+      return secretStrength(env);
+    }),
+
+    advisory("P3.3", "Pre-auth sweep order: stale buckets linger to the cap, and no test covers live-bucket eviction", () => {
+      const read = probe.read("bridge/src/auth/pre-auth-guard.ts");
+      if (!read.ok || read.content === null) {
+        return skip("pre-auth-guard.ts not readable from this checkout; run the security suite from the build machine");
+      }
+      const record =
+        'run `npx vitest run tests/security.test.ts -t "refills over time and keeps its bucket state bounded"` on the build ' +
+        "machine and record it green; no test asserts a live bucket survives cap eviction (§8 L4). No host action";
+      const sweep = read.content.slice(read.content.indexOf("sweepBuckets"));
+      return sweep.length > 0 && sweep.slice(0, 600).includes("break;")
+        ? pass(
+            "sweepBuckets still breaks on the first live bucket (insertion order ≈ recency), so stale buckets linger until " +
+              `the cap — accepted. ${record}`,
+          )
+        : fail(
+            "sweepBuckets no longer breaks on the first live bucket: the accepted state in §8 L4 is absent, so re-read the sweep " +
+              `and reconcile the runbook before proceeding. ${record}`,
+          );
     }),
 
     advisory("P3.4", "Output bounding truncates by characters, not bytes (accepted limitation L7)", () => {
@@ -432,7 +697,10 @@ export function createPreflightSuite(probe: HostProbe, options: PreflightOptions
       if (!read.ok || read.content === null) return skip("hermes-spawn.ts not readable from this checkout");
       return /slice\(0,\s*maxBytes\)/.test(read.content)
         ? pass("character-based truncation confirmed; keep NEXUP_BRIDGE_MAX_OUTPUT_BYTES sane and confirm S11")
-        : pass("no character-based slice found; re-check the bounding implementation");
+        : fail(
+            "boundText no longer slices by characters: the accepted state in §8 L7 is absent, so re-read the bounding " +
+              "implementation and reconcile the runbook before proceeding",
+          );
     }),
 
     /* P4 — host state capture */

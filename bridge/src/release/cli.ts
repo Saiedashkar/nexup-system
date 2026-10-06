@@ -124,7 +124,17 @@ export function parseArgs(argv: readonly string[]): Parsed {
         break;
       case "--min-free-mib": {
         const value = next(index, arg);
-        if (value !== undefined) parsed.preflight.minFreeMiB = Number.parseInt(value, 10);
+        if (value !== undefined) {
+          // A rejected input, not a check: NaN would silently propagate into the
+          // free-space comparison and report "below the NaN MiB floor". Refuse it
+          // as a usage error instead (exit 2), before any probe runs.
+          const threshold = Number(value);
+          if (!Number.isInteger(threshold) || threshold <= 0) {
+            parsed.unknown.push(`--min-free-mib needs a positive integer, got "${value}"`);
+          } else {
+            parsed.preflight.minFreeMiB = threshold;
+          }
+        }
         index += 1;
         break;
       }
@@ -192,7 +202,7 @@ export function runReleaseCli(argv: readonly string[], io: CliIo = defaultIo): n
   const suite = createHermesCompatSuite(probe, compat);
   const redactor = createRedactor();
   report = evaluate(suite, probe);
-  io.out(renderReport(report, { format: parsed.format, redactor }));
+  io.out(renderReport(report, { format: parsed.format, redactor, banner: suite.banner }));
   return report.exitCode;
 }
 

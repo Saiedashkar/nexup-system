@@ -10,9 +10,11 @@
  *
  *   1. **Nothing is asserted, only checked.** A check returns evidence; the
  *      runner decides the verdict.
- *   2. **Fail-closed.** A safety-critical check that cannot run is NOT a pass —
- *      it blocks. Only an explicitly advisory check may be skipped without
- *      turning the verdict into a NO-GO.
+ *   2. **Fail-closed, and a warning stops the run.** A safety-critical check
+ *      that cannot run is NOT a pass — it blocks. An advisory check that merely
+ *      cannot run is reported without gating (the runbook assigns those rows to
+ *      another venue), but an advisory check that FAILS is a warning and blocks
+ *      too: §1 P0 says "Do not proceed on a warning." See `evaluate`.
  */
 
 export type CheckSeverity =
@@ -74,9 +76,19 @@ export function evaluate(suite: Suite, probe: HostProbe): SuiteReport {
       // A check that throws is a check that did not run. Never a pass.
       outcome = { status: "skip", reason: `check threw: ${error instanceof Error ? error.message : String(error)}` };
     }
-    // FAIL-CLOSED: any non-pass on a safety check blocks. An advisory check may
-    // fail or skip freely — it is reported but cannot green-light anything.
-    const blocking = check.severity === "safety" && outcome.status !== "pass";
+    // THE GATE, taken from the runbook's own words.
+    //
+    //   1. A check that FAILS is a warning and blocks at ANY severity (§1 P0:
+    //      "Every check has a stated pass signal. Do not proceed on a
+    //      warning."). Severity says whether a row may be *unavailable* here,
+    //      not whether its failure is harmless. Treating an advisory failure as
+    //      a cosmetic `warn` let a real misconfiguration leave the run at PASS.
+    //   2. A check that CANNOT RUN blocks only when it is safety-critical. The
+    //      runbook states fail-closed for SAFETY checks; the advisory rows that
+    //      legitimately cannot run on the host (P0.1 build gate, P0.3 toolchain,
+    //      P1.7 Vercel) are assigned elsewhere and must not gate the host run.
+    const blocking =
+      outcome.status === "fail" || (check.severity === "safety" && outcome.status === "skip");
     return { check, outcome, blocking };
   });
 

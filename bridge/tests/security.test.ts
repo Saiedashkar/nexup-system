@@ -12,6 +12,10 @@ import {
 } from "@/modules/workforce/bridge/signing";
 
 import { BridgeError, mapTransportErrorKind, toErrorEnvelope, httpStatusForCode } from "../src/api/errors";
+import {
+  DEFAULT_CLIENT_IP_HEADER,
+  DEFAULT_TRUSTED_PROXIES,
+} from "../src/auth/client-identity";
 import { NonceStore } from "../src/auth/nonce-store";
 import { DEFAULT_AUTH_FAILURE_AUDIT_MAX, PreAuthGuard } from "../src/auth/pre-auth-guard";
 import { RateLimiter } from "../src/auth/rate-limit";
@@ -272,6 +276,24 @@ describe("7. configuration", () => {
     expect(resolution.reason).not.toContain(SECRET);
     expect(resolution.config).toMatchObject({ hmacSecretPresent: true });
     expect(resolution.config.hermes.sessionTokenPresent).toBe(true);
+  });
+
+  it("trusts only loopback proxies by default, and accepts an explicit boundary", () => {
+    const defaults = resolveBridgeConfig(FULL_ENV);
+    expect(defaults.enabled).toBe(true);
+    if (!defaults.enabled) return;
+    expect(defaults.config.trustedProxyAddresses).toEqual([...DEFAULT_TRUSTED_PROXIES]);
+    expect(defaults.config.clientIpHeader).toBe(DEFAULT_CLIENT_IP_HEADER);
+
+    const pinned = resolveBridgeConfig({
+      ...FULL_ENV,
+      NEXUP_BRIDGE_TRUSTED_PROXIES: "10.0.0.9, 10.0.0.10",
+      NEXUP_BRIDGE_CLIENT_IP_HEADER: "X-Real-Client-IP",
+    });
+    expect(pinned.enabled).toBe(true);
+    if (!pinned.enabled) return;
+    expect(pinned.config.trustedProxyAddresses).toEqual(["10.0.0.9", "10.0.0.10"]);
+    expect(pinned.config.clientIpHeader).toBe("X-Real-Client-IP");
   });
 
   it("reads the secrets separately from the config", () => {

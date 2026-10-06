@@ -197,6 +197,87 @@ describe("F5.3 an arbitrary method is rejected at runtime", () => {
   });
 });
 
+describe("F5.5 cancellation reaches the wire as session.interrupt", () => {
+  /** Answers session.create, keeps prompt.submit in flight, answers the interrupt. */
+  function stallingServer(): (frame: RpcFrame, socket: FakeWebSocket) => void {
+    return (frame, socket) => {
+      if (frame.method === DEFAULT_HERMES_RPC_PROTOCOL.methods.sessionCreate) {
+        socket.reply(frame.id as string, { session_id: "sess_1" });
+        return;
+      }
+      if (frame.method === DEFAULT_HERMES_RPC_PROTOCOL.methods.promptSubmit) {
+        // Acknowledged but never completed: the run stays in flight so a cancel
+        // has something real to interrupt.
+        socket.reply(frame.id as string, {});
+        return;
+      }
+      if (frame.method === DEFAULT_HERMES_RPC_PROTOCOL.methods.sessionInterrupt) {
+        socket.reply(frame.id as string, {});
+      }
+    };
+  }
+
+  it("sends the allowlisted session.interrupt for a live run", async () => {
+    const { factory, getSocket } = bridgeFactory({ server: stallingServer() });
+    const manager = new RunManager({
+      profile: "saieed",
+      timeoutMs: 5_000,
+      maxOutputBytes: 8_192,
+      maxConcurrency: 2,
+      transportFactory: factory,
+      logger: new Logger({ sink: () => {}, level: "error" }),
+      metrics: new Metrics(),
+    });
+    const record = manager.submit({
+      keyId: "nexup-vercel",
+      instruction: "do the thing",
+      correlation: { actorId: "actor_1", traceId: "trace_1" },
+    });
+    await waitFor(() => record.status === "RUNNING" && record.executionId === "sess_1");
+
+    await manager.abort(record.runId);
+
+    expect(record.status).toBe("CANCELLED");
+    const sent = (getSocket()?.received ?? []).map((frame) => frame.method);
+    // The interrupt is the documented cancellation path — not a generic RPC.
+    expect(sent).toContain(HERMES_RPC_METHODS.sessionInterrupt);
+    for (const method of sent) expect(BRIDGE_ALLOWED_HERMES_METHODS).toContain(method);
+  });
+
+  it("sends no interrupt when the run never learned a session id", async () => {
+    // `session.create` is left unanswered, so there is no session to interrupt.
+    // The run must still finalize as CANCELLED — without a bogus interrupt
+    // naming a session that does not exist.
+    const { factory, getSocket } = bridgeFactory({
+      server: (frame, socket) => {
+        if (frame.method === DEFAULT_HERMES_RPC_PROTOCOL.methods.sessionInterrupt) socket.reply(frame.id as string, {});
+      },
+    });
+    const manager = new RunManager({
+      profile: "saieed",
+      timeoutMs: 5_000,
+      maxOutputBytes: 8_192,
+      maxConcurrency: 2,
+      transportFactory: factory,
+      logger: new Logger({ sink: () => {}, level: "error" }),
+      metrics: new Metrics(),
+    });
+    const record = manager.submit({
+      keyId: "nexup-vercel",
+      instruction: "do the thing",
+      correlation: { actorId: "actor_1", traceId: "trace_1" },
+    });
+    await waitFor(() => record.status === "RUNNING");
+    expect(record.executionId).toBeUndefined();
+
+    await manager.abort(record.runId);
+
+    expect(record.status).toBe("CANCELLED");
+    const sent = (getSocket()?.received ?? []).map((frame) => frame.method);
+    expect(sent).not.toContain(HERMES_RPC_METHODS.sessionInterrupt);
+  });
+});
+
 describe("F5.4 the runtime guard is exercised on the outbound path", () => {
   it("blocks a tampered protocol end-to-end through RunManager with METHOD_NOT_ALLOWED", async () => {
     const { factory, getSocket } = bridgeFactory({

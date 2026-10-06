@@ -1,3 +1,4 @@
+import { HermesBridgeClient } from "@/modules/workforce/runtimes/hermes/bridge-client";
 import type { HermesRpcEvent } from "@/modules/workforce/runtimes/hermes/hermes-rpc-transport";
 import type {
   HermesTransport,
@@ -85,6 +86,33 @@ export class FakeHermesTransport implements HermesTransport {
 
 export function fakeFactory(behavior: FakeBehavior): BridgeTransportFactory {
   return ({ onEvent, onSession }) => new FakeHermesTransport(behavior, onEvent, onSession);
+}
+
+/**
+ * Replays the app-side client's REAL wire payload.
+ *
+ * The bridge and the client are separate artifacts, so the strongest contract
+ * check is to let the client build and serialize the body, then feed exactly
+ * those bytes to the bridge. If the client ever adds or renames a field, the
+ * bridge's strict schema test fails instead of silently dropping it at deploy.
+ */
+export async function wireBodyFromAppClient(
+  input: Parameters<HermesBridgeClient["submitRun"]>[0],
+): Promise<Record<string, unknown>> {
+  let sent = "";
+  const client = new HermesBridgeClient({
+    baseUrl: "https://bridge.example",
+    keyId: "nexup-vercel",
+    secret: "0123456789abcdef0123456789abcdef",
+    fetchImpl: (async (_url: string, init: { body?: string }) => {
+      sent = String(init?.body ?? "");
+      return new Response(JSON.stringify({ runId: "run_1", streamUrl: "/v1/runs/run_1/stream", status: "QUEUED" }), {
+        status: 201,
+      });
+    }) as unknown as typeof fetch,
+  });
+  await client.submitRun(input);
+  return JSON.parse(sent) as Record<string, unknown>;
 }
 
 export async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {

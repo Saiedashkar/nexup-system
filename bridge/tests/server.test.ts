@@ -66,6 +66,41 @@ describe("bridge server adapter", () => {
     expect(seen.at(-1)?.query).toBeUndefined();
   });
 
+  it("streams SSE with the headers that keep frames unbuffered, and exact framing", async () => {
+    const app: BridgeApp = {
+      async handle() {
+        return {
+          kind: "sse",
+          status: 200,
+          headers: { "x-nexup-run-id": "run_1" },
+          open: (stream) => {
+            stream.send("delta", { text: "Hello " });
+            stream.send("delta", { text: "world" });
+            stream.send("complete", { status: "succeeded", text: "Hello world" });
+            stream.close();
+            return () => {};
+          },
+        };
+      },
+    };
+    const port = await start(app);
+    const response = await fetch(`http://127.0.0.1:${port}/v1/runs/run_1/stream`);
+
+    expect(response.status).toBe(200);
+    // A proxy that buffers the response would defeat live streaming, so these
+    // four headers are part of the contract, not cosmetics.
+    expect(response.headers.get("content-type")).toBe("text/event-stream; charset=utf-8");
+    expect(response.headers.get("cache-control")).toBe("no-cache, no-transform");
+    expect(response.headers.get("x-accel-buffering")).toBe("no");
+    expect(response.headers.get("x-nexup-run-id")).toBe("run_1");
+
+    expect(await response.text()).toBe(
+      'event: delta\ndata: {"text":"Hello "}\n\n' +
+        'event: delta\ndata: {"text":"world"}\n\n' +
+        'event: complete\ndata: {"status":"succeeded","text":"Hello world"}\n\n',
+    );
+  });
+
   it("rejects an oversized body with 413 before buffering without bound", async () => {
     const app: BridgeApp = {
       async handle() {

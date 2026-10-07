@@ -163,7 +163,17 @@ export type HermesErrorCategory =
   | "UNSUPPORTED";
 
 export type HermesExecutionRecord = {
+  /**
+   * The handle for `status`/`cancel`/`resume`: the BRIDGE's run id on the bridge
+   * transport, the Hermes session id elsewhere. See `extractExecutionId`.
+   */
   executionId: string | null;
+  /**
+   * The provider's own execution reference when it differs from the handle —
+   * on the bridge transport, the Hermes session id the run used. Provider
+   * metadata: reported for audit/trace, never used as a handle.
+   */
+  providerExecutionId?: string;
   status: AgentExecutionStatus;
   outputText?: string;
   output?: unknown;
@@ -196,8 +206,27 @@ export function parseHermesRaw(raw: string): { parsed: Record<string, unknown> |
 
 function extractExecutionId(parsed: Record<string, unknown> | null): string | null {
   if (!parsed) return null;
-  const value = parsed.executionId ?? parsed.execution_id ?? parsed.id ?? parsed.runId;
+  // `runId` FIRST. On the bridge transport it is the bridge's OWN run id — the
+  // only id its `status`/`cancel`/`stream` routes accept — while `executionId`
+  // is the Hermes session it reports alongside. Preferring the session id (the
+  // previous order) made every status/cancel call fail: measured against the
+  // deployed bridge, `GET /v1/runs/58b92fb1` → 404 RUN_NOT_FOUND versus
+  // `GET /v1/runs/run_muxjhitf_79c4e201` → 200 COMPLETED for the same run.
+  const value = parsed.runId ?? parsed.executionId ?? parsed.execution_id ?? parsed.id;
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+/** The provider's own reference, when it is not the handle we kept. */
+function extractProviderExecutionId(
+  parsed: Record<string, unknown> | null,
+  handle: string | null,
+): string | undefined {
+  if (!parsed) return undefined;
+  for (const key of ["executionId", "execution_id", "sessionId", "session_id"] as const) {
+    const value = parsed[key];
+    if (typeof value === "string" && value.trim() && value !== handle) return value;
+  }
+  return undefined;
 }
 
 function extractStatus(parsed: Record<string, unknown> | null): AgentExecutionStatus {
@@ -300,6 +329,8 @@ export function normalizeHermesTransportResult(input: {
     durationMs: result.durationMs,
     completedAt: now.toISOString(),
   };
+  const providerExecutionId = extractProviderExecutionId(parsed, executionId);
+  if (providerExecutionId) record.providerExecutionId = providerExecutionId;
   if (output !== undefined) record.output = output;
   if (outputText !== undefined) record.outputText = outputText;
 

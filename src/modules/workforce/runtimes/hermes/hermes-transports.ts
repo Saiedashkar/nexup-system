@@ -411,11 +411,20 @@ export function createHermesTransport(
     // The bridge is the ONLY production path to a loopback-only Hermes. The
     // client signs with the shared HMAC primitive and never sees the Hermes
     // session token.
+    //
+    // `bridgeFetch ?? fetchImpl`: the factory (`createHermesRuntimeFromEnv`)
+    // passes the GENERAL injected fetch, while only this branch knew about
+    // `bridgeFetch`. The two are now both honoured, because a caller that
+    // injects a fetch and silently gets `globalThis.fetch` instead reaches the
+    // real network in tests and in any proxied deployment. Measured: a test
+    // double for a stalled bridge was bypassed entirely and the request went to
+    // DNS for the fake host.
+    const injectedFetch = options.bridgeFetch ?? options.fetchImpl;
     const client = new HermesBridgeClient({
       baseUrl: config.bridgeEndpoint ?? "",
       keyId: config.bridgeKeyId ?? "nexup-vercel",
       secret: options.bridgeSecret ?? "",
-      ...(options.bridgeFetch ? { fetchImpl: options.bridgeFetch } : {}),
+      ...(injectedFetch ? { fetchImpl: injectedFetch } : {}),
       ...(options.bridgeNonceFactory ? { nonceFactory: options.bridgeNonceFactory } : {}),
       ...(options.bridgeNow ? { now: options.bridgeNow } : {}),
     });

@@ -145,7 +145,13 @@ export class HermesBridgeTransport implements HermesTransport {
     }
 
     const frameText = typeof terminal.data.text === "string" && terminal.data.text.length > 0 ? terminal.data.text : text;
-    const body: Record<string, unknown> = { ...terminal.data, text: frameText };
+    // BOTH identities travel. The bridge's OWN run id is the handle its
+    // `status`/`cancel`/`stream` routes are keyed by; the `executionId` in its
+    // terminal frame is the Hermes session (provider metadata). The frame
+    // carries only the latter, so the former is added here — measured against
+    // the deployed bridge, using the session id as the handle made every
+    // status/cancel call answer `404 RUN_NOT_FOUND`.
+    const body: Record<string, unknown> = { ...terminal.data, runId, text: frameText };
     return { ok: true, raw: JSON.stringify(body) };
   }
 

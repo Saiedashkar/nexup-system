@@ -17,6 +17,8 @@
 //
 // Subcommands:
 //
+//   node scripts/dev-db.mjs start     just the cluster (loopback, trust auth)
+//   node scripts/dev-db.mjs restart   force a FRESH cluster (clears a wedged one)
 //   node scripts/dev-db.mjs up        cluster + the PRE-MIGRATION schema
 //   node scripts/dev-db.mjs migrate   apply the proposed additive migrations,
 //                                     verify them, and write the evidence file
@@ -106,11 +108,15 @@ const EXPECTED_NEW_TABLES = [
 ];
 
 function run(command, args, options = {}) {
+  // Time-bounded: on Windows a wedged backend can make psql block forever, and
+  // a harness that hangs is worse than one that fails. Callers may override.
   const result = spawnSync(command, args, {
     cwd: REPO_ROOT,
     encoding: "utf8",
     env: { ...process.env, ...(options.env ?? {}) },
     maxBuffer: 64 * 1024 * 1024,
+    timeout: options.timeout ?? 90_000,
+    killSignal: "SIGKILL",
   });
   return {
     status: result.status ?? (result.error ? -1 : 0),
@@ -179,6 +185,8 @@ function ensureCluster() {
 
   if (clusterRunning()) return;
 
+  clearStalePostmaster();
+
   must(
     "pg_ctl start",
     run(PG_CTL, [
@@ -187,7 +195,11 @@ function ensureCluster() {
       // autovacuum=off: this is a development fixture, and on Windows an
       // autovacuum worker can hit a DLL-initialisation failure (0xC0000142)
       // that crash-restarts the whole cluster mid-run.
-      "-o", `-p ${PORT} -c listen_addresses=127.0.0.1 -c fsync=off -c synchronous_commit=off -c autovacuum=off`,
+      // shared_buffers is lowered for the same reason: on Windows the backend's
+      // shared-memory mapping can fail to reserve at its address (error 487)
+      // when the segment is large, which is the second half of the same
+      // 0xC0000142 symptom. A small segment is plenty for a dev fixture.
+      "-o", `-p ${PORT} -c listen_addresses=127.0.0.1 -c fsync=off -c synchronous_commit=off -c autovacuum=off -c shared_buffers=64MB`,
       "-w", "start",
     ]),
   );
@@ -196,6 +208,58 @@ function ensureCluster() {
     if (clusterRunning()) return;
     if (attempt === 29) throw new Error(`cluster never became ready; see ${LOG_FILE}`);
     sleep(1000);
+  }
+}
+
+/**
+ * Removes a postmaster that is alive but no longer serving.
+ *
+ * `clusterRunning()` answers "can I query it", not "is a process listening".
+ * On Windows a backend can die with a DLL-initialisation failure (0xC0000142)
+ * and leave the postmaster re-initialising forever: the port stays bound, every
+ * connection fails, and `pg_ctl start` then refuses because the data directory
+ * still looks in use (and the log file is locked). Without this, the harness is
+ * wedged until an operator kills the process by hand.
+ *
+ * The pid is read from the data directory's own `postmaster.pid`, so nothing
+ * outside this cluster is ever touched.
+ */
+function clearStalePostmaster() {
+  const pidFile = path.join(DATA_DIR, "postmaster.pid");
+  if (!fs.existsSync(pidFile)) return;
+  const pid = Number(lines(fs.readFileSync(pidFile, "utf8"))[0]);
+  if (Number.isFinite(pid) && pid > 0) {
+    if (WIN) run("taskkill", ["/F", "/T", "/PID", String(pid)]);
+    else run("kill", ["-9", String(pid)]);
+  }
+  fs.rmSync(pidFile, { force: true });
+  sleep(1500);
+}
+
+/**
+ * Unconditionally stop this cluster — even when it is too wedged to answer
+ * `pg_ctl stop`. Used by `restart`, and by the demo environment, which wants a
+ * FRESH postmaster every time (a fresh one always clears the Windows
+ * shared-memory/DLL-init failure that a long-lived postmaster can accumulate).
+ */
+function hardStopCluster() {
+  const pidFile = path.join(DATA_DIR, "postmaster.pid");
+  if (!fs.existsSync(pidFile)) return;
+  const pid = Number(lines(fs.readFileSync(pidFile, "utf8"))[0]);
+  if (Number.isFinite(pid) && pid > 0) {
+    if (WIN) run("taskkill", ["/F", "/T", "/PID", String(pid)]);
+    else run("kill", ["-9", String(pid)]);
+  }
+  fs.rmSync(pidFile, { force: true });
+  sleep(1500);
+}
+
+/** Runs a query, returning null instead of throwing (e.g. no such database). */
+function tryQuery(fn) {
+  try {
+    return fn();
+  } catch {
+    return null;
   }
 }
 
@@ -514,9 +578,14 @@ function statusPayload() {
     postmasterStartedAt: running ? query("select pg_postmaster_start_time()::text", "postgres") : null,
     isLoopbackConnection: running ? query("select case when inet_server_addr() in ('127.0.0.1','::1') then 'yes' else 'NO' end", "postgres") : null,
     superuser: running ? query("select current_user", "postgres") : null,
-    aiTables: running ? aiTableInventory() : [],
+    // Tolerant: the cluster can be healthy while `nexup_dev` does not exist yet
+    // (a caller may build its own database). `status` must still answer, or a
+    // readiness check would read as "not running".
+    aiTables: running ? (tryQuery(() => aiTableInventory()) ?? []) : [],
     legacyTables: running
-      ? Number(query(`select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE' and table_name not like 'ai\\_%'`))
+      ? (tryQuery(() =>
+          Number(query(`select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE' and table_name not like 'ai\\_%'`)),
+        ) ?? null)
       : null,
     productionUrlHost: productionHost(),
   };
@@ -550,6 +619,49 @@ function down() {
   console.log(`stopped the development cluster at ${DATA_DIR} (data kept)`);
 }
 
+/**
+ * start — bring the cluster UP and nothing else.
+ *
+ * `up` deliberately rebuilds the pre-migration schema and measures the
+ * registered-history replay; that is its job as an EVIDENCE harness. A caller
+ * that only needs a running loopback cluster (e.g. the local demo, which builds
+ * its schema from `prisma/schema.prisma`) should not pay for that, so `start`
+ * runs `ensureCluster` alone: no database is dropped, no migration is applied.
+ */
+/**
+ * A minimal, database-agnostic identity of the CLUSTER.
+ *
+ * `start`/`restart` must work before any database exists (a caller may create
+ * its own), so they cannot use `statusPayload()` — that reads `nexup_dev` and
+ * would throw on a cluster that has none.
+ */
+function clusterIdentity() {
+  const running = clusterRunning();
+  return {
+    running,
+    dataDirectory: DATA_DIR,
+    port: PORT,
+    listenAddresses: running ? query("show listen_addresses", "postgres") : null,
+  };
+}
+
+function start() {
+  requireTools();
+  ensureCluster();
+  console.log(JSON.stringify(clusterIdentity(), null, 2));
+}
+
+/**
+ * restart — always stop this cluster (however unhealthy) and start a FRESH one.
+ * The reliable way out of the Windows postmaster wedge (see `hardStopCluster`).
+ */
+function restart() {
+  requireTools();
+  hardStopCluster();
+  ensureCluster();
+  console.log(JSON.stringify(clusterIdentity(), null, 2));
+}
+
 function destroy() {
   stop();
   fs.rmSync(DATA_DIR, { recursive: true, force: true });
@@ -559,7 +671,7 @@ function destroy() {
 
 /* ═══════════════════════════════════════════════════════ */
 
-const COMMANDS = { up, migrate, status, down, destroy };
+const COMMANDS = { start, restart, up, migrate, status, down, destroy };
 const command = process.argv[2];
 if (!COMMANDS[command]) {
   console.error(`usage: node scripts/dev-db.mjs ${Object.keys(COMMANDS).join("|")}`);

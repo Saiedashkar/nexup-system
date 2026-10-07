@@ -21,7 +21,7 @@ import {
 
 import type { RuntimeRegistry } from "../runtimes/runtime-registry";
 import type { ReviewDecision, ReviewService, TaskReview } from "../review/task-review";
-import type { AgentExecutionError } from "../runtimes/agent-runtime";
+import { isTerminalExecutionStatus, type AgentExecutionError } from "../runtimes/agent-runtime";
 import type {
   ExecutionRecorder,
   ExecutionRecord,
@@ -393,23 +393,38 @@ export class MissionOrchestrator {
       throw new AiWorkforceError("RUN_NOT_FOUND", `Task "${taskId}" has no execution record`, { taskId });
     }
 
+    // Ask the runtime FIRST: while it can answer it is the AUTHORITY, and a
+    // fresh report can carry a retryable classification the stored record does
+    // not. But a restarted process may host a runtime that never minted this
+    // handle, and then `waitForExecution` cannot answer at all. In that ONE
+    // case, if the durable record is ALREADY TERMINAL, the outcome was still
+    // OBSERVED and written down (by this process's dispatch, or by a previous
+    // process / the reconciler), so settle from the record instead of failing a
+    // mission that has an answer. Nothing is resubmitted, and a NON-terminal
+    // record keeps failing loudly — "we cannot verify it" is never turned into
+    // success.
+    const alreadyDecided = isTerminalExecutionStatus(record.status);
+    let execution = record;
     const outcome = await this.deps.dispatcher.waitForExecution(
       { runtimeId: record.runtimeId, handleId: task.executionHandleId },
       options.waitTimeoutMs ? { timeoutMs: options.waitTimeoutMs } : undefined,
     );
     if (!outcome.dispatched && outcome.error) {
-      throw new AiWorkforceError("RUNTIME_UNAVAILABLE", outcome.error.message, { taskId, code: outcome.error.code });
+      if (!alreadyDecided) {
+        throw new AiWorkforceError("RUNTIME_UNAVAILABLE", outcome.error.message, { taskId, code: outcome.error.code });
+      }
+      // The runtime cannot answer, but the attempt is already decided durably.
+    } else {
+      execution = await this.deps.executions.apply(record.id, {
+        status: outcome.status ?? "UNKNOWN",
+        ...(outcome.execution?.providerExecutionId ? { providerExecutionId: outcome.execution.providerExecutionId } : {}),
+        ...(outcome.execution?.completedAt ? { completedAt: outcome.execution.completedAt } : {}),
+        ...(outcome.execution?.durationMs !== undefined ? { durationMs: outcome.execution.durationMs } : {}),
+        ...(outcome.output !== undefined ? { output: outcome.output } : {}),
+        ...(outcome.execution?.outputText !== undefined ? { outputText: outcome.execution.outputText } : {}),
+        ...(outcome.execution?.error ? { error: outcome.execution.error } : {}),
+      });
     }
-
-    const execution = await this.deps.executions.apply(record.id, {
-      status: outcome.status ?? "UNKNOWN",
-      ...(outcome.execution?.providerExecutionId ? { providerExecutionId: outcome.execution.providerExecutionId } : {}),
-      ...(outcome.execution?.completedAt ? { completedAt: outcome.execution.completedAt } : {}),
-      ...(outcome.execution?.durationMs !== undefined ? { durationMs: outcome.execution.durationMs } : {}),
-      ...(outcome.output !== undefined ? { output: outcome.output } : {}),
-      ...(outcome.execution?.outputText !== undefined ? { outputText: outcome.execution.outputText } : {}),
-      ...(outcome.execution?.error ? { error: outcome.execution.error } : {}),
-    });
 
     if (execution.status === "SUCCEEDED") {
       if (this.reviewPolicy === "NEVER") {

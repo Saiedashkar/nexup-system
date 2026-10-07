@@ -46,3 +46,7 @@ next-env.d.ts
 
 # Scratch files from local proof harnesses (scripts/dev-db.mjs, run-app-proof.sh)
 .tmp-*
+
+# Local throwaway DEMO environment (scripts/demo-env.mjs) — holds a generated
+# AUTH_SECRET and a local demo login. Never committed.
+.demo/

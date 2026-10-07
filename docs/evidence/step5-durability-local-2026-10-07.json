@@ -1,0 +1,56 @@
+{
+  "proof": "the Step-5 mission lifecycle over the DURABLE Prisma repositories, on a real PostgreSQL, with the process that ran it gone before the records are read back",
+  "testedAt": "2026-10-07T15:48:11Z (first run) and again on the certified tree before this artifact was written; both runs 7/7",
+  "environment": {
+    "runner": "local build machine",
+    "database": "THROWAWAY PostgreSQL 18.6 cluster created by scripts/run-persistence-proof.sh — initdb in a temp directory, loopback only, trust auth, deleted on exit",
+    "productionDatabase": "NOT touched. No migration was applied to Supabase or to any existing cluster.",
+    "existingLocalClusterOn5432": "NOT touched (its credentials were never used or guessed)"
+  },
+  "testedCommit": "359d922d5c9cd3b0bd0a22ba1a46d6cbf3f0e92c",
+  "treeFingerprint": "sha256:4ea239dcf98f84643ea20eeeeae936d755d7cfb95e8244b72d45129b2609f942",
+  "closureCommit": "bcd8821ed3867bd5f0cc308ddaa2928840722ac3",
+  "fingerprintCertification": "sha256(git diff 359d922d5c9cd3b0bd0a22ba1a46d6cbf3f0e92c bcd8821ed3867bd5f0cc308ddaa2928840722ac3) == treeFingerprint.",
+  "gatedCommand": "bash scripts/run-persistence-proof.sh",
+  "testFile": "tests/workforce-step5-persistence.test.ts",
+  "migrationsApplied": [
+    "prisma/proposed-migrations/AI_WORKFORCE_PHASE_1A/migration.sql",
+    "prisma/proposed-migrations/AI_WORKFORCE_PHASE_1B/migration.sql",
+    "prisma/proposed-migrations/AI_WORKFORCE_PHASE_2/migration.sql"
+  ],
+  "tablesPresentAfterApply": [
+    "ai_jobs", "ai_runs", "ai_run_events", "ai_approvals",
+    "ai_missions", "ai_tasks", "ai_execution_records", "ai_task_reviews"
+  ],
+  "additiveOnlyEvidence": {
+    "checker": "node scripts/verify-proposed-migration.mjs prisma/proposed-migrations/AI_WORKFORCE_PHASE_2/migration.sql",
+    "result": "ok — no DROP / DELETE / TRUNCATE / RENAME; every ALTER TABLE targets a table this file creates",
+    "statementKinds": "4x CREATE TABLE, 23x CREATE INDEX, 2x CREATE UNIQUE INDEX, 6x ALTER TABLE (foreign keys between the four new tables only)",
+    "tablesCreated": ["ai_missions", "ai_tasks", "ai_execution_records", "ai_task_reviews"],
+    "note": "the verifier is also run inside the test's beforeAll, so an additive guarantee cannot regress silently"
+  },
+  "results": {
+    "tests": 7,
+    "passed": 7,
+    "failed": 0
+  },
+  "whatEachTestEstablished": [
+    "Command -> Mission -> Task -> real Step-4 agent -> Execution -> Review PENDING -> HUMAN approval -> COMPLETED, then re-hydrated by a SECOND and a THIRD process from the database alone: mission state/history/projectRef/clientRef, task state/attempt/executionRecordId/reviewId, execution handleId/providerExecutionId/idempotencyKey/audit trail, and the decided review all reconstruct.",
+    "A STALE snapshot cannot advance a mission: the compare-and-set on the stored state loses and the row is left exactly as the other process left it.",
+    "A SECOND decision on the same review is refused, across processes — the CAS on PENDING wins once, and the first person's decision stands.",
+    "A non-HUMAN approver is refused on the durable path too, and the review stays PENDING and decidable.",
+    "A retry keeps BOTH attempts, each with its own idempotency key, its own record id and its own audit trail; both reviews are durable.",
+    "The schema enforces its own contracts: a task cannot reference a missing mission (foreign key), and two tasks cannot share a mission sequence (unique).",
+    "Saving an execution record that does not exist is a typed RUN_NOT_FOUND, never a silent insert."
+  ],
+  "migrationRehearsal": "the exact proposed SQL that will eventually run on a real server was executed here first, in order (1A -> 1B -> PHASE_2), against a real PostgreSQL 18.6",
+  "reproduce": [
+    "git checkout bcd8821ed3867bd5f0cc308ddaa2928840722ac3",
+    "bash scripts/run-persistence-proof.sh",
+    "expect: 7 passed, and the throwaway cluster removed afterwards"
+  ],
+  "secretScan": {
+    "secretsInThisFile": 0,
+    "note": "no credential of any kind is needed or recorded for this proof: the cluster is trust-auth and loopback only"
+  }
+}

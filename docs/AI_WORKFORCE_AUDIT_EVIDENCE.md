@@ -69,6 +69,46 @@ export HERMES_RUNTIME_TIMEOUT_MS=120000
 | Step 4 — the real actor, submit → status → terminal | `npx vitest run tests/workforce-step4-async.test.ts` |
 | Step 4 — **live cancel through the port** | `npx vitest run tests/workforce-step4-live-cancel.test.ts` |
 | Step 5 — the full mission lifecycle | `npx vitest run tests/workforce-step5-mission.test.ts` |
+| Step 5 — **durability** on a real PostgreSQL | `bash scripts/run-persistence-proof.sh` |
+| Step 5 — **live + durable**, real agent | `PROOF_TEST=tests/workforce-step5-live-durability.test.ts bash scripts/run-persistence-proof.sh` |
+
+## Durability proofs — the isolated cluster
+
+The durability proofs need a real PostgreSQL, and NEXUP's real database is data.
+`scripts/run-persistence-proof.sh` therefore stands up a **throwaway** cluster:
+
+```bash
+bash scripts/run-persistence-proof.sh                                    # 7 tests, offline
+PROOF_TEST=tests/workforce-step5-live-durability.test.ts \
+  bash scripts/run-persistence-proof.sh                                  # 1 test, + the bridge env
+```
+
+It `initdb`s a new cluster in a temp directory, on loopback with trust auth,
+applies the three proposed migration files to it, runs the suite, and then stops
+and deletes the cluster. It never starts, stops or touches any running
+PostgreSQL service, never reads `DATABASE_URL`, and applies no migration to any
+real database.
+
+Because that database is **not** the production one, the live durability proof
+does not close Step 5: applying the migration for real needs explicit owner
+approval against a separate development database.
+
+## Additive-only, checked mechanically
+
+Before any proposed migration is trusted, its SQL is inspected by machine, not
+by eye:
+
+```bash
+node scripts/verify-proposed-migration.mjs \
+  prisma/proposed-migrations/AI_WORKFORCE_PHASE_2/migration.sql
+```
+
+It fails on any `DROP` / `DELETE` / `TRUNCATE` / `RENAME`, and on any
+`ALTER TABLE` naming a table the file does not itself create. It is also invoked
+from the durability suite's `beforeAll`, so the guarantee cannot regress
+silently. (`AI_WORKFORCE_PHASE_1B` intentionally fails it: the `DROP` there is a
+reviewed removal of a proposed table that never existed anywhere. Every `DROP`
+should fail this check and be argued for by a person.)
 
 Optional knobs: `NEXUP_CANCEL_AFTER_MS` (default 10000) — how long the run is
 left working before the cancel.
@@ -141,6 +181,14 @@ command from the table above, and compare.
   "secretScan": { "leakedSecretOccurrences": 0 }
 }
 ```
+
+## Recorded artifacts
+
+| Artifact | Proof |
+|---|---|
+| `docs/evidence/step4-live-cancel-2026-10-07.json` | live cancel through `AgentRuntime.cancelJob` |
+| `docs/evidence/step5-durability-local-2026-10-07.json` | the Step-5 lifecycle over durable repositories on a real PostgreSQL, re-hydrated after a restart |
+| `docs/evidence/step5-live-durability-2026-10-07.json` | the same lifecycle with the REAL agent over the bridge, persisted and re-hydrated |
 
 ## Historical note
 

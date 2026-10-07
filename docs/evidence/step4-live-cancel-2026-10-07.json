@@ -1,0 +1,61 @@
+{
+  "proof": "live cancellation driven only through the AgentRuntime port (dispatcher.cancelJob -> AgentRuntime.cancelJob -> bridge POST /v1/runs/:runId/cancel -> terminal CANCELLED). The driver never calls BridgeClient.cancelRun.",
+  "testedAt": "2026-10-07T15:15:22.248Z",
+  "environment": {
+    "runner": "local build machine (client)",
+    "bridge": "https://bridge.srv1995415.hstgr.cloud",
+    "transport": "BRIDGE",
+    "profileRef": "saieed",
+    "hermes": "hermes-agent-r3j1-hermes-agent-1 (Up 2 weeks, never restarted)"
+  },
+  "testedCommit": "3581cdf75f36c8057738db3ad1c42d92a01c3853",
+  "treeFingerprint": "sha256:28805f25af2e374cdeaf1c590dd315a9f20e4e9d33569ac2ae59d83430770c06",
+  "closureCommit": "5da402c2a5dd1c6bdb932a17ef923f98fbf0a77e",
+  "fingerprintCertification": "sha256(git diff 3581cdf75f36c8057738db3ad1c42d92a01c3853 5da402c2a5dd1c6bdb932a17ef923f98fbf0a77e) == treeFingerprint, so the committed tree is exactly the tree under test.",
+  "gatedCommand": "NEXUP_BRIDGE_E2E=1 HERMES_RUNTIME_PROFILE=saieed HERMES_RUNTIME_TRANSPORT=BRIDGE HERMES_RUNTIME_BRIDGE_URL=https://bridge.srv1995415.hstgr.cloud HERMES_RUNTIME_BRIDGE_KEY_ID=nexup-vercel HERMES_RUNTIME_BRIDGE_SECRET=\"$SECRET\" HERMES_RUNTIME_TIMEOUT_MS=120000 npx vitest run tests/workforce-step4-live-cancel.test.ts",
+  "secretHandling": "NEXUP_BRIDGE_HMAC_SECRET was read from /etc/nexup-bridge/bridge.env into an environment variable on the host and passed by reference; it appears in no file in this repository and is not recorded here.",
+  "actorId": "actor_internal_strategy_analyst",
+  "actorSlug": "internal-strategy-analyst",
+  "actorLifecycle": "SHADOW",
+  "capabilityId": "strategy.internal-brief",
+  "capabilityVersion": "1.0.0",
+  "assignmentId": "w_assignment_0001",
+  "runtimeId": "runtime_hermes_saeed",
+  "runtimeType": "EXTERNAL_AGENT_RUNTIME",
+  "transport": "BRIDGE",
+  "profileRef": "saieed",
+  "runId": "run_muy91cuk_84b81ca4",
+  "providerExecutionId": "16fac992",
+  "idempotencyKey": "job:job_step4_cancel_1791386110705",
+  "timings": {
+    "acceptedMs": 1263,
+    "cancelAfterMs": 10000,
+    "cancelMs": 269
+  },
+  "result": {
+    "statusDuring": "ACCEPTED",
+    "cancelAckStatus": "CANCELLED",
+    "statusFinal": "CANCELLED",
+    "terminal": true,
+    "runtimeEvents": ["runtime.submit", "runtime.cancelled"]
+  },
+  "bridgeAudit": [
+    "{\"ts\":\"2026-10-07T15:15:10.032Z\",\"level\":\"info\",\"msg\":\"run submitted\",\"service\":\"nexup-bridge\",\"runId\":\"run_muy91cuk_84b81ca4\",\"traceId\":\"step4-live-cancel\"}",
+    "{\"action\":\"run.submit\",\"keyId\":\"nexup-vercel\",\"profile\":\"saieed\",\"outcome\":\"allowed\",\"statusCode\":201,\"durationMs\":66,\"remote\":\"197.53.226.12\",\"at\":\"2026-10-07T15:15:10.081Z\"}",
+    "{\"action\":\"run.stream\",\"keyId\":\"nexup-vercel\",\"profile\":\"saieed\",\"outcome\":\"allowed\",\"statusCode\":200,\"durationMs\":1,\"remote\":\"197.53.226.12\",\"at\":\"2026-10-07T15:15:10.393Z\"}",
+    "{\"action\":\"run\",\"keyId\":\"nexup-vercel\",\"profile\":\"saieed\",\"outcome\":\"cancelled\",\"runId\":\"run_muy91cuk_84b81ca4\",\"at\":\"2026-10-07T15:15:20.365Z\"}",
+    "{\"action\":\"run.cancel\",\"keyId\":\"nexup-vercel\",\"profile\":\"saieed\",\"outcome\":\"allowed\",\"statusCode\":200,\"durationMs\":7,\"remote\":\"197.53.226.12\",\"at\":\"2026-10-07T15:15:20.370Z\"}"
+  ],
+  "bridgeAuditNotes": "Exactly one run.submit (201), one run.stream (200), one run.cancel (200) and one terminal `run` audit with outcome `cancelled`. There is NO completion audit for this runId, and no run.status line (the app-side status read was served from the adapter's own record, not the bridge). A timestamp comparison across machines is only indicative: the local clock ran ahead of the host by roughly 0.6-1.3s in this window, so the bridge-side ordering above — not the cross-machine offsets — is what establishes the correlation.",
+  "secretScan": {
+    "leakedSecretOccurrencesInBridgeLog": 0,
+    "command": "docker logs nexup-bridge --since 30m | grep -cE \"llm.oneshot|session-token|HMAC_SECRET\""
+  },
+  "reproduce": [
+    "git checkout 5da402c2a5dd1c6bdb932a17ef923f98fbf0a77e",
+    "read the secret without printing it (see docs/AI_WORKFORCE_AUDIT_EVIDENCE.md)",
+    "run the gated command above",
+    "compare the printed [step4-cancel-audit] line against this file",
+    "read the bridge side back by runId and confirm one submit, one cancel, no completion"
+  ]
+}

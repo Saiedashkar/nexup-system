@@ -66,6 +66,11 @@ export const AI_WORKFORCE_ERROR_CODES = [
   "MISSION_NOT_FOUND",
   "INVALID_MISSION_TRANSITION",
   "MISSION_CONFLICT",
+  // ── Step 5/8 — the Command idempotency boundary ──
+  /** The same idempotency key arrived with a DIFFERENT command body. */
+  "COMMAND_KEY_REUSED",
+  /** The key is claimed but its mission is not recorded yet — retry shortly. */
+  "COMMAND_IN_PROGRESS",
 ] as const;
 
 export type AiWorkforceErrorCode = (typeof AI_WORKFORCE_ERROR_CODES)[number];

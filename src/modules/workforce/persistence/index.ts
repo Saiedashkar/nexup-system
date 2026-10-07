@@ -34,5 +34,15 @@ export type {
 export { createWorkforceDomainFromPrisma } from "./prisma-composition";
 export type { DurableWorkforceDomainOptions } from "./prisma-composition";
 
+/* ── Step 5/8 — the durable Command IDEMPOTENCY ledger ── */
+export {
+  PrismaCommandIntentRepository,
+  assertCommandIntentSchema,
+} from "./prisma-command-intent-repository";
+export type {
+  CommandIntentPrismaClient,
+  PrismaCommandIntentRepositoryOptions,
+} from "./prisma-command-intent-repository";
+
 /** What the composition helper accepts — a handle, or a bare client. */
 export type WorkforceLifecycleClientLike = WorkforcePrismaHandle | PrismaClient;

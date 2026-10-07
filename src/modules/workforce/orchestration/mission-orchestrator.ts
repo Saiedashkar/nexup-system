@@ -250,7 +250,13 @@ export class MissionOrchestrator {
       const next = tasks.find((task) => task.state === "READY" && dependenciesMet(task, tasks));
       if (next) {
         const outcome = await this.startTask(missionId, next.id);
-        changes.push(`task:${next.id}:${outcome.state}`);
+        // A refusal is REPORTED, never swallowed: an operator staring at a
+        // mission that will not progress must be able to read WHY from the same
+        // result that told them it did not progress. The task state alone cannot
+        // carry it (a blocked task has not moved).
+        changes.push(
+          outcome.blocked ? `task:${next.id}:BLOCKED:${outcome.blocked}` : `task:${next.id}:${outcome.state}`,
+        );
         tasks = await this.deps.tasks.listForMission(missionId);
       }
     }

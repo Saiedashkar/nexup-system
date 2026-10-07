@@ -43,3 +43,6 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# Scratch files from local proof harnesses (scripts/dev-db.mjs, run-app-proof.sh)
+.tmp-*

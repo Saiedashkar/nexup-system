@@ -35,7 +35,19 @@ export type DurableWorkforceDomainOptions = {
   runtimeAdapters?: AgentRuntime[];
 };
 
+/**
+ * A real Prisma client, not a handle. `PrismaClient` itself exposes a `client`
+ * property (an internal object with no delegates), so "has a `.client`" is NOT a
+ * safe test: resolving an already-resolved client would return that internal
+ * object and every delegate would look missing. Test the client shape instead.
+ */
+function isPrismaClientLike(value: unknown): boolean {
+  const candidate = value as Record<string, unknown> | null | undefined;
+  return !!candidate && typeof candidate["$transaction"] === "function";
+}
+
 function resolveClient(handleOrClient: WorkforcePrismaHandle | PrismaClient): PrismaClient {
+  if (isPrismaClientLike(handleOrClient)) return handleOrClient as PrismaClient;
   const candidate = handleOrClient as Partial<WorkforcePrismaHandle>;
   return (candidate.client ?? (handleOrClient as PrismaClient)) as PrismaClient;
 }

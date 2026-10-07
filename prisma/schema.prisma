@@ -1104,6 +1104,52 @@ model AiExecutionRecord {
   @@map("ai_execution_records")
 }
 
+//
+// ONE more table for Step 5's application boundary: the Command IDEMPOTENCY
+// ledger.
+//
+//   - Additive like the rest: one CREATE TABLE, its indexes, no ALTER against
+//     any existing table. The proposed DDL lives in
+//     `prisma/proposed-migrations/AI_WORKFORCE_PHASE_3/` and is NOT part of
+//     `prisma/migrations/`, so `prisma migrate deploy` cannot pick it up.
+//   - Provider-neutral on purpose: the ledger knows a SCOPE and an opaque
+//     idempotency key, never a provider, a transport or a model. Two retries of
+//     the same Command must land on the same Mission; a genuinely new Command
+//     must still create a new one.
+//   - The unique index on (scope, idempotencyKey) IS the algorithm: the claim is
+//     a single INSERT, so two concurrent callers cannot both win. No advisory
+//     locks, no read-then-write race.
+//   - `commandHash` makes a reused key with a DIFFERENT payload a refusal, not a
+//     silent replay of someone else's work.
+//   - `missionId` is the reference to the Mission the claim produced. The
+//     ledger never embeds the mission.
+
+/// The Command idempotency ledger — at most one Mission per (scope, key).
+model AiCommandIntent {
+  id             String   @id
+  /// Caller-owned namespace for the key (a business/actor scope, never model output).
+  scope          String
+  /// The caller's retry token. Opaque to this system.
+  idempotencyKey String
+  /// sha256 of the canonical command payload: a reused key with a different body is refused.
+  commandHash    String
+  /// CLAIMED → COMPLETED | FAILED. Validated by the application state machine.
+  state          String   @default("CLAIMED")
+  /// The Mission this claim owns, once it exists.
+  missionId      String?
+  requestedBy    String
+  capabilityId   String?
+  reason         String?
+  createdAt      DateTime
+  updatedAt      DateTime
+
+  @@unique([scope, idempotencyKey])
+  @@index([missionId])
+  @@index([state])
+  @@index([createdAt])
+  @@map("ai_command_intents")
+}
+
 /// The HUMAN AUTHORITY boundary. An agent's result is not a decision.
 /// A decision is a compare-and-set on PENDING: the first one wins, so a review
 /// can never be decided twice.

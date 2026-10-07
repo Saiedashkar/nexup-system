@@ -1,6 +1,6 @@
 # AI Workforce — Step 4 + Step 5 closure report
 
-**Branch:** `feature/ai-workforce-foundation` · **Audited SHA:** `fefce65775fa48bbf4213aa84879c8bf1b989195` (the commit carrying this report adds only this file)
+**Branch:** `feature/ai-workforce-foundation` · **Audited SHA:** `b438bdc34e3b3bcb25cc9d1f18cbd792e377bc93` (the commit carrying this report adds only documentation)
 **Date:** 2026-10-07 · **Master:** `bf701fac705cfbb2672cf931dda3962e7fafc617` — untouched, equal to `origin/master`
 **Step 6:** NOT STARTED.
 
@@ -22,6 +22,7 @@ Where a claim could not be re-established, it says so.
 | `06e1611` | Read-only Command Center query surfaces (G) |
 | `0f8b29a` | Correct two unresolvable commit SHAs in the evidence |
 | `bbe68cc` | Durability proved from a second operating-system process |
+| `b438bdc` | Durable exhaustion and cancellation proofs |
 | `b2648a3` | Re-certify the durability evidence at the process boundary |
 | `fefce65` | Drop an unused date helper from the durable adapters |
 
@@ -38,9 +39,10 @@ work builds on.
 | `npx prisma validate` | schema valid |
 | `node scripts/verify-proposed-migration.mjs …AI_WORKFORCE_PHASE_2/migration.sql` | ok (4× CREATE TABLE, 23× CREATE INDEX, 2× CREATE UNIQUE INDEX, 6× ALTER TABLE) |
 | Offline workforce suites (13 files) | **188 passed \| 14 skipped (202)** |
+| Durable suites, gated | **9 passed** (persistence) · **1 passed** (live, certified at `bcd8821`) |
 | `bridge/` — `tsc --noEmit` + `vitest run` | 0 errors · **202 passed** |
 | `bridge/tests/supervisor.test.sh` | **72 passed, 0 failed** |
-| `bash scripts/run-persistence-proof.sh` | **7 passed** (real PostgreSQL) |
+| `bash scripts/run-persistence-proof.sh` | **9 passed** (real PostgreSQL) |
 | `eslint` over `src/modules/workforce`, the new tests and the new scripts | 0 errors, 0 warnings |
 
 The 14 skips are the gated suites: `workforce-step4-live-cancel` (needs
@@ -153,17 +155,20 @@ b8d64e03…  06e1611..bbe68cc   MATCH   (current certification)
 
 ### F — Step-5 end-to-end durability — **DEMONSTRATED locally; Step 5 itself still BLOCKED**
 
-`tests/workforce-step5-persistence.test.ts` (7/7, real PostgreSQL) runs
+`tests/workforce-step5-persistence.test.ts` (9/9, real PostgreSQL) runs
 Command → Mission → Task → real Step-4 agent → Execution → PENDING Review →
 human approval → COMPLETED Task → COMPLETED Mission, then re-reads the chain
 through fresh domains, and — since `bbe68cc` — through **a separate
 operating-system process** (`scripts/read-durable-mission.cjs`) that imports
 nothing from `src/` and therefore cannot reach any registry or module state the
-test built. It also proves: a stale snapshot loses its compare-and-set; a second
-decision is refused across processes; a non-human approver is refused on the
-durable path; both attempts of a retry persist with their own keys, records and
-audit trails; foreign keys and the `(missionId, sequence)` unique hold; a
-missing execution record is a typed error, not an insert.
+test built. It also proves, durably: a stale snapshot loses its compare-and-set;
+a second decision is refused across processes; a non-human approver is refused;
+both attempts of a retry persist with their own keys, records and audit trails;
+**a retryable failure returns the task to `READY` and, once the allowance runs
+out, the task and mission end `FAILED`**; **a cancel through the runtime port
+leaves the execution record, the task and the mission `CANCELLED`, with the
+timestamp and reason**; foreign keys and the `(missionId, sequence)` unique hold;
+a missing execution record is a typed error, not an insert.
 
 `tests/workforce-step5-live-durability.test.ts` (1/1, certified at `bcd8821`)
 does the same with the **real agent over the real bridge to Hermes `saieed`**.
@@ -194,9 +199,9 @@ reproducible. No UI was redesigned and no mock was replaced.
 | Mock injection | **DEMONSTRATED** | provenance gate; mock off the production surface |
 | Duplicate submit / idempotency | **PARTIAL** | transport replays a duplicate key and refuses to re-run it (offline test); keys are deterministic per task+attempt and distinct per attempt. A repeated *Command* creating a second Mission has **no** dedupe guard |
 | Stale CAS update | **DEMONSTRATED** | in-memory and durable |
-| Execution failure | **PARTIAL** | retryable transport failure → task `READY` → second attempt → `FAILED` is proven in memory; a `FAILED` execution record persisted and re-read from the database is **not** |
-| Cancellation | **DEMONSTRATED** live through the port; a **CANCELLED execution record surviving in the database is not** | |
-| Retry exhaustion | **PARTIAL** | `maxAttempts` exhausted → task and mission `FAILED` is proven in memory (`workforce-step5-mission.test.ts`); it is **not** proven on the durable path |
+| Execution failure | **DEMONSTRATED** | in memory and, since `b438bdc`, on the durable path: both attempts persist as `FAILED` with their `TRANSPORT` error category |
+| Cancellation | **DEMONSTRATED** | live through the port (certified at `5da402c`), and the `CANCELLED` execution record now persists and re-reads on the durable path |
+| Retry exhaustion | **DEMONSTRATED** | in memory and, since `b438bdc`, on the durable path: `maxAttempts` exhausted → task and mission `FAILED`, re-read out of process |
 | Duplicate human decision | **DEMONSTRATED** | CAS on `PENDING`, across processes |
 | Non-human approval | **DEMONSTRATED** | in memory and durable |
 | Process / repository rehydration | **DEMONSTRATED** | fresh domains **and** a separate OS process, from the database alone |
@@ -225,9 +230,9 @@ reproducible. No UI was redesigned and no mock was replaced.
    `createMissionOrchestrator`, `createWorkforceDomainFromPrisma` or
    `bootstrapWorkforceDomain`. Steps 4 and 5 delivered a library plus its tests;
    nothing in the running application dispatches a mission yet.
-2. **The durable path is thinner than the in-memory one**: cancellation
-   persistence, execution-failure persistence and retry-exhaustion-to-`FAILED`
-   are proven in memory but not against the database.
+2. **No process-level restart is exercised**: the proofs re-read through fresh
+   clients, fresh domains and one genuinely separate OS process, but never by
+   killing and restarting the application.
 3. **Command-level idempotency is absent** — two identical Commands create two
    Missions.
 4. **`AI_WORKFORCE_PHASE_1B` intentionally fails** the additive verifier (it

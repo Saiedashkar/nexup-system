@@ -7,12 +7,18 @@
     "productionDatabase": "NOT touched. No migration was applied to Supabase or to any existing cluster.",
     "existingLocalClusterOn5432": "NOT touched (its credentials were never used or guessed)"
   },
-  "testedCommit": "bbe68cc68c2c1846bcd7e68e24b4dce4f5d7fbdb",
+  "testedCommit": "b438bdc34e3b3bcb25cc9d1f18cbd792e377bc93",
   "testedCommitNote": "the code tree the suite was verified on. The commit that carries THIS artifact adds only documentation, so it changes no tested behaviour.",
-  "treeFingerprint": "sha256:b8d64e03c0a35a8e08660b83595a0315888fa4a0fd59b7bbe5335a984afea7f9",
-  "certifiedDeltaFrom": "06e1611e2ba749c54cac6420f0cde97171e4a147",
-  "fingerprintCertification": "sha256(git diff 06e1611e2ba749c54cac6420f0cde97171e4a147 bbe68cc68c2c1846bcd7e68e24b4dce4f5d7fbdb) == treeFingerprint — the certified code delta is exactly the separate-operating-system-process durability proof.",
+  "treeFingerprint": "sha256:4c6cfd748def54ebe52be2ecb6b3dd411cdfe185977156046e8bb16b0ece635a",
+  "certifiedDeltaFrom": "fefce65775fa48bbf4213aa84879c8bf1b989195",
+  "fingerprintCertification": "sha256(git diff fefce65775fa48bbf4213aa84879c8bf1b989195 b438bdc34e3b3bcb25cc9d1f18cbd792e377bc93) == treeFingerprint — the certified code delta is exactly the durable exhaustion and cancellation proofs.",
   "previousCertifications": [
+    {
+      "testedCommit": "bbe68cc68c2c1846bcd7e68e24b4dce4f5d7fbdb",
+      "treeFingerprint": "sha256:b8d64e03c0a35a8e08660b83595a0315888fa4a0fd59b7bbe5335a984afea7f9",
+      "certifiedDeltaFrom": "06e1611e2ba749c54cac6420f0cde97171e4a147",
+      "result": "7 passed"
+    },
     {
       "testedCommit": "29e7f35db398701cdf185bc3788cf2d749c12a88",
       "treeFingerprint": "sha256:01cbdc956975e2cf9119d7209088ce3c3b103d4834465d93174ea9d63179c3c8",
@@ -26,7 +32,7 @@
       "result": "7 passed"
     }
   ],
-  "reCertifiedBecause": "the suite was strengthened: the finished chain is now ALSO read by a separate operating-system process (scripts/read-durable-mission.cjs) that imports nothing from src/. The proof was re-run on the strengthened tree and passed 7/7; every earlier tree is still listed so any of them can be checked out and reproduced.",
+  "reCertifiedBecause": "the suite was strengthened twice: the finished chain is now ALSO read by a separate operating-system process (scripts/read-durable-mission.cjs) that imports nothing from src/, and the two terminal failures that were only proven in memory — the retry allowance running out, and a cancel through the runtime port — are now proven against the database as well. The proof was re-run on each strengthened tree; every earlier tree is still listed so any of them can be checked out and reproduced.",
   "gatedCommand": "bash scripts/run-persistence-proof.sh",
   "testFile": "tests/workforce-step5-persistence.test.ts",
   "migrationsApplied": [
@@ -46,8 +52,8 @@
     "note": "the verifier is also run inside the test's beforeAll, so an additive guarantee cannot regress silently"
   },
   "results": {
-    "tests": 7,
-    "passed": 7,
+    "tests": 9,
+    "passed": 9,
     "failed": 0
   },
   "whatEachTestEstablished": [
@@ -58,15 +64,17 @@
     "A retry keeps BOTH attempts, each with its own idempotency key, its own record id and its own audit trail; both reviews are durable.",
     "The schema enforces its own contracts: a task cannot reference a missing mission (foreign key), and two tasks cannot share a mission sequence (unique).",
     "Saving an execution record that does not exist is a typed RUN_NOT_FOUND, never a silent insert.",
+    "EXHAUSTION: a retryable transport failure returns the task to READY after attempt 1, a re-dispatch makes attempt 2, and running out of allowance ends the task AND the mission FAILED — with both attempts, their TRANSPORT error category, their retryable flags and their distinct idempotency keys all durable and re-read.",
+    "CANCELLATION: an in-flight run cancelled through the runtime port ends the execution record CANCELLED (with its timestamp and reason), the task CANCELLED and the mission CANCELLED — read back by a process that never saw the cancel.",
     "A SEPARATE OPERATING-SYSTEM PROCESS (scripts/read-durable-mission.cjs, a plain node invocation that imports nothing from src/ and shares no module state with the test) reads the finished chain from the database alone and sees the same COMPLETED mission, projectRef/clientRef, the same task, handle, provider execution reference, idempotency key, audit trail and APPROVED review. The in-process re-hydrations are reconstructions; this one cannot be."
   ],
   "adjacentCoverage": "tests/workforce-command-center-queries.test.ts (7 tests, offline, no database) exercises the read-only Command Center surfaces over the same ports — including a before/after hash of every repository proving the queries write nothing.",
   "migrationRehearsal": "the exact proposed SQL that will eventually run on a real server was executed here first, in order (1A -> 1B -> PHASE_2), against a real PostgreSQL 18.6",
   "reproduce": [
-    "git checkout bbe68cc68c2c1846bcd7e68e24b4dce4f5d7fbdb",
+    "git checkout b438bdc34e3b3bcb25cc9d1f18cbd792e377bc93",
     "bash scripts/run-persistence-proof.sh",
-    "expect: 7 passed, and the throwaway cluster removed afterwards",
-    "(the earlier certifications are still reproducible: git checkout bcd8821ed3867bd5f0cc308ddaa2928840722ac3 or 06e1611e2ba749c54cac6420f0cde97171e4a147, same command, same 7 passed)",
+    "expect: 9 passed, and the throwaway cluster removed afterwards",
+    "(the earlier certifications are still reproducible at their own commits — bcd8821ed3867bd5f0cc308ddaa2928840722ac3 and 06e1611e2ba749c54cac6420f0cde97171e4a147 pass 7, bbe68cc68c2c1846bcd7e68e24b4dce4f5d7fbdb passes 7)",
     "to see the outside-process read by hand: node scripts/read-durable-mission.cjs <databaseUrl> w_mission_0001 — run it against a cluster that still holds the rows"
   ],
   "secretScan": {

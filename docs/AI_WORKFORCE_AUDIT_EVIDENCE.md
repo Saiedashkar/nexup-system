@@ -78,7 +78,7 @@ The durability proofs need a real PostgreSQL, and NEXUP's real database is data.
 `scripts/run-persistence-proof.sh` therefore stands up a **throwaway** cluster:
 
 ```bash
-bash scripts/run-persistence-proof.sh                                    # 7 tests, offline
+bash scripts/run-persistence-proof.sh                                    # 9 tests, offline
 PROOF_TEST=tests/workforce-step5-live-durability.test.ts \
   bash scripts/run-persistence-proof.sh                                  # 1 test, + the bridge env
 ```

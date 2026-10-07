@@ -1,4 +1,4 @@
-import type { AgentExecutionStatus, AgentJobRequest } from "../agent-runtime";
+import type { AgentExecutionStatus, AgentJobRequest, AgentExecutionErrorCategory } from "../agent-runtime";
 import type { HermesCorrelation, HermesTransportPayload, HermesTransportResult } from "./hermes-transport";
 
 /**
@@ -152,6 +152,25 @@ export function mapHermesStatus(raw: unknown): AgentExecutionStatus {
    Map out — raw output → generic execution record
    ═══════════════════════════════════════════════════════ */
 
+/* The adapter's own richer vocabulary maps INTO the neutral one, so a generic
+   execution record never grows an HTTP-specific field just because this
+   provider needs one. */
+const GENERIC_ERROR_CATEGORY: Record<HermesErrorCategory, AgentExecutionErrorCategory> = {
+  NONE: "NONE",
+  TIMEOUT: "TIMEOUT",
+  TRANSPORT: "TRANSPORT",
+  HTTP: "TRANSPORT",
+  BLOCKED: "BLOCKED",
+  MALFORMED_OUTPUT: "MALFORMED_OUTPUT",
+  RUNTIME_ERROR: "RUNTIME_ERROR",
+  UNSUPPORTED: "UNSUPPORTED",
+};
+
+/** Maps a provider-specific category into the provider-neutral set. */
+export function toGenericErrorCategory(category: HermesErrorCategory): AgentExecutionErrorCategory {
+  return GENERIC_ERROR_CATEGORY[category] ?? "RUNTIME_ERROR";
+}
+
 export type HermesErrorCategory =
   | "NONE"
   | "TIMEOUT"
@@ -185,6 +204,8 @@ export type HermesExecutionRecord = {
   truncated: boolean;
   /** Opaque reference; the raw provider output is not promoted to a core type. */
   rawRef?: string;
+  /** True when this record answered an idempotent replay: no new run was made. */
+  replayed?: boolean;
 };
 
 /** Tolerant JSON parse: a non-JSON body is not an exception, it is `malformed`. */

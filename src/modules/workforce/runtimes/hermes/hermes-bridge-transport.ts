@@ -2,6 +2,8 @@ import type { HermesBridgeClient } from "./bridge-client";
 import { assertAddressableProfile } from "./hermes-config";
 import { boundText, redactSecrets } from "./hermes-spawn";
 import type {
+  HermesAsyncTransport,
+  HermesRunStart,
   HermesTransport,
   HermesTransportErrorKind,
   HermesTransportRequest,
@@ -51,7 +53,7 @@ function mapBridgeErrorCode(code: string | undefined): HermesTransportErrorKind 
   }
 }
 
-export class HermesBridgeTransport implements HermesTransport {
+export class HermesBridgeTransport implements HermesTransport, HermesAsyncTransport {
   readonly kind = "BRIDGE";
 
   private readonly options: HermesBridgeTransportOptions;
@@ -76,7 +78,7 @@ export class HermesBridgeTransport implements HermesTransport {
         case "health":
           return await this.health(request, startedAt);
         case "submit":
-          return await this.submit(request, startedAt);
+          return await this.submit(request);
         case "status":
           return await this.status(request, startedAt);
         case "cancel":
@@ -89,6 +91,48 @@ export class HermesBridgeTransport implements HermesTransport {
     }
   }
 
+  /**
+   * Starts the run and returns its id at once, with the terminal result arriving
+   * on `completion`. This is the bridge's real shape: `/v1/runs` answers 201 the
+   * moment the run is accepted, and the run then lives until its terminal frame.
+   *
+   * `submit` below is the fused form built on this one, so there is a single
+   * implementation of the streaming/terminal logic.
+   */
+  async startRun(request: HermesTransportRequest): Promise<HermesRunStart> {
+    const startedAt = Date.now();
+
+    try {
+      assertAddressableProfile(request.profile);
+    } catch {
+      return { state: "NOT_STARTED", result: this.failure("FORBIDDEN", startedAt) };
+    }
+    if (!this.options.client) return { state: "NOT_STARTED", result: this.failure("UNAVAILABLE", startedAt) };
+    if (request.operation !== "submit") return { state: "NOT_STARTED", result: this.failure("UNSUPPORTED", startedAt) };
+
+    try {
+      const submitted = await this.options.client.submitRun({
+        instruction: request.payload?.instruction ?? "",
+        contextJson: request.payload?.contextJson,
+        correlation: request.correlation,
+        timeoutMs: request.timeoutMs,
+      });
+      const runId = submitted?.runId;
+      if (typeof runId !== "string" || !runId) {
+        // A 201 without the id its own routes are keyed by is useless: say so.
+        return { state: "NOT_STARTED", result: this.failure("MALFORMED", startedAt) };
+      }
+      const completion = this.consumeRun(runId, request).then((terminal) =>
+        terminal.ok
+          ? this.ok(terminal.raw, request, startedAt)
+          : this.failure(terminal.errorKind ?? "UNAVAILABLE", startedAt),
+      );
+      return { state: "STARTED", executionId: runId, completion };
+    } catch (error) {
+      return { state: "NOT_STARTED", result: this.failure(this.classify(error), startedAt) };
+    }
+  }
+
   private async health(request: HermesTransportRequest, startedAt: number): Promise<HermesTransportResult> {
     const health = await this.options.client.health();
     const status = health.hermes === "unavailable" ? "unavailable" : health.hermes === "degraded" ? "degraded" : "healthy";
@@ -96,18 +140,10 @@ export class HermesBridgeTransport implements HermesTransport {
     return this.ok(JSON.stringify({ status, detail: health.detail, profile: request.profile }), request, startedAt);
   }
 
-  private async submit(request: HermesTransportRequest, startedAt: number): Promise<HermesTransportResult> {
-    const submitted = await this.options.client.submitRun({
-      instruction: request.payload?.instruction ?? "",
-      contextJson: request.payload?.contextJson,
-      correlation: request.correlation,
-      timeoutMs: request.timeoutMs,
-    });
-
-    const terminal = await this.consumeRun(submitted.runId, request);
-    if (!terminal.ok) return this.failure(terminal.errorKind ?? "UNAVAILABLE", startedAt);
-
-    return this.ok(terminal.raw, request, startedAt);
+  private async submit(request: HermesTransportRequest): Promise<HermesTransportResult> {
+    const start = await this.startRun(request);
+    if (start.state === "NOT_STARTED") return start.result;
+    return start.completion;
   }
 
   /** Drains the SSE stream, accumulating deltas as a fallback for an empty complete frame. */

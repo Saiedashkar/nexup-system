@@ -100,6 +100,15 @@ export { InMemoryActorRegistry } from "./actors/actor-registry";
 export type { ActorRegistry } from "./actors/actor-registry";
 export { execActorRegistration, founderActorRegistration, systemActorRegistration } from "./actors/exec-actor";
 
+export {
+  internalStrategyAnalystRegistration,
+  INTERNAL_STRATEGY_ANALYST_ACTOR_ID,
+  INTERNAL_STRATEGY_ANALYST_SLUG,
+  INTERNAL_STRATEGY_ANALYST_ROLE,
+  STRATEGY_DEPARTMENT,
+} from "./actors/strategy-actor";
+export type { StrategyActorBindingInput } from "./actors/strategy-actor";
+
 export * from "./capabilities/capability-contracts";
 export { InMemoryCapabilityRegistry } from "./capabilities/capability-registry";
 export type { CapabilityRegistry } from "./capabilities/capability-registry";
@@ -122,3 +131,6 @@ export type { MissionRepository } from "./missions/mission-repository";
 export { MissionService } from "./missions/mission-service";
 
 export * from "./execution/actor-execution-context";
+
+/* ── Step 4 — the first REAL actor wired to a real runtime ── */
+export * from "./orchestration/strategy-analyst";

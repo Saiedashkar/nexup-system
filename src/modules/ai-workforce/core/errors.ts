@@ -60,6 +60,8 @@ export const AI_WORKFORCE_ERROR_CODES = [
   "RUNTIME_NOT_FOUND",
   "RUNTIME_UNSUPPORTED",
   "RUNTIME_UNHEALTHY",
+  /** A caller stopped WAITING for an execution; the execution itself may still be running. */
+  "RUNTIME_TIMEOUT",
   "INVALID_MISSION",
   "MISSION_NOT_FOUND",
   "INVALID_MISSION_TRANSITION",

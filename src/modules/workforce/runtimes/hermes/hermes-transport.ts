@@ -93,6 +93,31 @@ export interface HermesTransport {
 }
 
 /* ═══════════════════════════════════════════════════════
+   Optional NON-BLOCKING start
+   ═══════════════════════════════════════════════════════
+
+   `invoke` is one call that returns one result, so it can only express a
+   transport that decides an outcome synchronously. A transport that owns a run
+   lifecycle (the bridge) can additionally START the run and hand back its id
+   and a completion promise, exactly like the provider does. Transports that
+   cannot are unchanged and the adapter falls back to the blocking call. */
+
+export type HermesRunStart =
+  /** The run exists now. `executionId` is the id its control routes accept. */
+  | { state: "STARTED"; executionId: string; completion: Promise<HermesTransportResult> }
+  /** It never started; `result` carries the honest failure. */
+  | { state: "NOT_STARTED"; result: HermesTransportResult };
+
+export interface HermesAsyncTransport extends HermesTransport {
+  startRun(request: HermesTransportRequest): Promise<HermesRunStart>;
+}
+
+/** Whether a transport can start a run without waiting for its end. */
+export function isHermesAsyncTransport(transport: HermesTransport): transport is HermesAsyncTransport {
+  return typeof (transport as Partial<HermesAsyncTransport>).startRun === "function";
+}
+
+/* ═══════════════════════════════════════════════════════
    Observability — structured adapter events
    ═══════════════════════════════════════════════════════
 

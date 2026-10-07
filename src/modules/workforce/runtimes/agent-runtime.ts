@@ -87,11 +87,16 @@ export type AgentJobHandle = {
 /**
  * The execution port.
  *
- *   submitJob           hand a capability to the runtime
+ *   submitJob           hand a capability to the runtime AND wait for the end
  *   resumeJob           continue a parked execution
  *   cancelJob           request cancellation
  *   getExecutionStatus  observe state
  *   healthCheck         is this runtime usable right now
+ *
+ * `submitJob` is the FUSED form (start + wait) and stays for callers that cannot
+ * hold a handle across turns. A runtime with its own lifecycle also implements
+ * `AsyncAgentRuntime` below, where `startJob` returns immediately and status,
+ * events, waiting and cancellation are separately reachable.
  */
 export interface AgentRuntime {
   readonly identity: RuntimeIdentity;
@@ -106,6 +111,171 @@ export type RuntimeFactoryDeps = {
   ids: IdFactory;
   now: Clock;
 };
+
+/* ═══════════════════════════════════════════════════════
+   The ASYNCHRONOUS execution contract
+   ═══════════════════════════════════════════════════════
+
+   `submitJob` fuses "start it" with "and wait for the terminal frame". A real
+   runtime has its OWN lifecycle: it accepts the work, runs it on its own
+   schedule, can be observed while it runs, and can be cancelled. This is that
+   lifecycle, expressed with no provider vocabulary in it.
+
+       startJob → handle → status/events → terminal result → cancel
+
+   `AsyncAgentRuntime extends AgentRuntime` rather than replacing it, so a
+   runtime that only implements the blocking port keeps working and callers ask
+   for the richer contract with `isAsyncAgentRuntime()` instead of testing for a
+   provider class. */
+
+/**
+ * Neutral error vocabulary. A provider adapter maps its own richer categories
+ * INTO this set — the generic record never grows a provider field.
+ */
+export const AGENT_EXECUTION_ERROR_CATEGORIES = [
+  "NONE",
+  "INVALID_REQUEST",
+  "TRANSPORT",
+  "TIMEOUT",
+  "BLOCKED",
+  "UNSUPPORTED",
+  "MALFORMED_OUTPUT",
+  "RUNTIME_ERROR",
+] as const;
+export type AgentExecutionErrorCategory = (typeof AGENT_EXECUTION_ERROR_CATEGORIES)[number];
+
+export type AgentExecutionError = {
+  category: AgentExecutionErrorCategory;
+  message: string;
+  /** Whether an identical retry could plausibly succeed. */
+  retryable: boolean;
+};
+
+/**
+ * A submission may carry an idempotency key. Two submissions with the same key
+ * to the SAME runtime must resolve to the SAME execution: a retry can never
+ * create a second real run.
+ */
+export type AgentJobSubmission = AgentJobRequest & {
+  idempotencyKey?: string;
+};
+
+/**
+ * The derived key a runtime uses when the caller supplied none. A retried
+ * dispatch of the same job IS the same execution, so `jobId` is a safe key;
+ * with neither field there is no key and each submission is a new run.
+ */
+export function executionIdempotencyKeyFor(request: AgentJobSubmission): string | undefined {
+  if (request.idempotencyKey) return request.idempotencyKey;
+  if (request.jobId) return `job:${request.jobId}`;
+  return undefined;
+}
+
+/**
+ * The structured, provider-neutral record of ONE execution.
+ *
+ * `handleId` is the runtime's own reference (the id its control routes accept);
+ * `providerExecutionId` is the provider's private reference (e.g. a session id)
+ * — reported for audit, never used as a handle.
+ */
+export type AgentExecutionRecord = {
+  handleId: string;
+  runtimeId: RuntimeId;
+  jobId?: JobId;
+  missionId?: MissionId;
+  actorId?: ActorId;
+  capabilityId?: CapabilityId;
+  status: AgentExecutionStatus;
+  submittedAt: string;
+  startedAt?: string;
+  updatedAt: string;
+  completedAt?: string;
+  durationMs?: number;
+  /** Provider's own reference when it differs from the handle. Never a handle. */
+  providerExecutionId?: string;
+  output?: unknown;
+  outputText?: string;
+  error?: AgentExecutionError;
+  truncated?: boolean;
+  /** The key this execution was deduplicated by, when one applied. */
+  idempotencyKey?: string;
+  /** True when this handle was returned for an ALREADY-known key: no new run. */
+  replayed?: boolean;
+};
+
+/* Ordered, per-execution events. Adapter-owned observability (the push sink on
+   the transport port) is unchanged; this is the pull side a caller can read. */
+export const AGENT_EXECUTION_EVENT_TYPES = [
+  "SUBMITTED",
+  "STARTED",
+  "PROGRESS",
+  "STATUS",
+  "COMPLETED",
+  "FAILED",
+  "CANCELLED",
+] as const;
+export type AgentExecutionEventType = (typeof AGENT_EXECUTION_EVENT_TYPES)[number];
+
+export type AgentExecutionEvent = {
+  handleId: string;
+  runtimeId: RuntimeId;
+  /** Monotonic within one execution, starting at 1. */
+  seq: number;
+  at: string;
+  type: AgentExecutionEventType;
+  status: AgentExecutionStatus;
+  /** Bounded, non-secret note. */
+  detail?: string;
+};
+
+export type AgentExecutionWaitOptions = {
+  /**
+   * How long the CALLER is willing to wait. On expiry `waitForExecution`
+   * throws RUNTIME_TIMEOUT — it does NOT cancel the execution. Omitted = wait
+   * until the runtime reaches a terminal state (the transport timeout still
+   * bounds the run itself).
+   */
+  timeoutMs?: number;
+  /** Advisory poll interval for runtimes that poll rather than subscribe. */
+  pollMs?: number;
+};
+
+export const DEFAULT_EXECUTION_WAIT_TIMEOUT_MS = 120_000;
+
+/** Terminal = finished, one way or another. `UNKNOWN` is NOT terminal. */
+export function isTerminalExecutionStatus(status: AgentExecutionStatus): boolean {
+  return status === "SUCCEEDED" || status === "FAILED" || status === "CANCELLED";
+}
+
+/** The asynchronous half of the port. */
+export interface AgentExecutionLifecycle {
+  /** Accept the work and return a usable handle. Does NOT wait for the end. */
+  startJob(request: AgentJobSubmission): Promise<AgentJobHandle>;
+  /** The full record, whether or not the execution has finished. */
+  getExecution(handleId: string): Promise<AgentExecutionRecord | null>;
+  /** Ordered events observed for this execution (empty for an unknown handle). */
+  executionEvents(handleId: string): Promise<AgentExecutionEvent[]>;
+  /**
+   * The terminal record, waiting if necessary.
+   * @throws RUNTIME_NOT_FOUND for an unstarted handle
+   * @throws RUNTIME_TIMEOUT when the CALLER's wait expires (execution continues)
+   */
+  waitForExecution(handleId: string, options?: AgentExecutionWaitOptions): Promise<AgentExecutionRecord>;
+}
+
+/** A runtime that hosts work with its own lifecycle — the production shape. */
+export interface AsyncAgentRuntime extends AgentRuntime, AgentExecutionLifecycle {}
+
+/** Whether a runtime implements the asynchronous contract, without a cast. */
+export function isAsyncAgentRuntime(runtime: AgentRuntime): runtime is AsyncAgentRuntime {
+  const candidate = runtime as Partial<AsyncAgentRuntime>;
+  return (
+    typeof candidate.startJob === "function" &&
+    typeof candidate.waitForExecution === "function" &&
+    typeof candidate.getExecution === "function" &&
+    typeof candidate.executionEvents === "function"
+  );
+}
 
 /**
  * The runtime an actor should execute on.

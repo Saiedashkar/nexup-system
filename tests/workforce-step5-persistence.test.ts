@@ -237,7 +237,8 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
     // --- the process dies here. A new one re-reads everything. ---
     const runningExecution = (await first.domain.executionRecords.listForTask(task.id))[0];
     const firstHandle = runningExecution.handleId;
-    const providerExecutionId = runningExecution.providerExecutionId;
+    // Whatever the runtime reported — present or absent — must survive verbatim.
+    const providerExecutionId = runningExecution.providerExecutionId ?? null;
 
     const second = await boot("p2");
 
@@ -257,7 +258,7 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
 
     const [rehydratedExecution] = await second.domain.executionRecords.listForTask(task.id);
     expect(rehydratedExecution.handleId).toBe(firstHandle);
-    expect(rehydratedExecution.providerExecutionId).toBe(providerExecutionId);
+    expect(rehydratedExecution.providerExecutionId ?? null).toBe(providerExecutionId);
     expect(rehydratedExecution.status).toBe("SUCCEEDED");
     expect(rehydratedExecution.idempotencyKey).toBe(`task:${task.id}:attempt:1`);
     // The deterministic transport answers in the same breath as the handle, so

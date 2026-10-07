@@ -16,6 +16,7 @@ import {
   type ExecutionRecordRepository,
 } from "./execution/execution-record";
 import { InMemoryReviewRepository, ReviewService, type ReviewRepository } from "./review/task-review";
+import { createCommandCenterQueries, type CommandCenterQueries } from "./queries/command-center";
 
 /**
  * Workforce Runtime Core — module surface (Phase 2A).
@@ -68,6 +69,12 @@ export type WorkforceDomain = {
   reviews: ReviewService;
   /** The store behind `reviews` (in memory, or durable). */
   reviewRepository: ReviewRepository;
+  /**
+   * READ-ONLY query surfaces for the Command Center (active missions, execution
+   * status, recent activity, decision queue). They never advance anything;
+   * Step 6 is what will draw them.
+   */
+  queries: CommandCenterQueries;
   ids: IdFactory;
   now: Clock;
 };
@@ -88,6 +95,13 @@ export function createWorkforceDomain(options: CreateWorkforceDomainOptions = {}
   const executions = new ExecutionRecorder({ records: executionRecords, ids, now });
   const reviewRepository = options.reviews ?? new InMemoryReviewRepository();
   const reviews = new ReviewService({ ids, now, actors, reviews: reviewRepository });
+  const queries = createCommandCenterQueries({
+    missions: missionRepository,
+    tasks,
+    executionRecords,
+    reviews: reviewRepository,
+    now,
+  });
 
   for (const runtime of options.runtimeAdapters ?? []) {
     runtimes.register(runtime);
@@ -105,6 +119,7 @@ export function createWorkforceDomain(options: CreateWorkforceDomainOptions = {}
     executions,
     reviews,
     reviewRepository,
+    queries,
     ids,
     now,
   };
@@ -219,3 +234,16 @@ export * from "./orchestration/strategy-analyst";
 
 /* ── Step 5 — the real mission lifecycle, in ONE orchestrator ── */
 export * from "./orchestration/mission-orchestrator";
+
+/* ── Step 5/8 — READ-ONLY query surfaces for the Command Center (Step 6 draws
+   them; nothing here replaces a UI mock) ── */
+export { createCommandCenterQueries } from "./queries/command-center";
+export type {
+  ActivityRow,
+  CommandCenterQueries,
+  CommandCenterSnapshot,
+  DecisionRow,
+  ExecutionStatusRow,
+  MissionProgress,
+  MissionTaskCounts,
+} from "./queries/command-center";

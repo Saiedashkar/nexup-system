@@ -89,10 +89,6 @@ function toDate(iso: string): Date {
   return new Date(iso);
 }
 
-function fromDate(value: Date | null | undefined): string | undefined {
-  return value ? value.toISOString() : undefined;
-}
-
 /* ═══════════════════════════════════════════════════════
    Missions
    ═══════════════════════════════════════════════════════ */

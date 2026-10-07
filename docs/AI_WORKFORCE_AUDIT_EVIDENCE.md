@@ -89,6 +89,20 @@ and deletes the cluster. It never starts, stops or touches any running
 PostgreSQL service, never reads `DATABASE_URL`, and applies no migration to any
 real database.
 
+The suite `boot()`s several "processes" — each with its own Prisma client and its
+own registries — so a re-read is a genuine reconstruction and not the same
+object handed back. Those still share the vitest process, so the first test goes
+one step further and reads the finished chain from a **separate operating-system
+process**:
+
+```bash
+node scripts/read-durable-mission.cjs <databaseUrl> <missionId>
+```
+
+That script imports nothing from `src/`, so no registry, cache or module state
+built by the test is reachable from it — the database is the only possible
+source. It prints one JSON object and contains no credentials.
+
 Because that database is **not** the production one, the live durability proof
 does not close Step 5: applying the migration for real needs explicit owner
 approval against a separate development database.
@@ -187,7 +201,7 @@ command from the table above, and compare.
 | Artifact | Proof |
 |---|---|
 | `docs/evidence/step4-live-cancel-2026-10-07.json` | live cancel through `AgentRuntime.cancelJob` |
-| `docs/evidence/step5-durability-local-2026-10-07.json` | the Step-5 lifecycle over durable repositories on a real PostgreSQL, re-hydrated after a restart |
+| `docs/evidence/step5-durability-local-2026-10-07.json` | the Step-5 lifecycle over durable repositories on a real PostgreSQL, re-hydrated by fresh domains and by a separate operating-system process |
 | `docs/evidence/step5-live-durability-2026-10-07.json` | the same lifecycle with the REAL agent over the bridge, persisted and re-hydrated |
 
 ## Historical note

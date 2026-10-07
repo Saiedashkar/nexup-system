@@ -15,7 +15,7 @@ production activation.
 |---|---|
 | Authoritative starting point | `cec9056` (`feature/ai-workforce-foundation`) |
 | Application boundary + Command identity | `dacdc32` |
-| This gate (this document, the readiness package, the refreshed evidence) | see the commit that adds this file |
+| This gate (this document, the readiness package, the refreshed evidence) | `51ad2e0` (this file, readiness package, both evidence files, and the two script refinements) |
 | `master` / `origin/master` | `bf701fac705cfbb2672cf931dda3962e7fafc617` — **untouched** |
 
 Only the feature branch was pushed. No migration file was added to

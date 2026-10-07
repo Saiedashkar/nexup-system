@@ -1,0 +1,123 @@
+{
+  "proof": "the APPLICATION acceptance proofs: the full lifecycle through the application boundary (Command → … → human decision → COMPLETED), Command idempotency, and a REAL multi-process restart proof against the isolated development database",
+  "generatedAt": "2026-10-07T19:05:38.469Z",
+  "exitStatus": "0",
+  "runnerSaidSuccess": true,
+  "counts": {
+    "testFiles": 4,
+    "tests": 9,
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0
+  },
+  "testedCommit": "dacdc3204c5378c8ea67898a9e9002a6889996b0",
+  "workingTreeDirty": true,
+  "workingTreeChanges": [
+    "M scripts/dev-db.mjs",
+    "M scripts/write-app-proof-evidence.mjs",
+    "?? docs/AI_WORKFORCE_PRODUCTION_MIGRATION_PACKAGE.md",
+    "?? docs/evidence/step5-app-acceptance-2026-10-07.json",
+    "?? docs/evidence/step5-dev-migration-2026-10-07.json"
+  ],
+  "environment": {
+    "applicationDatabase": "the isolated development cluster only — 127.0.0.1, created by `initdb` for this work, never the production Supabase host",
+    "productionDatabase": "NOT touched. The application proof never reads DATABASE_URL.",
+    "transport": "the real Hermes runtime adapter over the DETERMINISTIC test transport (an explicit allowTestTransport opt-in), so the proofs spend no provider turn. The live bridge proof is separate (scripts/run-persistence-proof.sh)."
+  },
+  "isolatedCluster": {
+    "running": true,
+    "dataDirectory": "C:\\Users\\MegaStore\\AppData\\Local\\nexup-dev-db",
+    "port": "5501",
+    "listenAddresses": "127.0.0.1",
+    "database": "nexup_dev",
+    "version": "PostgreSQL 18.6 on x86_64-windows, compiled by msvc-19.44.35228, 64-bit",
+    "postmasterStartedAt": "2026-10-07 20:59:27.132171+03",
+    "isLoopbackConnection": "yes",
+    "superuser": "postgres",
+    "aiTables": [
+      "ai_approvals",
+      "ai_command_intents",
+      "ai_execution_records",
+      "ai_jobs",
+      "ai_missions",
+      "ai_run_events",
+      "ai_runs",
+      "ai_task_reviews",
+      "ai_tasks"
+    ],
+    "legacyTables": 28,
+    "productionUrlHost": {
+      "source": ".env",
+      "host": "db.hoahuemoxjwivbuvxlkt.supabase.co",
+      "port": "6543",
+      "loopback": false
+    }
+  },
+  "suites": [
+    {
+      "file": "tests\\workforce-step5-app-integration.test.ts",
+      "status": "passed",
+      "assertions": [
+        {
+          "title": "STEP 5 — the application boundary runs the whole lifecycle on a real database runs Command → Mission → Task → Actor → Capability → Runtime → Execution → Review → COMPLETED",
+          "status": "passed",
+          "durationMs": 638.1361000000002
+        },
+        {
+          "title": "STEP 5 — the application boundary runs the whole lifecycle on a real database returns the SAME mission for a retry, and runs nothing new",
+          "status": "passed",
+          "durationMs": 424.90229999999974
+        },
+        {
+          "title": "STEP 5 — the application boundary runs the whole lifecycle on a real database refuses a reused key with a DIFFERENT command (COMMAND_KEY_REUSED)",
+          "status": "passed",
+          "durationMs": 300.2548999999999
+        },
+        {
+          "title": "STEP 5 — the application boundary runs the whole lifecycle on a real database still creates a NEW mission for a genuinely new command",
+          "status": "passed",
+          "durationMs": 382.53219999999965
+        },
+        {
+          "title": "STEP 5 — the application boundary runs the whole lifecycle on a real database refuses a capability the actor is NOT assigned, with zero transport calls",
+          "status": "passed",
+          "durationMs": 165.7588999999998
+        },
+        {
+          "title": "STEP 5 — the application boundary runs the whole lifecycle on a real database rehydrates the finished mission through a FRESH application",
+          "status": "passed",
+          "durationMs": 524.9126999999999
+        }
+      ]
+    },
+    {
+      "file": "tests\\workforce-step5-app-restart.test.ts",
+      "status": "passed",
+      "assertions": [
+        {
+          "title": "STEP 5 — the application rehydrates a mission after a REAL process restart fails closed when the process has no verified durable database",
+          "status": "passed",
+          "durationMs": 4.8332000000000335
+        },
+        {
+          "title": "STEP 5 — the application rehydrates a mission after a REAL process restart process A hands over an OPEN HUMAN DECISION and process B finishes the mission from the rows",
+          "status": "passed",
+          "durationMs": 9458.7159
+        },
+        {
+          "title": "STEP 5 — the application rehydrates a mission after a REAL process restart measures the case that does NOT work: an in-flight handle cannot be settled after a restart",
+          "status": "passed",
+          "durationMs": 7562.482100000001
+        }
+      ]
+    }
+  ],
+  "howToReproduce": [
+    "node scripts/dev-db.mjs up        # isolated development cluster + pre-migration schema",
+    "bash scripts/run-app-proof.sh      # runs both suites and re-writes this file"
+  ],
+  "knownLimitationsRecordedByThisRun": [
+    "An execution left IN FLIGHT by a process restart cannot be settled: the runtime adapter's handle bookkeeping is in-process memory and the port has no re-adoption seam. The restart suite asserts this failure and the stuck rows rather than hiding it.",
+    "The provider-side cancellation of such a handle is not confirmed, so cancelling such a mission closes the bookkeeping without pretending the provider run was stopped."
+  ]
+}

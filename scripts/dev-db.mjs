@@ -440,7 +440,11 @@ function migrate() {
     registeredMigrationReplay: replayRegisteredMigrations(),
     identity,
     testedCommit: git(["rev-parse", "HEAD"]),
+    // Listed, not just asserted: this run WRITES an evidence file, so the tree
+    // is never pristine at the moment of measurement. A reader can check that
+    // the only changes are the artifacts themselves.
     workingTreeDirty: git(["status", "--porcelain"]).length > 0,
+    workingTreeChanges: lines(git(["status", "--porcelain"])),
     migrationsApplied: applied,
     preMigration: before,
     postMigration: after,
@@ -470,7 +474,7 @@ function migrate() {
   console.log(`   database matches schema.prisma      : ${checks.databaseMatchesSchemaAfter}`);
   console.log(`   evidence                            : ${path.relative(REPO_ROOT, outFile)}`);
 
-  const failed = Object.entries(checks).filter(([key, value]) => typeof value === "boolean" && !value);
+  const failed = Object.entries(checks).filter(([, value]) => typeof value === "boolean" && !value);
   if (failed.length > 0) {
     console.error(`\nFAILED checks: ${failed.map(([key]) => key).join(", ")} — the evidence file records the exact state.`);
     process.exitCode = 1;

@@ -1,0 +1,247 @@
+{
+  "proof": "the OWNER-APPROVED development-database application of the proposed AI Workforce migrations (1A → 1B → PHASE_2 → PHASE_3) onto a pre-migration schema, with mechanical verification of additive-only safety",
+  "appliedAt": "2026-10-07T19:04:33.601Z",
+  "environment": {
+    "cluster": "development cluster created by `initdb` for this work — loopback only, trust auth",
+    "dataDirectory": "C:\\Users\\MegaStore\\AppData\\Local\\nexup-dev-db",
+    "port": "5501",
+    "database": "nexup_dev",
+    "productionDatabase": "NOT touched. Every command ran with DATABASE_URL pointed at this dev cluster; no proposed migration is registered in prisma/migrations, so `prisma migrate deploy` cannot pick one up by accident.",
+    "credentialsPrinted": "none — trust auth on loopback, and this script never reads DATABASE_URL to decide where to connect"
+  },
+  "preMigrationSchema": {
+    "source": "the Prisma datamodel at the commit this branch forked from (git merge-base HEAD master)",
+    "reason": "`prisma migrate deploy` cannot replay the registered history onto an empty database: 20260823221818_init creates Client_phone_key as a UNIQUE INDEX and 20260824120000_add_business_multitenancy drops it as a CONSTRAINT (error 42704). The baseline is therefore built from the model, and the replay failure is recorded below rather than assumed away.",
+    "tables": 28,
+    "legacyFingerprint": {
+      "hash": "0e72c9ecdfd4a470f0e59f52f30cff67e55879287fcbd084a879ba6440007b0e",
+      "columns": 282
+    }
+  },
+  "registeredMigrationReplay": {
+    "database": "nexup_dev_migratecheck",
+    "exitCode": 1,
+    "replayable": false,
+    "appliedMigrations": [
+      "20260823221818_init",
+      "20260824120000_add_business_multitenancy"
+    ],
+    "failedMigration": "20260824120000_add_business_multitenancy",
+    "failure": "ERROR: constraint \"Client_phone_key\" of relation \"Client\" does not exist"
+  },
+  "identity": {
+    "running": true,
+    "dataDirectory": "C:\\Users\\MegaStore\\AppData\\Local\\nexup-dev-db",
+    "port": "5501",
+    "listenAddresses": "127.0.0.1",
+    "database": "nexup_dev",
+    "version": "PostgreSQL 18.6 on x86_64-windows, compiled by msvc-19.44.35228, 64-bit",
+    "postmasterStartedAt": "2026-10-07 20:59:27.132171+03",
+    "isLoopbackConnection": "yes",
+    "superuser": "postgres",
+    "aiTables": [
+      "ai_approvals",
+      "ai_command_intents",
+      "ai_execution_records",
+      "ai_jobs",
+      "ai_missions",
+      "ai_run_events",
+      "ai_runs",
+      "ai_task_reviews",
+      "ai_tasks"
+    ],
+    "legacyTables": 28,
+    "productionUrlHost": {
+      "source": ".env",
+      "host": "db.hoahuemoxjwivbuvxlkt.supabase.co",
+      "port": "6543",
+      "loopback": false
+    }
+  },
+  "testedCommit": "dacdc3204c5378c8ea67898a9e9002a6889996b0",
+  "workingTreeDirty": true,
+  "workingTreeChanges": [
+    "M scripts/dev-db.mjs",
+    "M scripts/write-app-proof-evidence.mjs",
+    "?? docs/AI_WORKFORCE_PRODUCTION_MIGRATION_PACKAGE.md",
+    "?? docs/evidence/step5-app-acceptance-2026-10-07.json",
+    "?? docs/evidence/step5-dev-migration-2026-10-07.json"
+  ],
+  "migrationsApplied": [
+    {
+      "file": "prisma/proposed-migrations/AI_WORKFORCE_PHASE_1A/migration.sql",
+      "sha256": "3376311a93f3bec4135b1e8c37238672767ca2d9966ef6e278a0f61813f6f6a0",
+      "additiveVerifier": "ok",
+      "additiveVerifierOutput": "ok   additive-only: prisma/proposed-migrations/AI_WORKFORCE_PHASE_1A/migration.sql\nok   no DROP / DELETE / TRUNCATE / RENAME\nok   every ALTER TABLE targets a table this file creates (ai_jobs, ai_runs, ai_run_events, ai_tool_invocations, ai_approvals)\n     tables created : ai_jobs, ai_runs, ai_run_events, ai_tool_invocations, ai_approvals\n     statement kinds: 8× CREATE TYPE, 5× CREATE TABLE, 25× CREATE INDEX, 4× ALTER TABLE",
+      "applyExit": 0,
+      "applyStderr": ""
+    },
+    {
+      "file": "prisma/proposed-migrations/AI_WORKFORCE_PHASE_1B/migration.sql",
+      "sha256": "8418dba5841b289b871f1019f1b6abd6bda3c3aa470cab2afa0e9161dfbad2a1",
+      "additiveVerifier": "REFUSED (reviewed)",
+      "additiveVerifierOutput": "",
+      "applyExit": 0,
+      "applyStderr": ""
+    },
+    {
+      "file": "prisma/proposed-migrations/AI_WORKFORCE_PHASE_2/migration.sql",
+      "sha256": "9b269aff30564d028daecac139c80baf090cc714783adb40ce6d469522a7491a",
+      "additiveVerifier": "ok",
+      "additiveVerifierOutput": "ok   additive-only: prisma/proposed-migrations/AI_WORKFORCE_PHASE_2/migration.sql\nok   no DROP / DELETE / TRUNCATE / RENAME\nok   every ALTER TABLE targets a table this file creates (ai_missions, ai_tasks, ai_execution_records, ai_task_reviews)\n     tables created : ai_missions, ai_tasks, ai_execution_records, ai_task_reviews\n     statement kinds: 4× CREATE TABLE, 23× CREATE INDEX, 2× CREATE UNIQUE INDEX, 6× ALTER TABLE",
+      "applyExit": 0,
+      "applyStderr": ""
+    },
+    {
+      "file": "prisma/proposed-migrations/AI_WORKFORCE_PHASE_3/migration.sql",
+      "sha256": "59e244b2a45118263e872022c98de650b8d4e3360fe649cf9dd6f231413eb273",
+      "additiveVerifier": "ok",
+      "additiveVerifierOutput": "ok   additive-only: prisma/proposed-migrations/AI_WORKFORCE_PHASE_3/migration.sql\nok   no DROP / DELETE / TRUNCATE / RENAME\nok   every ALTER TABLE targets a table this file creates (ai_command_intents)\n     tables created : ai_command_intents\n     statement kinds: 1× CREATE TABLE, 3× CREATE INDEX, 1× CREATE UNIQUE INDEX",
+      "applyExit": 0,
+      "applyStderr": ""
+    }
+  ],
+  "preMigration": {
+    "legacyFingerprint": {
+      "hash": "0e72c9ecdfd4a470f0e59f52f30cff67e55879287fcbd084a879ba6440007b0e",
+      "columns": 282
+    },
+    "legacyRowCounts": {
+      "ActivityLog": 0,
+      "Business": 1,
+      "BusinessOwnership": 0,
+      "CapitalContribution": 0,
+      "CapitalSpend": 0,
+      "Client": 0,
+      "ClientPayment": 0,
+      "Deal": 0,
+      "Expense": 0,
+      "FixedExpense": 0,
+      "NexupProfitLedger": 0,
+      "OfficeAllocationSetting": 0,
+      "OfficeExpense": 0,
+      "OfficeTool": 0,
+      "OfficeToolPayment": 0,
+      "Partner": 0,
+      "PartnerTransaction": 0,
+      "PaymentReceipt": 0,
+      "PoolTransaction": 0,
+      "ProfitTransfer": 0,
+      "ProjectRecord": 0,
+      "Property": 0,
+      "ServiceType": 0,
+      "Subscription": 0,
+      "SubscriptionInvoice": 0,
+      "User": 1,
+      "Withdrawal": 0,
+      "_ProjectRecordToServiceType": 0
+    },
+    "aiTables": [],
+    "foreignKeys": 0,
+    "indexes": 0,
+    "diffToSchema": {
+      "empty": false,
+      "tablesInDiff": [
+        "ai_jobs",
+        "ai_runs",
+        "ai_run_events",
+        "ai_approvals",
+        "ai_missions",
+        "ai_tasks",
+        "ai_execution_records",
+        "ai_command_intents",
+        "ai_task_reviews"
+      ],
+      "bytes": 13156
+    }
+  },
+  "postMigration": {
+    "legacyFingerprint": {
+      "hash": "0e72c9ecdfd4a470f0e59f52f30cff67e55879287fcbd084a879ba6440007b0e",
+      "columns": 282
+    },
+    "legacyRowCounts": {
+      "ActivityLog": 0,
+      "Business": 1,
+      "BusinessOwnership": 0,
+      "CapitalContribution": 0,
+      "CapitalSpend": 0,
+      "Client": 0,
+      "ClientPayment": 0,
+      "Deal": 0,
+      "Expense": 0,
+      "FixedExpense": 0,
+      "NexupProfitLedger": 0,
+      "OfficeAllocationSetting": 0,
+      "OfficeExpense": 0,
+      "OfficeTool": 0,
+      "OfficeToolPayment": 0,
+      "Partner": 0,
+      "PartnerTransaction": 0,
+      "PaymentReceipt": 0,
+      "PoolTransaction": 0,
+      "ProfitTransfer": 0,
+      "ProjectRecord": 0,
+      "Property": 0,
+      "ServiceType": 0,
+      "Subscription": 0,
+      "SubscriptionInvoice": 0,
+      "User": 1,
+      "Withdrawal": 0,
+      "_ProjectRecordToServiceType": 0
+    },
+    "aiTables": [
+      "ai_approvals",
+      "ai_command_intents",
+      "ai_execution_records",
+      "ai_jobs",
+      "ai_missions",
+      "ai_run_events",
+      "ai_runs",
+      "ai_task_reviews",
+      "ai_tasks"
+    ],
+    "foreignKeys": 9,
+    "indexes": 61,
+    "diffToSchema": {
+      "empty": true,
+      "tablesInDiff": [],
+      "bytes": 32
+    }
+  },
+  "checks": {
+    "additiveOnly": "each proposed file passes scripts/verify-proposed-migration.mjs; PHASE_1B is EXPECTED to refuse (its reviewed DROP targets a proposed table that never existed in any database)",
+    "legacySchemaFingerprintUnchanged": true,
+    "legacyRowCountsUnchanged": true,
+    "canaryRowsIntact": true,
+    "newTablesCreated": [
+      "ai_approvals",
+      "ai_command_intents",
+      "ai_execution_records",
+      "ai_jobs",
+      "ai_missions",
+      "ai_run_events",
+      "ai_runs",
+      "ai_task_reviews",
+      "ai_tasks"
+    ],
+    "newTablesExactlyAsExpected": true,
+    "theMissingTablesWereExactlyTheProposal": true,
+    "databaseMatchesSchemaAfter": true
+  },
+  "canary": {
+    "before": {
+      "business": "dev_canary_business|NEXUP|nexup",
+      "user": "dev_canary_user|canary@example.invalid"
+    },
+    "after": {
+      "business": "dev_canary_business|NEXUP|nexup",
+      "user": "dev_canary_user|canary@example.invalid"
+    }
+  },
+  "howToReproduce": [
+    "node scripts/dev-db.mjs up        # fresh loopback cluster + the pre-migration schema",
+    "node scripts/dev-db.mjs migrate   # applies 1A→1B→PHASE_2→PHASE_3 and re-writes this evidence",
+    "node scripts/dev-db.mjs status    # identity + schema state"
+  ]
+}

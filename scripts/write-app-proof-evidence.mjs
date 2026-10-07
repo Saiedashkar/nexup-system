@@ -74,7 +74,14 @@ const evidence = {
     skipped: results?.numPendingTests ?? null,
   },
   testedCommit: git(["rev-parse", "HEAD"]),
+  // Listed, not just asserted: this run WRITES an evidence file, so the tree is
+  // never pristine at the moment of measurement. A reader can check that the
+  // only changes are the artifacts themselves.
   workingTreeDirty: (git(["status", "--porcelain"]) ?? "").length > 0,
+  workingTreeChanges: (git(["status", "--porcelain"]) ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean),
   environment: {
     applicationDatabase:
       "the isolated development cluster only — 127.0.0.1, created by `initdb` for this work, never the production Supabase host",

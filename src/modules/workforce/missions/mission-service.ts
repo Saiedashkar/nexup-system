@@ -63,6 +63,8 @@ export class MissionService {
     };
     if (input.businessId) mission.businessId = input.businessId;
     if (input.workspaceRef) mission.workspaceRef = input.workspaceRef;
+    if (input.projectRef) mission.projectRef = input.projectRef;
+    if (input.clientRef) mission.clientRef = input.clientRef;
 
     return this.deps.missions.insert(mission);
   }

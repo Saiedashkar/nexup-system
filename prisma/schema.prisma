@@ -934,3 +934,204 @@ model AiApproval {
   @@index([createdAt])
   @@map("ai_approvals")
 }
+// ═══════════════════════════════════════════════════════
+// AI WORKFORCE — MISSION LIFECYCLE (Phase 2 — ADDITIVE, NOT YET MIGRATED)
+// ═══════════════════════════════════════════════════════
+//
+// FOUR new tables for the Step-5 lifecycle: Mission → Task → ExecutionRecord →
+// TaskReview. Nothing above is touched — no ALTER, no DROP, no RENAME — and no
+// foreign key is declared into a legacy table (actor, business, user and
+// workspace ids stay plain indexed strings), so the legacy schema stays
+// byte-identical.
+//
+//   - The proposed DDL lives in `prisma/proposed-migrations/AI_WORKFORCE_PHASE_2/`
+//     and is NOT part of `prisma/migrations/`, so `prisma migrate deploy` cannot
+//     pick it up by accident.
+//   - Lifecycle STATE is a validated `String`, not a Postgres enum. The state
+//     machines live in TypeScript (`mission-contracts.ts`, `task-contracts.ts`,
+//     `task-review.ts`) and are asserted there, so adding a state is a code
+//     change rather than an `ALTER TYPE` that cannot run inside a transaction.
+//   - The per-attempt audit trail is the `audit` JSON column on the execution
+//     record, not a fifth table: the domain already owns that ordered array and
+//     exposing it twice would create two owners for one fact. `Recent Activity`
+//     reads execution records by `updatedAt`. This is the same reasoning that
+//     removed the duplicating `ai_tool_invocations` table in Phase 1B.
+//   - No soft-delete columns: these are compliance/audit records, deliberately
+//     NOT added to `SOFT_DELETE_MODELS`.
+
+/// A business GOAL. Sits above tasks and points at them by reference.
+model AiMission {
+  id           String    @id
+  title        String
+  goal         String
+  /// Business/workspace/project/client references — opaque ids, never objects.
+  businessId   String?
+  workspaceRef String?
+  projectRef   String?
+  clientRef    String?
+  /// Actor or user id that created the mission.
+  createdBy    String
+  /// Actor or user id accountable for the mission.
+  owner        String?
+  participants Json      @default("[]")
+  state        String
+  priority     String    @default("NORMAL")
+  contextRefs  Json      @default("[]")
+  jobRefs      Json      @default("[]")
+  taskRefs     Json      @default("[]")
+  approvals    Json      @default("[]")
+  outputs      Json      @default("[]")
+  /// Serialised MissionTransition[]. The mission's own state history.
+  history      Json      @default("[]")
+  createdAt    DateTime
+  updatedAt    DateTime
+  startedAt    DateTime?
+  finishedAt   DateTime?
+
+  tasks      AiTask[]
+  executions AiExecutionRecord[]
+  reviews    AiTaskReview[]
+
+  @@index([state])
+  @@index([businessId])
+  @@index([projectRef])
+  @@index([clientRef])
+  @@index([createdAt])
+  @@map("ai_missions")
+}
+
+/// ONE unit of work inside a mission, with the accountable actor and capability.
+model AiTask {
+  id                        String    @id
+  missionId                 String
+  /// Order inside the mission (1-based). Dependencies win over order.
+  sequence                  Int
+  title                     String
+  objective                 String
+  input                     Json      @default("{}")
+  /// The actor accountable for this task. Null until assigned.
+  assignedActorId           String?
+  /// The capability the actor must be ASSIGNED to run.
+  requiredCapabilityId      String?
+  requiredCapabilityVersion String?
+  /// Task ids that must be COMPLETED before this one may run.
+  dependsOn                 Json      @default("[]")
+  state                     String
+  /// How many execution attempts have been made (0 before the first).
+  attempt                   Int       @default(0)
+  maxAttempts               Int       @default(2)
+  /// The execution record of the CURRENT (or last) attempt.
+  executionRecordId         String?
+  /// The runtime handle of the current attempt, for status/cancel.
+  executionHandleId         String?
+  /// The review awaiting a human decision, when the task is in REVIEW.
+  reviewId                  String?
+  result                    Json?
+  error                     Json?
+  /// Serialised TaskTransition[].
+  history                   Json      @default("[]")
+  createdAt                 DateTime
+  updatedAt                 DateTime
+  startedAt                 DateTime?
+  finishedAt                DateTime?
+
+  mission    AiMission           @relation(fields: [missionId], references: [id], onDelete: Restrict)
+  executions AiExecutionRecord[]
+  reviews    AiTaskReview[]
+
+  @@unique([missionId, sequence])
+  @@index([missionId])
+  @@index([state])
+  @@index([assignedActorId])
+  @@index([requiredCapabilityId])
+  @@map("ai_tasks")
+}
+
+/// ONE execution ATTEMPT. The audit spine of the lifecycle.
+/// `handleId` is the runtime's own handle (the bridge run id on BRIDGE);
+/// `providerExecutionId` is the provider's private reference (the Hermes
+/// session). They are deliberately different columns — conflating them made
+/// every status/cancel call answer RUN_NOT_FOUND.
+model AiExecutionRecord {
+  id                  String    @id
+  handleId            String
+  runtimeId           String
+  actorId             String
+  capabilityId        String
+  capabilityVersion   String?
+  /// The assignment edge that authorised this attempt.
+  assignmentId        String?
+  missionId           String?
+  taskId              String?
+  /// 1-based attempt number inside the task.
+  attempt             Int       @default(1)
+  providerExecutionId String?
+  status              String
+  /// The key that made this attempt idempotent, when one applied.
+  idempotencyKey      String?
+  /// True when the runtime answered an idempotent replay: no new real run.
+  replayed            Boolean   @default(false)
+  startedAt           DateTime
+  updatedAt           DateTime
+  completedAt         DateTime?
+  durationMs          Int?
+  /// The structured result. `output` is the parsed shape; `outputText` the raw
+  /// bounded provider text. Both travel because a provider may send one or the
+  /// other, and the audit needs whichever it sent.
+  output              Json?
+  outputText          String?
+  error               Json?
+  cancelledAt         DateTime?
+  cancelledReason     String?
+  /// Serialised ExecutionAuditEvent[]. Ordered, append-only per attempt.
+  audit               Json      @default("[]")
+  createdAt           DateTime  @default(now())
+
+  mission AiMission? @relation(fields: [missionId], references: [id], onDelete: Restrict)
+  task    AiTask?    @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  reviews AiTaskReview[]
+
+  @@unique([taskId, attempt])
+  @@index([handleId])
+  @@index([providerExecutionId])
+  @@index([idempotencyKey])
+  @@index([status])
+  @@index([runtimeId])
+  @@index([actorId])
+  @@index([missionId])
+  @@index([taskId])
+  @@index([updatedAt])
+  @@map("ai_execution_records")
+}
+
+/// The HUMAN AUTHORITY boundary. An agent's result is not a decision.
+/// A decision is a compare-and-set on PENDING: the first one wins, so a review
+/// can never be decided twice.
+model AiTaskReview {
+  id                String    @id
+  taskId            String
+  missionId         String
+  /// The attempt whose result is under review.
+  executionRecordId String
+  state             String    @default("PENDING")
+  /// Why the review exists (what the agent produced, in one bounded line).
+  summary           String
+  /// Who must decide.
+  reviewerActorId   String?
+  requestedBy       String
+  requestedAt       DateTime
+  decidedBy         String?
+  decidedAt         DateTime?
+  note              String?
+
+  task      AiTask            @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  mission   AiMission         @relation(fields: [missionId], references: [id], onDelete: Restrict)
+  execution AiExecutionRecord @relation(fields: [executionRecordId], references: [id], onDelete: Restrict)
+
+  @@index([taskId])
+  @@index([missionId])
+  @@index([state])
+  @@index([requestedAt])
+  @@index([reviewerActorId])
+  @@map("ai_task_reviews")
+}

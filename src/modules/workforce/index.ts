@@ -15,7 +15,7 @@ import {
   InMemoryExecutionRecordRepository,
   type ExecutionRecordRepository,
 } from "./execution/execution-record";
-import { ReviewService } from "./review/task-review";
+import { InMemoryReviewRepository, ReviewService, type ReviewRepository } from "./review/task-review";
 
 /**
  * Workforce Runtime Core — module surface (Phase 2A).
@@ -42,6 +42,11 @@ export type CreateWorkforceDomainOptions = {
   /** Injected repositories, so a test may share state across a "restart". */
   tasks?: TaskRepository;
   executionRecords?: ExecutionRecordRepository;
+  /**
+   * Where reviews live. Defaults to memory; the application composition passes
+   * a durable repository so a PENDING human decision survives a restart.
+   */
+  reviews?: ReviewRepository;
   /** Register the EXEC + Founder actor seeds. */
   seedExecutive?: boolean;
 };
@@ -61,6 +66,8 @@ export type WorkforceDomain = {
   executions: ExecutionRecorder;
   /** The human-authority decision boundary. */
   reviews: ReviewService;
+  /** The store behind `reviews` (in memory, or durable). */
+  reviewRepository: ReviewRepository;
   ids: IdFactory;
   now: Clock;
 };
@@ -79,7 +86,8 @@ export function createWorkforceDomain(options: CreateWorkforceDomainOptions = {}
   const tasks = options.tasks ?? new InMemoryTaskRepository();
   const executionRecords = options.executionRecords ?? new InMemoryExecutionRecordRepository();
   const executions = new ExecutionRecorder({ records: executionRecords, ids, now });
-  const reviews = new ReviewService({ ids, now, actors });
+  const reviewRepository = options.reviews ?? new InMemoryReviewRepository();
+  const reviews = new ReviewService({ ids, now, actors, reviews: reviewRepository });
 
   for (const runtime of options.runtimeAdapters ?? []) {
     runtimes.register(runtime);
@@ -96,6 +104,7 @@ export function createWorkforceDomain(options: CreateWorkforceDomainOptions = {}
     executionRecords,
     executions,
     reviews,
+    reviewRepository,
     ids,
     now,
   };
@@ -185,6 +194,7 @@ export type {
 } from "./execution/execution-record";
 
 export {
+  InMemoryReviewRepository,
   ReviewService,
   REVIEW_DECISIONS,
   REVIEW_STATES,
@@ -192,11 +202,17 @@ export {
 } from "./review/task-review";
 export type {
   ReviewDecision,
+  ReviewRepository,
   ReviewRequestInput,
   ReviewServiceLike,
   ReviewState,
   TaskReview,
 } from "./review/task-review";
+
+/* ── Step 5/8 — DURABLE persistence (its own entry point, so this barrel stays
+   free of Prisma and the in-memory composition stays cheap to import) ──
+   Application composition: `import { createWorkforceDomainFromPrisma } from
+   "@/modules/workforce/persistence"`. */
 
 /* ── Step 4 — the first REAL actor wired to a real runtime ── */
 export * from "./orchestration/strategy-analyst";

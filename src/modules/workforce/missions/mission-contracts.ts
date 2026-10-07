@@ -40,6 +40,17 @@ export type Mission = {
   /** Business/workspace this mission belongs to (reference, not a scope object). */
   businessId?: string;
   workspaceRef?: string;
+  /**
+   * The project and client this mission serves, as opaque REFERENCES.
+   *
+   * The audit found the mission could name a business and a workspace but not
+   * the project or client the work is actually for, which is exactly the link
+   * the Command Center groups by. These stay references — never embedded scope
+   * objects — so the core domain keeps no dependency on the project or client
+   * modules.
+   */
+  projectRef?: string;
+  clientRef?: string;
   /** Actor or user id that created the mission. */
   createdBy: string;
   /** Actor or user id accountable for the mission. */
@@ -69,6 +80,8 @@ export type MissionCreateInput = {
   owner?: string | null;
   businessId?: string;
   workspaceRef?: string;
+  projectRef?: string;
+  clientRef?: string;
   priority?: MissionPriority;
   participants?: ActorId[];
   contextRefs?: string[];

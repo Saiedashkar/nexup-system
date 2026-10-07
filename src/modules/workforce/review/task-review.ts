@@ -4,6 +4,64 @@ import type { ActorRegistry } from "../actors/actor-registry";
 import type { ActorId, ExecutionRecordId, MissionId, ReviewId, TaskId } from "../core/refs";
 
 /**
+ * Review repository port.
+ *
+ * The review boundary had no persistence seam: `ReviewService` held the rows in
+ * a private map, so a restart silently forgot every pending human decision. The
+ * port is deliberately the same shape as the mission/task/execution ports,
+ * including a compare-and-set `decide` on the review STATE — that is what makes
+ * "exactly one decision" true across two processes, not just two calls.
+ */
+export interface ReviewRepository {
+  insert(review: TaskReview): Promise<TaskReview>;
+  get(id: ReviewId): Promise<TaskReview | null>;
+  forTask(taskId: TaskId): Promise<TaskReview[]>;
+  listPending(): Promise<TaskReview[]>;
+  /** @returns the stored review on success, or null when the CAS lost. */
+  decide(review: TaskReview, expected: ReviewState[]): Promise<TaskReview | null>;
+}
+
+function cloneReview(review: TaskReview): TaskReview {
+  return { ...review };
+}
+
+export class InMemoryReviewRepository implements ReviewRepository {
+  private readonly rows = new Map<ReviewId, TaskReview>();
+
+  async insert(review: TaskReview): Promise<TaskReview> {
+    this.rows.set(review.id, cloneReview(review));
+    return cloneReview(review);
+  }
+
+  async get(id: ReviewId): Promise<TaskReview | null> {
+    const row = this.rows.get(id);
+    return row ? cloneReview(row) : null;
+  }
+
+  async forTask(taskId: TaskId): Promise<TaskReview[]> {
+    return [...this.rows.values()]
+      .filter((row) => row.taskId === taskId)
+      .map(cloneReview)
+      .sort((a, b) => a.requestedAt.localeCompare(b.requestedAt));
+  }
+
+  async listPending(): Promise<TaskReview[]> {
+    return [...this.rows.values()]
+      .filter((row) => row.state === "PENDING")
+      .map(cloneReview)
+      .sort((a, b) => a.requestedAt.localeCompare(b.requestedAt));
+  }
+
+  async decide(review: TaskReview, expected: ReviewState[]): Promise<TaskReview | null> {
+    const current = this.rows.get(review.id);
+    if (!current) return null;
+    if (!expected.includes(current.state)) return null;
+    this.rows.set(review.id, cloneReview(review));
+    return cloneReview(review);
+  }
+}
+
+/**
  * REVIEW — the explicit HUMAN AUTHORITY boundary.
  *
  * An agent's result is not a decision. A task that produced output does not
@@ -73,6 +131,12 @@ export type ReviewServiceDeps = {
    * practice: it is the reason the boundary exists.
    */
   actors?: ActorRegistry;
+  /**
+   * Where reviews are stored. Defaults to memory, so existing tests and the
+   * in-memory composition are unchanged; the application composition passes a
+   * durable repository so a pending decision survives a restart.
+   */
+  reviews?: ReviewRepository;
 };
 
 export interface ReviewServiceLike {
@@ -84,9 +148,11 @@ export interface ReviewServiceLike {
 }
 
 export class ReviewService implements ReviewServiceLike {
-  private readonly rows = new Map<ReviewId, TaskReview>();
+  private readonly rows: ReviewRepository;
 
-  constructor(private readonly deps: ReviewServiceDeps) {}
+  constructor(private readonly deps: ReviewServiceDeps) {
+    this.rows = deps.reviews ?? new InMemoryReviewRepository();
+  }
 
   async request(input: ReviewRequestInput): Promise<TaskReview> {
     if (!input.summary?.trim()) {
@@ -106,27 +172,19 @@ export class ReviewService implements ReviewServiceLike {
       requestedBy: input.requestedBy,
       requestedAt: at,
     };
-    this.rows.set(review.id, { ...review });
-    return { ...review };
+    return this.rows.insert(review);
   }
 
   async get(id: ReviewId): Promise<TaskReview | null> {
-    const row = this.rows.get(id);
-    return row ? { ...row } : null;
+    return this.rows.get(id);
   }
 
   async forTask(taskId: TaskId): Promise<TaskReview[]> {
-    return [...this.rows.values()]
-      .filter((row) => row.taskId === taskId)
-      .map((row) => ({ ...row }))
-      .sort((a, b) => a.requestedAt.localeCompare(b.requestedAt));
+    return this.rows.forTask(taskId);
   }
 
   async listPending(): Promise<TaskReview[]> {
-    return [...this.rows.values()]
-      .filter((row) => row.state === "PENDING")
-      .map((row) => ({ ...row }))
-      .sort((a, b) => a.requestedAt.localeCompare(b.requestedAt));
+    return this.rows.listPending();
   }
 
   /**
@@ -135,7 +193,7 @@ export class ReviewService implements ReviewServiceLike {
    * @throws APPROVAL_NOT_FOUND | APPROVAL_ALREADY_DECIDED | APPROVAL_FORBIDDEN
    */
   async decide(reviewId: ReviewId, input: ReviewDecisionInput): Promise<TaskReview> {
-    const existing = this.rows.get(reviewId);
+    const existing = await this.rows.get(reviewId);
     if (!existing) {
       throw new AiWorkforceError("APPROVAL_NOT_FOUND", `Review "${reviewId}" does not exist`, { reviewId });
     }
@@ -183,11 +241,22 @@ export class ReviewService implements ReviewServiceLike {
       decidedAt: at,
       ...(input.note ? { note: input.note } : {}),
     };
-    this.rows.set(reviewId, decided);
-    return { ...decided };
+    // The decision is a COMPARE-AND-SET on PENDING, not a blind write: if a
+    // second decision raced this one, the CAS loses and the caller is told the
+    // review was already decided instead of overwriting a person's decision.
+    const stored = await this.rows.decide(decided, ["PENDING"]);
+    if (!stored) {
+      const now = await this.rows.get(reviewId);
+      throw new AiWorkforceError(
+        "APPROVAL_ALREADY_DECIDED",
+        `Review "${reviewId}" was decided concurrently (now ${now?.state ?? "unknown"})`,
+        { reviewId, state: now?.state ?? "UNKNOWN" },
+      );
+    }
+    return stored;
   }
 
-  count(): number {
-    return this.rows.size;
+  async count(): Promise<number> {
+    return (await this.rows.listPending()).length;
   }
 }

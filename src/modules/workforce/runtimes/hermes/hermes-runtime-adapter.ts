@@ -1,8 +1,10 @@
 import { AiWorkforceError } from "@/modules/ai-workforce/core/errors";
 import type { Clock, IdFactory } from "@/modules/ai-workforce/core/types";
 import type {
+  AgentExecutionAdoption,
   AgentExecutionEvent,
   AgentExecutionRecord,
+  AgentExecutionReference,
   AgentExecutionStatus,
   AgentExecutionWaitOptions,
   AgentJobHandle,
@@ -22,6 +24,7 @@ import {
   isHermesAsyncTransport,
   noopRuntimeEventSink,
   type HermesTransport,
+  type HermesTransportResult,
   type RuntimeEvent,
   type RuntimeEventSink,
 } from "./hermes-transport";
@@ -449,6 +452,122 @@ export class HermesRuntimeAdapter implements AgentRuntime, AsyncAgentRuntime {
     await this.awaitPending(handleId, pending, options.timeoutMs);
     const settled = this.records.get(handleId) ?? record;
     return this.toExecutionRecord(handleId, settled);
+  }
+
+  /* ═══════════════════════════════════════════════════
+     Re-adoption — an execution this process did not start
+     ═══════════════════════════════════════════════════ */
+
+  /**
+   * Takes responsibility for a run a PREVIOUS process submitted.
+   *
+   * It never resubmits and never starts a second run: the only outbound call is
+   * a status READ against the run id the durable record already carried. That is
+   * the whole point — the provider kept working while we were gone, and this is
+   * how we look at it again.
+   *
+   * Three honest answers, and the reason each one matters:
+   *
+   *   ADOPTED     the provider answered with a state, and this adapter now holds
+   *               the handle again, so the ordinary status/wait/cancel paths
+   *               work exactly as they do for a run we started ourselves;
+   *   UNKNOWN     the provider answered 404: it does not know this execution any
+   *               more (the bridge restarted, the run was reaped). This is
+   *               KNOWLEDGE, and it is reported as such — never as FAILED, since
+   *               the run may have finished successfully before the record went
+   *               away, and a retry would then duplicate real work;
+   *   UNAVAILABLE the provider could not be asked at all (timeout, 5xx, no
+   *               status surface). This is the ABSENCE of knowledge: nothing is
+   *               changed and the caller is told it may retry the reconciliation.
+   */
+  async adoptExecution(reference: AgentExecutionReference): Promise<AgentExecutionAdoption> {
+    const known = this.records.get(reference.handleId);
+    if (known) {
+      // Adopting something we already hold is a no-op, and must not become a
+      // second read: a retried reconciliation has to be idempotent.
+      return { kind: "ADOPTED", record: this.toExecutionRecord(reference.handleId, known) };
+    }
+
+    if (!this.capabilities.status) {
+      return {
+        kind: "UNAVAILABLE",
+        retryable: false,
+        detail: "this runtime exposes no status surface, so an execution started by another process cannot be observed",
+      };
+    }
+
+    let result: HermesTransportResult;
+    try {
+      result = await this.transport.invoke({
+        operation: "status",
+        profile: this.config.profile,
+        payload: { instruction: "", contextJson: "{}", executionId: reference.handleId },
+        timeoutMs: this.config.timeoutMs,
+        maxOutputBytes: this.config.maxOutputBytes,
+        correlation: { actorId: "system", traceId: reference.handleId },
+      });
+    } catch (error) {
+      return {
+        kind: "UNAVAILABLE",
+        retryable: true,
+        detail: `the runtime could not be reached: ${error instanceof Error ? error.message : "unknown transport error"}`,
+      };
+    }
+
+    // A 404 on a status read is the provider telling us the execution does not
+    // exist any more — "not found" is knowledge about the REMOTE, not a failed
+    // run, so it must never be normalized into FAILED.
+    if (result.transportError === "HTTP_ERROR" && result.httpStatus === 404) {
+      return {
+        kind: "UNKNOWN",
+        detail: `the runtime answered 404 for run "${reference.handleId}": it does not know this execution`,
+      };
+    }
+
+    if (!result.ok) {
+      const retryable =
+        result.transportError === "TIMEOUT" ||
+        result.transportError === "UNAVAILABLE" ||
+        result.transportError === undefined ||
+        (result.httpStatus ?? 0) >= 500;
+      return {
+        kind: "UNAVAILABLE",
+        retryable,
+        detail: `the runtime did not answer for run "${reference.handleId}" (${result.transportError ?? "no result"}${result.httpStatus ? ` ${result.httpStatus}` : ""})`,
+      };
+    }
+
+    const record = normalizeHermesTransportResult({
+      result,
+      runtime: { id: this.identity.id, type: this.identity.type },
+      now: this.now(),
+      textOnly: this.transport.kind === "CLI_ONESHOT",
+    });
+    // The provider's own reference may only be in the DURABLE record we are
+    // re-adopting; keep it, so audit does not lose the link across a restart.
+    if (!record.providerExecutionId && reference.providerExecutionId) {
+      record.providerExecutionId = reference.providerExecutionId;
+    }
+
+    const handle = this.remember(undefined, record, reference.handleId);
+    const context: { actorId?: string; missionId?: string; capabilityId?: string; jobId?: string } = {};
+    if (reference.actorId) context.actorId = reference.actorId;
+    if (reference.capabilityId) context.capabilityId = reference.capabilityId;
+    if (reference.missionId) context.missionId = reference.missionId;
+    if (reference.taskId) context.jobId = reference.taskId;
+    if (Object.keys(context).length > 0) this.contexts.set(reference.handleId, context);
+    this.pushEvent(reference.handleId, "STATUS", record.status, "re-adopted after a restart");
+    this.emit({
+      type: "runtime.started",
+      status: handle.status,
+      profile: this.config.profile,
+      executionId: record.executionId ?? reference.handleId,
+      missionId: reference.missionId,
+      actorId: "system",
+      traceId: reference.handleId,
+      detail: "re-adopted a run started by a previous process",
+    });
+    return { kind: "ADOPTED", record: this.toExecutionRecord(reference.handleId, record) };
   }
 
   /* ═══════════════════════════════════════════════════

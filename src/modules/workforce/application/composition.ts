@@ -5,6 +5,7 @@ import { createIdFactory, systemClock } from "@/modules/ai-workforce/core/ids";
 import type { Clock, IdFactory } from "@/modules/ai-workforce/core/types";
 import type { WorkforcePrismaHandle } from "@/modules/ai-workforce/persistence/prisma-client";
 
+import { ExecutionReconciler } from "../execution/execution-reconciler";
 import type { WorkforceDomain } from "../index";
 import { createMissionOrchestrator, type MissionOrchestrator, type ReviewPolicy } from "../orchestration/mission-orchestrator";
 import { bootstrapStrategyAnalyst } from "../orchestration/strategy-analyst";
@@ -79,6 +80,8 @@ export type WorkforceApplication = {
   intents: PrismaCommandIntentRepository;
   routing: WorkforceRouting;
   bootstrap: { persistence: "DATABASE"; externalCalls: false };
+  /** The provider-neutral re-adoption service (restart recovery). */
+  reconciler: ExecutionReconciler;
   /** Closes the pool this application owns, when it owns one. */
   disconnect?: () => Promise<void>;
 };
@@ -166,7 +169,20 @@ export async function createWorkforceApplication(
       ...(options.reviewPolicy ? { reviewPolicy: options.reviewPolicy } : {}),
     });
 
-  const commands = new WorkforceCommandService({ domain, orchestrator, intents, route });
+  // Recovery is composed HERE, with the orchestrator it must settle through, so
+  // an application can never be built that dispatches work but cannot re-adopt
+  // it after the next restart.
+  const reconciler = new ExecutionReconciler({
+    records: domain.executionRecords,
+    executions: domain.executions,
+    runtimes: domain.runtimes,
+    missions: domain.missionRepository,
+    tasks: domain.tasks,
+    orchestrator,
+    now,
+  });
+
+  const commands = new WorkforceCommandService({ domain, orchestrator, intents, route, reconciler });
 
   return {
     domain,
@@ -174,6 +190,7 @@ export async function createWorkforceApplication(
     commands,
     queries: domain.queries,
     intents,
+    reconciler,
     routing,
     bootstrap: { persistence: "DATABASE", externalCalls: false },
   };

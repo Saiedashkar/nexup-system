@@ -42,6 +42,14 @@ export const EXECUTION_AUDIT_EVENT_TYPES = [
   "CANCELLED",
   "RETRY",
   "REJECTED",
+  /**
+   * A process that did NOT start this attempt took responsibility for it: the
+   * record was re-adopted after a restart and its state (or the absence of one)
+   * was learned from the runtime. Every reconciliation leaves one of these, so
+   * "this row was verified after a restart, and here is what we were told" is
+   * readable from the audit trail alone.
+   */
+  "RECONCILED",
 ] as const;
 export type ExecutionAuditEventType = (typeof EXECUTION_AUDIT_EVENT_TYPES)[number];
 
@@ -284,6 +292,76 @@ export class ExecutionRecorder {
     };
     this.push(next, "CANCELLED", "CANCELLED", reason);
     return this.deps.records.save(next);
+  }
+
+  /**
+   * Applies what a re-adoption learned about an attempt this process did not
+   * start.
+   *
+   * It obeys the same two rules as `apply` — the FIRST terminal state wins, and
+   * provider metadata is always merged — and it ALWAYS appends a RECONCILED
+   * event, including when it learned nothing terminal. `status` is what the
+   * runtime reported; for an unverifiable execution that is `UNKNOWN` with an
+   * `UNKNOWN_REMOTE` error, never a fabricated FAILED.
+   */
+  async reconcile(
+    recordId: ExecutionRecordId,
+    input: {
+      status: AgentExecutionStatus;
+      detail: string;
+      providerExecutionId?: string;
+      completedAt?: string;
+      durationMs?: number;
+      output?: unknown;
+      outputText?: string;
+      error?: AgentExecutionError;
+    },
+  ): Promise<ExecutionRecord> {
+    const existing = await this.require(recordId);
+    const at = this.deps.now().toISOString();
+    const next: ExecutionRecord = { ...existing, updatedAt: at };
+
+    if (!next.providerExecutionId && input.providerExecutionId) {
+      next.providerExecutionId = input.providerExecutionId;
+    }
+    if (input.durationMs !== undefined) next.durationMs = input.durationMs;
+    if (input.output !== undefined) next.output = input.output;
+    if (input.outputText !== undefined) next.outputText = input.outputText;
+    if (input.error) next.error = input.error;
+
+    if (!isTerminalExecutionStatus(existing.status)) {
+      next.status = input.status;
+      if (isTerminalExecutionStatus(input.status)) {
+        next.completedAt = input.completedAt ?? at;
+        this.push(next, "TERMINAL", input.status, input.detail);
+      } else {
+        this.push(next, "STATUS", input.status, input.detail);
+      }
+    }
+    this.push(next, "RECONCILED", next.status, input.detail);
+    return this.deps.records.save(next);
+  }
+
+  /**
+   * Records a reconciliation attempt that learned NOTHING (the runtime could
+   * not be asked). The state is left exactly as it was: an outage is not
+   * evidence, and this attempt must not look like it verified anything.
+   */
+  async noteReconciliation(recordId: ExecutionRecordId, detail: string): Promise<ExecutionRecord> {
+    const existing = await this.require(recordId);
+    const next: ExecutionRecord = { ...existing, updatedAt: this.deps.now().toISOString() };
+    this.push(next, "RECONCILED", next.status, detail);
+    return this.deps.records.save(next);
+  }
+
+  private async require(recordId: ExecutionRecordId): Promise<ExecutionRecord> {
+    const existing = await this.deps.records.get(recordId);
+    if (!existing) {
+      throw new AiWorkforceError("RUN_NOT_FOUND", `Execution record "${recordId}" does not exist`, {
+        executionRecordId: recordId,
+      });
+    }
+    return existing;
   }
 
   /** Records a human's refusal of the result (task FAILED by review). */

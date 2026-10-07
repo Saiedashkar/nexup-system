@@ -2,8 +2,12 @@ import { AiWorkforceError } from "@/modules/ai-workforce/core/errors";
 import type { Clock, IdFactory } from "@/modules/ai-workforce/core/types";
 import { assertNoCredentials } from "../core/credentials";
 import type {
+  AgentExecutionAdoption,
+  AgentExecutionError,
   AgentExecutionEvent,
   AgentExecutionRecord,
+  AgentExecutionRecovery,
+  AgentExecutionReference,
   AgentExecutionStatus,
   AgentJobHandle,
   AgentJobRequest,
@@ -40,11 +44,34 @@ export type DeterministicRuntimeOptions = {
   health?: RuntimeHealth["status"];
   /** Force the terminal state of every execution (tests only). */
   executionOutcome?: "SUCCEEDED" | "FAILED";
+  /**
+   * Executions a PREVIOUS process started that this runtime still knows about —
+   * a restart-proof stand-in for the bridge keeping its runs alive while the
+   * NEXUP process goes away. Adoption finds these; nothing is resubmitted.
+   */
+  adoptedExecutions?: readonly DeterministicAdoptableExecution[];
+  /**
+   * What to answer when adoption names a handle this runtime does not know:
+   * `UNKNOWN` models a provider that lost the run (a bridge restart), and
+   * `UNAVAILABLE` models a provider that cannot be asked right now.
+   */
+  adoptUnknownAs?: "UNKNOWN" | "UNAVAILABLE";
   ids: IdFactory;
   now: Clock;
 };
 
-export class DeterministicRuntimeAdapter implements AsyncAgentRuntime {
+export type DeterministicAdoptableExecution = {
+  handleId: string;
+  status: AgentExecutionStatus;
+  providerExecutionId?: string;
+  output?: unknown;
+  outputText?: string;
+  error?: AgentExecutionError;
+  durationMs?: number;
+  completedAt?: string;
+};
+
+export class DeterministicRuntimeAdapter implements AsyncAgentRuntime, AgentExecutionRecovery {
   readonly identity: RuntimeIdentity;
 
   private readonly handles = new Map<string, AgentJobHandle>();
@@ -198,6 +225,63 @@ export class DeterministicRuntimeAdapter implements AsyncAgentRuntime {
 
   async getExecutionStatus(handleId: string): Promise<AgentJobHandle> {
     return { ...this.requireHandle(handleId) };
+  }
+
+  /* ═══════════════════════════════════════════════════
+     Re-adoption
+     ═══════════════════════════════════════════════════ */
+
+  /**
+   * Adopts an execution this process did not start, from the fixture the test
+   * configured. It never calls `startJob`: adopting observes, it does not
+   * dispatch, so a reconciliation can never produce a second run.
+   */
+  async adoptExecution(reference: AgentExecutionReference): Promise<AgentExecutionAdoption> {
+    const known = this.records.get(reference.handleId);
+    if (known) return { kind: "ADOPTED", record: { ...known } };
+
+    const adopted = (this.options.adoptedExecutions ?? []).find((row) => row.handleId === reference.handleId);
+    if (!adopted) {
+      if (this.options.adoptUnknownAs === "UNAVAILABLE") {
+        return { kind: "UNAVAILABLE", retryable: true, detail: "the runtime could not be asked about this execution" };
+      }
+      return { kind: "UNKNOWN", detail: `the runtime does not know execution "${reference.handleId}"` };
+    }
+
+    const at = this.options.now().toISOString();
+    const record: AgentExecutionRecord = {
+      handleId: adopted.handleId,
+      runtimeId: this.identity.id,
+      status: adopted.status,
+      submittedAt: at,
+      startedAt: at,
+      updatedAt: at,
+      durationMs: adopted.durationMs ?? 0,
+    };
+    if (adopted.completedAt) record.completedAt = adopted.completedAt;
+    else if (isTerminalExecutionStatus(adopted.status)) record.completedAt = at;
+    if (reference.providerExecutionId) record.providerExecutionId = reference.providerExecutionId;
+    if (adopted.providerExecutionId) record.providerExecutionId = adopted.providerExecutionId;
+    if (adopted.output !== undefined) record.output = adopted.output;
+    if (adopted.outputText !== undefined) record.outputText = adopted.outputText;
+    if (adopted.error) record.error = adopted.error;
+    if (reference.taskId) record.jobId = reference.taskId;
+    if (reference.missionId) record.missionId = reference.missionId;
+    if (reference.actorId) record.actorId = reference.actorId;
+    if (reference.capabilityId) record.capabilityId = reference.capabilityId;
+
+    this.records.set(reference.handleId, record);
+    this.handles.set(reference.handleId, {
+      handleId: reference.handleId,
+      runtimeId: this.identity.id,
+      ...(reference.taskId ? { jobId: reference.taskId } : {}),
+      status: adopted.status,
+      submittedAt: at,
+      updatedAt: at,
+      detail: "re-adopted from a previous process",
+    });
+    this.pushEvent(reference.handleId, "STATUS", adopted.status, "re-adopted after a restart");
+    return { kind: "ADOPTED", record: { ...record } };
   }
 
   /* ═══════════════════════════════════════════════════

@@ -129,12 +129,16 @@ Proven at the application boundary (`tests/workforce-step5-app-integration.test.
 booting the real application composition against the dev database and sharing
 nothing but the rows:
 
-- **A** issues a Command, persists mission + task + execution, leaves an OPEN
-  human decision, and exits;
+- **A** issues a Command, persists mission + task + execution, and exits — either
+  leaving an OPEN human decision, or leaving the task RUNNING with the provider
+  run still alive;
 - **B** builds a fresh Prisma/application composition, rehydrates the mission
   from the rows, takes the human decision and completes it;
-- **C** measures the case that *does not* work, so the limitation is asserted
-  rather than hidden.
+- **C** re-adopts the in-flight execution A left behind — *asking* the provider,
+  never resubmitting — and settles it, asserting `runsStartedByC === 0` and
+  exactly one execution row;
+- **E** covers the case where the provider no longer knows the run: the attempt
+  becomes UNKNOWN and is escalated to a human, never guessed at.
 
 And `tests/workforce-step5-app-integration.test.ts` rehydrates a finished mission
 through a **fresh** application in-process.
@@ -214,25 +218,32 @@ characteristics, and expected downtime (**none**).
 **Verdict: GO FOR PRODUCTION MIGRATION APPROVAL** — conditional on the §4
 pre-flight check on `_prisma_migrations`.
 
-**Separately, NO-GO for *activating* the lifecycle in production**, for three
-application-level reasons (none schema-level): an execution left in flight by a
-restart cannot be settled; nothing deployed surfaces the lifecycle yet (Step 6);
-and the loopback-only persistence allowlist would refuse the production Supabase
-host, so activation needs an explicit owner decision, not just two env vars.
+**Separately, NO-GO for *activating* the lifecycle in production**, for two
+application-level reasons (none schema-level): nothing deployed surfaces the
+lifecycle yet (Step 6); and activation is an explicit owner decision whose
+pre-flight — a readable `_prisma_migrations` on the production host — could not
+be confirmed from this machine. The two blockers a previous revision recorded
+here are **closed**: an in-flight execution is now re-adopted across a restart
+(`ExecutionReconciler`), and the loopback-only guard is replaced by an explicit
+fail-closed host policy (`AI_WORKFORCE_DATABASE_TARGET` +
+`AI_WORKFORCE_DATABASE_HOSTS`). See
+[`docs/AI_WORKFORCE_STEP5_PREPRODUCTION_CLOSURE.md`](AI_WORKFORCE_STEP5_PREPRODUCTION_CLOSURE.md).
 
 ## 11. Remaining blockers
 
 1. **Production migration approval** — owner action; nothing else in Step 5 moves.
-2. **In-flight executions do not survive a restart.** The runtime adapter's handle
-   bookkeeping is in-process and `AgentExecutionLifecycle` has no re-adoption
-   seam, so `waitForExecution` throws `RUNTIME_NOT_FOUND` for a durable handle
-   after a restart. Such a mission can only be released by cancelling it, which
-   does not confirm the provider run stopped. Asserted by the restart suite, not
-   hidden.
-3. **Activation policy.** Production persistence requires widening the loopback
-   allowlist (deliberate owner decision about writing production data).
-4. **Nothing deployed exercises these routes yet** — Step 6 (Command Center real
+   Its pre-flight (`_prisma_migrations` lists all 14 registered migrations) was
+   **not readable from this host** (DNS `ENOTFOUND`; the read-only check exits 2
+   and mutates nothing) and must be re-run where the pooler is reachable.
+2. **Activation policy.** The host policy is now implemented and fails closed
+   (`AI_WORKFORCE_DATABASE_TARGET` + `AI_WORKFORCE_DATABASE_HOSTS`), so
+   activation no longer needs a code change — it needs the owner's explicit
+   decision to write production data.
+3. **Nothing deployed exercises these routes yet** — Step 6 (Command Center real
    data) remains locked, as instructed.
+
+*(The in-flight restart blocker previously listed here is **closed** — see §6 and
+[`docs/AI_WORKFORCE_STEP5_PREPRODUCTION_CLOSURE.md`](AI_WORKFORCE_STEP5_PREPRODUCTION_CLOSURE.md).)*
 
 ## 12. Rollback state
 

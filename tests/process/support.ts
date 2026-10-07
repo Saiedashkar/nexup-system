@@ -82,6 +82,8 @@ export function restartCommand(key: string = RESTART_KEY) {
 export type BootedProcess = {
   application: WorkforceApplication;
   handle: WorkforcePrismaHandle;
+  /** The transport this process bound, so a proof can COUNT what it did. */
+  transport: DeterministicHermesTransport;
   disconnect: () => Promise<void>;
 };
 
@@ -103,6 +105,18 @@ export type BootOptions = {
    * before the process can die.
    */
   holdCompletionMs?: number;
+  /**
+   * Runs the REMOTE side still knows about although this process never started
+   * them — a bridge that kept working while the NEXUP process was down. This is
+   * how a re-adoption proof says what the provider reports.
+   */
+  knownRuns?: ConstructorParameters<typeof DeterministicHermesTransport>[0]["knownRuns"];
+  /**
+   * Ids the remote does NOT know. The transport answers 404, exactly like the
+   * bridge for a run it cannot find, so "unverifiable" is exercised for real
+   * rather than as the fallback of a canned sequence.
+   */
+  unknownRunIds?: readonly string[];
 };
 
 export async function bootProcess(prefix: string, options: BootOptions = {}): Promise<BootedProcess> {
@@ -116,6 +130,8 @@ export async function bootProcess(prefix: string, options: BootOptions = {}): Pr
   const transport = new DeterministicHermesTransport({
     ...(options.statusSequence ? { statusSequence: options.statusSequence } : {}),
     ...(options.holdCompletionMs ? { holdCompletionMs: options.holdCompletionMs } : {}),
+    ...(options.knownRuns ? { knownRuns: options.knownRuns } : {}),
+    ...(options.unknownRunIds ? { unknownRunIds: options.unknownRunIds } : {}),
   });
   const runtime = createHermesRuntime(hermesConfig(), { transport, ids, now, allowTestTransport: true });
 
@@ -124,6 +140,7 @@ export async function bootProcess(prefix: string, options: BootOptions = {}): Pr
   return {
     application,
     handle,
+    transport,
     disconnect: () => handle.disconnect(),
   };
 }

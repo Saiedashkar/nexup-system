@@ -1,6 +1,6 @@
 import type { Clock, IdFactory, JobId, JsonObject } from "@/modules/ai-workforce/core/types";
 import type { Actor, ActorRuntimeBinding } from "../actors/actor-contracts";
-import type { ActorId, CapabilityId, MissionId, RuntimeId, TraceId } from "../core/refs";
+import type { ActorId, CapabilityId, MissionId, RuntimeId, TaskId, TraceId } from "../core/refs";
 
 /**
  * AgentRuntime — the provider-neutral execution port.
@@ -141,6 +141,15 @@ export const AGENT_EXECUTION_ERROR_CATEGORIES = [
   "UNSUPPORTED",
   "MALFORMED_OUTPUT",
   "RUNTIME_ERROR",
+  /**
+   * Reconciliation could NOT confirm the remote execution's state: the runtime
+   * answered, and no longer knows this execution at all (a bridge restarted, a
+   * provider dropped the run). This is deliberately NOT `TRANSPORT` (nothing
+   * was unreachable) and deliberately NOT a terminal FAILED (the run may have
+   * completed successfully before the record was lost). A caller must treat it
+   * as "unverified", and a human decides whether to retry.
+   */
+  "UNKNOWN_REMOTE",
 ] as const;
 export type AgentExecutionErrorCategory = (typeof AGENT_EXECUTION_ERROR_CATEGORIES)[number];
 
@@ -275,6 +284,76 @@ export function isAsyncAgentRuntime(runtime: AgentRuntime): runtime is AsyncAgen
     typeof candidate.getExecution === "function" &&
     typeof candidate.executionEvents === "function"
   );
+}
+
+/* ═══════════════════════════════════════════════════════
+   Re-adoption — taking responsibility for work started elsewhere
+   ═══════════════════════════════════════════════════════
+
+   A process restart loses the adapter's in-memory handle bookkeeping, but NOT
+   the work: a real runtime (the bridge, a provider) keeps running what it was
+   asked to run, and the execution record is durable. The gap this closes is
+   purely one of RESPONSIBILITY: after a restart nobody is watching the handle
+   any more, and the mission cannot move because the runtime no longer knows the
+   handle it minted in a previous life.
+
+   `adoptExecution` is that hand-over, expressed provider-neutrally:
+
+     - it NEVER resubmits the job and NEVER starts a second run: adopting is
+       observing an execution that already exists, nothing else;
+     - it reports what the runtime actually knows, in three honest shapes:
+         ADOPTED      the runtime answered and its record is now readable here
+         UNKNOWN      the runtime answered, and does not know this execution
+         UNAVAILABLE  the runtime could not be asked (outage, timeout, no
+                      status surface): nothing was learned, retry later
+
+   The distinction between UNKNOWN and UNAVAILABLE is the whole point: the first
+   is knowledge (“it is gone”), the second is the absence of knowledge (“we could
+   not look”). A caller that conflates them will either retry work that actually
+   succeeded or wait forever on a run nobody remembers.
+ */
+
+export type AgentExecutionReference = {
+  /** The runtime's own handle — on BRIDGE this is the run id. */
+  handleId: string;
+  runtimeId?: RuntimeId;
+  /** The provider's private reference, when the record carried one. */
+  providerExecutionId?: string;
+  /** Attribution, carried so an adopted record names the same work order. */
+  actorId?: ActorId;
+  capabilityId?: CapabilityId;
+  missionId?: MissionId;
+  taskId?: TaskId;
+  attempt?: number;
+};
+
+export const AGENT_EXECUTION_ADOPTION_KINDS = ["ADOPTED", "UNKNOWN", "UNAVAILABLE"] as const;
+export type AgentExecutionAdoptionKind = (typeof AGENT_EXECUTION_ADOPTION_KINDS)[number];
+
+export type AgentExecutionAdoption =
+  | { kind: "ADOPTED"; record: AgentExecutionRecord }
+  | { kind: "UNKNOWN"; detail: string }
+  | { kind: "UNAVAILABLE"; detail: string; retryable: boolean };
+
+/** The re-adoption half of the port. Optional: not every runtime has a memory. */
+export interface AgentExecutionRecovery {
+  adoptExecution(reference: AgentExecutionReference): Promise<AgentExecutionAdoption>;
+}
+
+/** A runtime that can both host a run and be asked about one it did not start. */
+export type AdoptableAgentRuntime = AsyncAgentRuntime & AgentExecutionRecovery;
+
+export function isAgentExecutionRecovery(runtime: AgentRuntime): runtime is AgentRuntime & AgentExecutionRecovery {
+  return typeof (runtime as Partial<AgentExecutionRecovery>).adoptExecution === "function";
+}
+
+/**
+ * The full contract the reconciler needs in one check, so a caller can decide
+ * between "this runtime can be reconciled" and "it cannot" WITHOUT probing two
+ * interfaces and accidentally treating a partial runtime as adoptable.
+ */
+export function isReconcilableRuntime(runtime: AgentRuntime): runtime is AdoptableAgentRuntime {
+  return isAsyncAgentRuntime(runtime) && isAgentExecutionRecovery(runtime);
 }
 
 /**

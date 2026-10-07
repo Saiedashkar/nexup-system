@@ -1,4 +1,4 @@
-import type { HermesBridgeClient } from "./bridge-client";
+import { BridgeClientError, type HermesBridgeClient } from "./bridge-client";
 import { assertNexupProfile } from "./hermes-config";
 import { boundText, redactSecrets } from "./hermes-spawn";
 import type {
@@ -195,8 +195,29 @@ export class HermesBridgeTransport implements HermesTransport, HermesAsyncTransp
   private async status(request: HermesTransportRequest, startedAt: number): Promise<HermesTransportResult> {
     const runId = request.payload?.executionId;
     if (!runId) return this.failure("UNSUPPORTED", startedAt);
-    const status = await this.options.client.getRun(runId);
-    return this.ok(JSON.stringify(status), request, startedAt);
+    try {
+      const status = await this.options.client.getRun(runId);
+      return this.ok(JSON.stringify(status), request, startedAt);
+    } catch (error) {
+      // A 404 means the bridge does not KNOW this run any more (the bridge
+      // restarted, or the run was reaped). That is a fact about the remote —
+      // not a transient outage — and re-adoption has to be able to tell the two
+      // apart: `UNKNOWN` releases a human to decide, while `UNAVAILABLE` says
+      // "ask again later". Flattening the 404 into UNAVAILABLE (the generic
+      // classification) would make a lost run look retryable forever. So it is
+      // reported as HTTP_ERROR/404, exactly as the HTTP transport reports it.
+      if (error instanceof BridgeClientError && error.status === 404) {
+        return {
+          ok: false,
+          raw: "",
+          truncated: false,
+          durationMs: Date.now() - startedAt,
+          transportError: "HTTP_ERROR",
+          httpStatus: 404,
+        };
+      }
+      throw error;
+    }
   }
 
   private async cancel(request: HermesTransportRequest, startedAt: number): Promise<HermesTransportResult> {

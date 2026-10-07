@@ -1,0 +1,41 @@
+{
+  "proof": "a READ-ONLY inspection of the production migration history: the prerequisite the production migration package depends on",
+  "generatedAt": "2026-10-07T21:26:57.395Z",
+  "readOnly": "select statements only; no DDL, no migration, no write, no schema change",
+  "host": "db.hoahuemoxjwivbuvxlkt.supabase.co",
+  "readable": false,
+  "reason": "getaddrinfo ENOTFOUND db.hoahuemoxjwivbuvxlkt.supabase.co",
+  "registeredMigrations": [
+    "20260823221818_init",
+    "20260824120000_add_business_multitenancy",
+    "20260824150000_office_admin_layer",
+    "20260824160000_add_client_payments",
+    "20260826100000_add_profit_transfer",
+    "20260826200000_add_permission_flags_and_nexup_profit_ledger",
+    "20260827000000_add_subscriptions_for_rebound",
+    "20260827100000_add_abomazen_properties_deals",
+    "20260828000000_add_performance_indexes",
+    "20260901000000_add_fund_flow_to_capital",
+    "20260915000000_add_soft_delete_columns",
+    "20260921000000_add_payment_receipt",
+    "20260926120000_add_capital_ledger_and_fixed_expenses",
+    "20260927000000_add_capital_spend_type_and_recipient"
+  ],
+  "registeredCount": 14,
+  "missingFromProduction": [
+    "20260823221818_init",
+    "20260824120000_add_business_multitenancy",
+    "20260824150000_office_admin_layer",
+    "20260824160000_add_client_payments",
+    "20260826100000_add_profit_transfer",
+    "20260826200000_add_permission_flags_and_nexup_profit_ledger",
+    "20260827000000_add_subscriptions_for_rebound",
+    "20260827100000_add_abomazen_properties_deals",
+    "20260828000000_add_performance_indexes",
+    "20260901000000_add_fund_flow_to_capital",
+    "20260915000000_add_soft_delete_columns",
+    "20260921000000_add_payment_receipt",
+    "20260926120000_add_capital_ledger_and_fixed_expenses",
+    "20260927000000_add_capital_spend_type_and_recipient"
+  ]
+}

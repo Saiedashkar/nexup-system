@@ -43,6 +43,29 @@ export type DeterministicHermesOptions = {
    * in-flight cancellation have to be tested against.
    */
   holdCompletionMs?: number;
+  /**
+   * Runs the REMOTE side already knows about before this transport existed —
+   * the offline stand-in for a bridge that kept working while the NEXUP process
+   * was down. A `status` read for one of these answers from here instead of
+   * falling back to the canned sequence, so re-adoption after a restart can be
+   * tested without a live provider.
+   */
+  knownRuns?: readonly DeterministicKnownRun[];
+  /**
+   * Ids the REMOTE side does NOT know. The transport answers as the bridge does
+   * for a run it cannot find — 404 — rather than inventing a status, so the
+   * "unknown remote execution" path is exercised for real.
+   */
+  unknownRunIds?: readonly string[];
+};
+
+export type DeterministicKnownRun = {
+  executionId: string;
+  /** The provider's own status word (`succeeded`, `failed`, `cancelled`, ...). */
+  status: string;
+  output?: unknown;
+  outputText?: string;
+  providerExecutionId?: string;
 };
 
 /** One run the deterministic transport is hosting, keyed by its own id. */
@@ -60,8 +83,19 @@ export class DeterministicHermesTransport implements HermesAsyncTransport {
   private readonly runs = new Map<string, DeterministicRun>();
   private counter = 0;
   private statusReads = 0;
+  private invocations = 0;
 
   constructor(private readonly options: DeterministicHermesOptions = {}) {}
+
+  /**
+   * What this transport was ASKED to do. A proof that claims "nothing was
+   * resubmitted" needs a counter, not a comment: `runsStarted` must not move
+   * across a re-adoption, and `statusReads` is what the re-adoption itself
+   * costs.
+   */
+  counts(): { runsStarted: number; statusReads: number; invocations: number } {
+    return { runsStarted: this.counter, statusReads: this.statusReads, invocations: this.invocations };
+  }
 
   /**
    * Starts a run and returns its id immediately. This is the shape the real
@@ -134,6 +168,7 @@ export class DeterministicHermesTransport implements HermesAsyncTransport {
 
   async invoke(request: HermesTransportRequest): Promise<HermesTransportResult> {
     assertNexupProfile(request.profile);
+    this.invocations += 1;
     const startedAt = Date.now();
 
     if (this.options.failWith) {
@@ -183,6 +218,28 @@ export class DeterministicHermesTransport implements HermesAsyncTransport {
         const hosting = this.runs.get(executionId);
         const known = hosting ? hosting.status : this.executions.get(executionId);
         if (known) return this.result(startedAt, { executionId, status: known });
+
+        // A run this process did not start, but the REMOTE still has.
+        const remote = (this.options.knownRuns ?? []).find((run) => run.executionId === executionId);
+        if (remote) {
+          const body: Record<string, unknown> = { executionId, status: remote.status };
+          if (remote.output !== undefined) body.output = remote.output;
+          if (remote.outputText !== undefined) body.outputText = remote.outputText;
+          if (remote.providerExecutionId) body.sessionId = remote.providerExecutionId;
+          return this.result(startedAt, body);
+        }
+
+        // A run the REMOTE does not know either: 404, exactly like the bridge.
+        if ((this.options.unknownRunIds ?? []).includes(executionId)) {
+          return {
+            ok: false,
+            raw: JSON.stringify({ error: { code: "RUN_NOT_FOUND", message: `No run "${executionId}"` } }),
+            truncated: false,
+            durationMs: Date.now() - startedAt,
+            transportError: "HTTP_ERROR",
+            httpStatus: 404,
+          };
+        }
         const sequence = this.options.statusSequence ?? ["queued", "running", "succeeded"];
         const value = sequence[Math.min(this.statusReads, sequence.length - 1)];
         this.statusReads += 1;

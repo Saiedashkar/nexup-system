@@ -1,23 +1,45 @@
 {
   "proof": "the APPLICATION acceptance proofs: the full lifecycle through the application boundary (Command → … → human decision → COMPLETED), Command idempotency, and a REAL multi-process restart proof against the isolated development database",
-  "generatedAt": "2026-10-07T19:05:38.469Z",
+  "generatedAt": "2026-10-07T21:52:20.847Z",
   "exitStatus": "0",
   "runnerSaidSuccess": true,
   "counts": {
     "testFiles": 4,
-    "tests": 9,
-    "passed": 9,
+    "tests": 10,
+    "passed": 10,
     "failed": 0,
     "skipped": 0
   },
-  "testedCommit": "dacdc3204c5378c8ea67898a9e9002a6889996b0",
+  "testedCommit": "4fde70bffb316ff9dcf341dc05e23065097c3883",
   "workingTreeDirty": true,
   "workingTreeChanges": [
-    "M scripts/dev-db.mjs",
-    "M scripts/write-app-proof-evidence.mjs",
-    "?? docs/AI_WORKFORCE_PRODUCTION_MIGRATION_PACKAGE.md",
-    "?? docs/evidence/step5-app-acceptance-2026-10-07.json",
-    "?? docs/evidence/step5-dev-migration-2026-10-07.json"
+    "M docs/AI_WORKFORCE_PRODUCTION_MIGRATION_PACKAGE.md",
+    "M docs/AI_WORKFORCE_STEP5_INTEGRATION_GATE.md",
+    "M scripts/run-app-proof.sh",
+    "M src/modules/ai-workforce/policies/persistence-safety.ts",
+    "M src/modules/workforce/application/command-service.ts",
+    "M src/modules/workforce/application/composition.ts",
+    "M src/modules/workforce/application/runtime.ts",
+    "M src/modules/workforce/execution/execution-record.ts",
+    "M src/modules/workforce/orchestration/mission-orchestrator.ts",
+    "M src/modules/workforce/runtimes/agent-runtime.ts",
+    "M src/modules/workforce/runtimes/deterministic-runtime-adapter.ts",
+    "M src/modules/workforce/runtimes/hermes/hermes-bridge-transport.ts",
+    "M src/modules/workforce/runtimes/hermes/hermes-runtime-adapter.ts",
+    "M src/modules/workforce/runtimes/hermes/testing/deterministic-transport.ts",
+    "M tests/process/app-process-c.test.ts",
+    "M tests/process/support.ts",
+    "M tests/workforce-step5-app-restart.test.ts",
+    "?? docs/evidence/step5-http-boundary-2026-10-07.json",
+    "?? docs/evidence/step5-production-migration-history-2026-10-07.json",
+    "?? scripts/check-production-migration-history.mjs",
+    "?? scripts/run-api-http-proof.sh",
+    "?? src/modules/workforce/execution/execution-reconciler.ts",
+    "?? tests/process/app-process-e.test.ts",
+    "?? tests/workforce-api-http.test.ts",
+    "?? tests/workforce-bridge-adoption.test.ts",
+    "?? tests/workforce-persistence-host-policy.test.ts",
+    "?? tests/workforce-step5-adoption.test.ts"
   ],
   "environment": {
     "applicationDatabase": "the isolated development cluster only — 127.0.0.1, created by `initdb` for this work, never the production Supabase host",
@@ -31,20 +53,10 @@
     "listenAddresses": "127.0.0.1",
     "database": "nexup_dev",
     "version": "PostgreSQL 18.6 on x86_64-windows, compiled by msvc-19.44.35228, 64-bit",
-    "postmasterStartedAt": "2026-10-07 20:59:27.132171+03",
+    "postmasterStartedAt": "2026-10-08 00:23:02.701377+03",
     "isLoopbackConnection": "yes",
     "superuser": "postgres",
-    "aiTables": [
-      "ai_approvals",
-      "ai_command_intents",
-      "ai_execution_records",
-      "ai_jobs",
-      "ai_missions",
-      "ai_run_events",
-      "ai_runs",
-      "ai_task_reviews",
-      "ai_tasks"
-    ],
+    "aiTables": [],
     "legacyTables": 28,
     "productionUrlHost": {
       "source": ".env",
@@ -61,32 +73,32 @@
         {
           "title": "STEP 5 — the application boundary runs the whole lifecycle on a real database runs Command → Mission → Task → Actor → Capability → Runtime → Execution → Review → COMPLETED",
           "status": "passed",
-          "durationMs": 638.1361000000002
+          "durationMs": 1203.3644999999997
         },
         {
           "title": "STEP 5 — the application boundary runs the whole lifecycle on a real database returns the SAME mission for a retry, and runs nothing new",
           "status": "passed",
-          "durationMs": 424.90229999999974
+          "durationMs": 679.9464000000007
         },
         {
           "title": "STEP 5 — the application boundary runs the whole lifecycle on a real database refuses a reused key with a DIFFERENT command (COMMAND_KEY_REUSED)",
           "status": "passed",
-          "durationMs": 300.2548999999999
+          "durationMs": 442.4285
         },
         {
           "title": "STEP 5 — the application boundary runs the whole lifecycle on a real database still creates a NEW mission for a genuinely new command",
           "status": "passed",
-          "durationMs": 382.53219999999965
+          "durationMs": 654.0694999999996
         },
         {
           "title": "STEP 5 — the application boundary runs the whole lifecycle on a real database refuses a capability the actor is NOT assigned, with zero transport calls",
           "status": "passed",
-          "durationMs": 165.7588999999998
+          "durationMs": 234.01180000000022
         },
         {
           "title": "STEP 5 — the application boundary runs the whole lifecycle on a real database rehydrates the finished mission through a FRESH application",
           "status": "passed",
-          "durationMs": 524.9126999999999
+          "durationMs": 963.0378999999994
         }
       ]
     },
@@ -97,17 +109,22 @@
         {
           "title": "STEP 5 — the application rehydrates a mission after a REAL process restart fails closed when the process has no verified durable database",
           "status": "passed",
-          "durationMs": 4.8332000000000335
+          "durationMs": 10.153800000000047
         },
         {
           "title": "STEP 5 — the application rehydrates a mission after a REAL process restart process A hands over an OPEN HUMAN DECISION and process B finishes the mission from the rows",
           "status": "passed",
-          "durationMs": 9458.7159
+          "durationMs": 14811.5938
         },
         {
-          "title": "STEP 5 — the application rehydrates a mission after a REAL process restart measures the case that does NOT work: an in-flight handle cannot be settled after a restart",
+          "title": "STEP 5 — the application rehydrates a mission after a REAL process restart re-adopts an IN-FLIGHT execution after a real restart, without resubmitting it, and completes the mission",
           "status": "passed",
-          "durationMs": 7562.482100000001
+          "durationMs": 20326.075300000004
+        },
+        {
+          "title": "STEP 5 — the application rehydrates a mission after a REAL process restart cannot verify an execution the runtime no longer knows, and escalates it to a human instead of guessing",
+          "status": "passed",
+          "durationMs": 12628.904800000004
         }
       ]
     }

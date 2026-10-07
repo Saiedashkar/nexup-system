@@ -246,12 +246,12 @@ describeIfDatabase("STEP 5 — the application rehydrates a mission after a REAL
       Number(psql(`select count(*) from "ai_execution_records" where "missionId" = '${missionId}'`, DB_NAME)),
     ).toBe(executionsBefore);
   }, 400_000);
-
-  it("measures the case that does NOT work: an in-flight handle cannot be settled after a restart", async () => {
+  it("re-adopts an IN-FLIGHT execution after a real restart, without resubmitting it, and completes the mission", async () => {
     const key = "restart-proof-2";
 
-    // Process A issues and DIES with the task RUNNING and the provider run
-    // genuinely still alive (APP_PROOF_HOLD_MS keeps it in flight).
+    // Process A issues and exits with the task RUNNING while the provider run is
+    // genuinely still alive (APP_PROOF_HOLD_MS holds the completion, and that
+    // timer is unref'd, so A really does die with work in flight).
     const receiptA = runChild(
       "tests/process/app-process-a.test.ts",
       { APP_PROOF_KEY: key, APP_PROOF_SETTLE: "no", APP_PROOF_HOLD_MS: "30000" },
@@ -262,34 +262,126 @@ describeIfDatabase("STEP 5 — the application rehydrates a mission after a REAL
 
     const missionId = String(receiptA.missionId);
     const taskId = String(receiptA.taskId);
+    const handleId = String(receiptA.executionHandleId);
+    expect(handleId).toBeTruthy();
 
-    // Process C tries to finish it, and cannot.
+    // Process C: a DIFFERENT process — fresh registries, fresh ids, fresh
+    // transport. The provider kept the run and finished it while we were down.
+    // C must ADOPT it by asking, never by submitting it again.
     const receiptC = runChild(
       "tests/process/app-process-c.test.ts",
-      { APP_PROOF_KEY: key, APP_PROOF_MISSION_ID: missionId },
+      { APP_PROOF_KEY: key, APP_PROOF_MISSION_ID: missionId, APP_PROOF_HANDLE_ID: handleId },
       "receipt-c.json",
     );
 
-    expect(receiptC.settled).toBe(false);
-    expect(receiptC.errorCode).toBe("RUNTIME_UNAVAILABLE");
-    expect(String(receiptC.errorMessage)).toMatch(/no execution/i);
-    expect(receiptC.missionStateAfter).toBe("RUNNING");
-    expect(receiptC.taskStateAfter).toBe("RUNNING");
+    expect(receiptC.pid).not.toBe(receiptA.pid);
+    expect(receiptC.pid).not.toBe(process.pid);
+    expect(receiptC.handleId).toBe(handleId);
+    // THE claim: re-adoption never started a second run.
+    expect(receiptC.runsStartedByC).toBe(0);
+    // ...and it settled the attempt from what the runtime reported.
+    expect(receiptC.executionStatusAfter).toBe("SUCCEEDED");
+    expect(receiptC.executionCount).toBe(1);
+    expect(String(receiptC.auditTypes)).toContain("RECONCILED");
+    expect(receiptC.taskStateAfter).toBe("REVIEW");
+    expect(receiptC.missionStateAfter).toBe("WAITING");
+    expect(String(receiptC.changes)).toContain("ADOPTED_TERMINAL");
 
-    // The rows say the same thing: durable, and stuck.
-    expect(psql(`select state from "ai_missions" where id = '${missionId}'`, DB_NAME)).toBe("RUNNING");
-    expect(psql(`select state from "ai_tasks" where id = '${taskId}'`, DB_NAME)).toBe("RUNNING");
-    expect(["SUCCEEDED", "FAILED", "CANCELLED"]).not.toContain(
-      psql(`select status from "ai_execution_records" where "taskId" = '${taskId}'`, DB_NAME),
+    // Process B: a THIRD process takes the human decision the re-adopted attempt
+    // parked. The human boundary is unchanged by any of this.
+    const receiptB = runChild(
+      "tests/process/app-process-b.test.ts",
+      { APP_PROOF_KEY: key, APP_PROOF_MISSION_ID: missionId },
+      "receipt-b2.json",
+    );
+    expect(receiptB.polledHandleId).toBe(handleId);
+    expect(receiptB.missionState).toBe("COMPLETED");
+    expect(receiptB.reviewState).toBe("APPROVED");
+
+    // The parent verifies from a FOURTH composition and from the RAW ROWS.
+    const application = await parentApplication();
+    const final = await application.commands.snapshot(missionId as never);
+    expect(final.mission.state).toBe("COMPLETED");
+    expect(final.tasks[0]!.state).toBe("COMPLETED");
+    expect(final.executions).toHaveLength(1);
+    expect(final.executions[0]!.handleId).toBe(handleId);
+
+    expect(psql(`select state from "ai_missions" where id = '${missionId}'`, DB_NAME)).toBe("COMPLETED");
+    expect(psql(`select state from "ai_tasks" where id = '${taskId}'`, DB_NAME)).toBe("COMPLETED");
+    // EXACTLY ONE attempt row and exactly one runtime handle: no process in this
+    // chain asked the provider to run this work twice.
+    expect(
+      psql(`select count(*) from "ai_execution_records" where "missionId" = '${missionId}'`, DB_NAME),
+    ).toBe("1");
+    expect(
+      psql(`select count(distinct "handleId") from "ai_execution_records" where "missionId" = '${missionId}'`, DB_NAME),
+    ).toBe("1");
+    expect(psql(`select status from "ai_execution_records" where "taskId" = '${taskId}'`, DB_NAME)).toBe("SUCCEEDED");
+    // The durable audit carries the reconciliation, so the ROW itself shows that
+    // a surviving process verified it — no process memory required.
+    expect(
+      psql(`select audit::text from "ai_execution_records" where "taskId" = '${taskId}'`, DB_NAME),
+    ).toContain("RECONCILED");
+  }, 400_000);
+
+  it("cannot verify an execution the runtime no longer knows, and escalates it to a human instead of guessing", async () => {
+    const key = "restart-proof-3";
+
+    const receiptA = runChild(
+      "tests/process/app-process-a.test.ts",
+      { APP_PROOF_KEY: key, APP_PROOF_SETTLE: "no", APP_PROOF_HOLD_MS: "30000" },
+      "receipt-a3.json",
+    );
+    const missionId = String(receiptA.missionId);
+    const taskId = String(receiptA.taskId);
+    const handleId = String(receiptA.executionHandleId);
+
+    // Process E asks the runtime about the run, and the runtime does not know it
+    // any more (404, as a restarted bridge answers). That is knowledge that the
+    // execution is GONE - not that it failed.
+    const receiptE = runChild(
+      "tests/process/app-process-e.test.ts",
+      { APP_PROOF_KEY: key, APP_PROOF_MISSION_ID: missionId, APP_PROOF_HANDLE_ID: handleId },
+      "receipt-e.json",
     );
 
-    // What DOES work is the release valve: an operator can cancel the mission,
-    // which cancels our bookkeeping. It cannot confirm the provider's run was
-    // stopped — the runtime refused that same handle a moment ago — so this
-    // closes the mission without pretending the execution was ended.
+    expect(receiptE.executionStatusAfter).toBe("UNKNOWN");
+    expect(receiptE.errorCategory).toBe("UNKNOWN_REMOTE");
+    expect(receiptE.escalated).toBe(true);
+    expect(receiptE.settled).toBe(false);
+    // No retry, no second run, no fabricated terminal state.
+    expect(receiptE.runsStartedByE).toBe(0);
+    expect(receiptE.executionCount).toBe(1);
+    expect(receiptE.attemptAfter).toBe(1);
+    expect(receiptE.taskStateAfter).toBe("REVIEW");
+    expect(Number(receiptE.decisionQueueSize)).toBeGreaterThan(0);
+
+    // The RAW rows agree, and the attempt is NOT terminal: only a human moves it.
+    expect(psql(`select status from "ai_execution_records" where "taskId" = '${taskId}'`, DB_NAME)).toBe("UNKNOWN");
+    expect(psql(`select state from "ai_tasks" where id = '${taskId}'`, DB_NAME)).toBe("REVIEW");
+    expect(
+      psql(`select error ->> 'category' from "ai_execution_records" where "taskId" = '${taskId}'`, DB_NAME),
+    ).toBe("UNKNOWN_REMOTE");
+    expect(
+      psql(`select count(*) from "ai_execution_records" where "missionId" = '${missionId}'`, DB_NAME),
+    ).toBe("1");
+    expect(
+      psql(`select count(*) from "ai_task_reviews" where "taskId" = '${taskId}' and state = 'PENDING'`, DB_NAME),
+    ).toBe("1");
+
+    // The human's release valve still works: a person may ask for another
+    // attempt (REVISION -> READY) or cancel. Nothing here chose for them.
     const application = await parentApplication();
-    const cancelled = await application.commands.cancel(missionId as never, "left in flight by a process restart");
-    expect(cancelled.mission.state).toBe("CANCELLED");
-    expect(psql(`select state from "ai_tasks" where id = '${taskId}'`, DB_NAME)).toBe("CANCELLED");
+    const snapshot = await application.commands.snapshot(missionId as never);
+    const pending = snapshot.reviews.find((review) => review.state === "PENDING")!;
+    const decided = await application.commands.decide(pending.id, {
+      decision: "NEEDS_REVISION",
+      decidedBy: "actor_founder",
+      note: "the run could not be verified; try again",
+    });
+    expect(decided.mission.state).not.toBe("COMPLETED");
+    const afterDecision = await application.commands.snapshot(missionId as never);
+    expect(["REVISION", "READY", "RUNNING"]).toContain(afterDecision.tasks[0]!.state);
   }, 400_000);
 });
+

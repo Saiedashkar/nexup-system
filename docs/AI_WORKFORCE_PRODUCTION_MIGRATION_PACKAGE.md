@@ -130,8 +130,9 @@ Against the production database, via the project's normal connection:
    information_schema.tables where table_schema='public' and table_type='BASE TABLE';`
    → **28** expected (the branch-point datamodel's table count).
 5. Confirm the application is NOT already configured to persist workforce state:
-   `AI_WORKFORCE_PERSISTENCE` unset/`memory`, and `AI_WORKFORCE_DATABASE_URL`
-   unset or not loopback. (Today it is; the application refuses otherwise.)
+   `AI_WORKFORCE_PERSISTENCE` unset/`memory`, and no accepted
+   `AI_WORKFORCE_DATABASE_URL` (unset, or a host the policy refuses). Today it is
+   off; the lifecycle only boots on `database` plus a URL the host policy accepts.
 
 ---
 
@@ -202,10 +203,12 @@ fingerprinted.
   and referenced by nothing in the legacy schema, so a partially applied batch
   can be completed or dropped without touching business data.
 - The application cannot write to any of these tables until
-  `AI_WORKFORCE_PERSISTENCE=database` and a loopback `AI_WORKFORCE_DATABASE_URL`
-  are set — and today it refuses to boot the lifecycle without them
-  (`getWorkforceApplication()` → `PERSISTENCE_UNAVAILABLE`). So applying the
-  schema has **no behavioural effect on the running application**.
+  `AI_WORKFORCE_PERSISTENCE=database` and a database URL the host policy accepts
+  are set — loopback, or an explicitly allowlisted remote host under
+  `AI_WORKFORCE_DATABASE_TARGET=production`. Today none is configured and it
+  refuses to boot the lifecycle without them (`getWorkforceApplication()` →
+  `PERSISTENCE_UNAVAILABLE`), so applying the schema has **no behavioural effect
+  on the running application**.
 
 ---
 
@@ -230,7 +233,7 @@ fingerprinted.
 6. Schema parity: `prisma migrate diff --from-config-datasource
    --to-schema=prisma/schema.prisma --exit-code` → exit **0** (empty diff).
 7. Application: `npx prisma generate && npx tsc --noEmit` → clean; then
-   `AI_WORKFORCE_PERSISTENCE=database` + a loopback URL, and
+   `AI_WORKFORCE_PERSISTENCE=database` + a URL the host policy accepts, and
    `bash scripts/run-app-proof.sh` against a development database first.
 
 ---
@@ -283,31 +286,46 @@ branch-point datamodel, and the database it produced is byte-equivalent to
 `schema.prisma`.
 
 **NO-GO** for activating the lifecycle in production (`AI_WORKFORCE_PERSISTENCE=
-database`), because of the two open items below — both are application-level, not
-schema-level, and both are recorded in the acceptance evidence:
+database`), for the two remaining, application-level reasons below — neither is
+schema-level, and neither blocks applying the additive DDL:
 
-1. **A run left in flight by a process restart cannot be settled.** The runtime
-   adapter's handle bookkeeping is in-process memory and
-   `AgentExecutionLifecycle` has no re-adoption seam, so after a restart
-   `waitForExecution` throws `RUNTIME_NOT_FOUND` for a durable handle. Such a
-   mission can only be released by cancelling it, which stops our bookkeeping
-   without confirming the provider's run was stopped.
-2. **Nothing in production surfaces the lifecycle yet.** The API routes exist and
+1. **Nothing in production surfaces the lifecycle yet.** The API routes exist and
    are wired to the durable composition, but the Command Center still reads its
    demo model by design (Step 6), and no route has been exercised against a
    deployed origin.
-3. **The persistence guard would REFUSE the production host, by design.**
-   `AI_WORKFORCE_DATABASE_URL` is checked against a **loopback allowlist**
-   (`assertIsolatedDatabaseUrl`, `src/modules/ai-workforce/policies/persistence-safety.ts`),
-   and the project's production `DATABASE_URL` is `db.<ref>.supabase.co:6543`,
-   which is not loopback. So production cannot persist workforce state by setting
-   environment variables alone: the allowlist itself has to be widened, which is
-   an explicit owner decision about writing to production data — **not** a
-   side effect of applying this migration. This is why the package says the DDL
-   is safe to apply *and* the lifecycle stays off until that decision is made.
+2. **Activation is an explicit owner decision, and its prerequisite is not
+   verified from this host.** The pre-flight this package depends on — that
+   `_prisma_migrations` lists all 14 registered migrations — could not be read
+   from this machine (DNS `getaddrinfo ENOTFOUND db.<ref>.supabase.co`; the
+   read-only check exits 2 and mutates nothing). It must be re-run from a host
+   that can reach the pooler before the migration path is chosen.
 
-All three are fixable without touching the schema, and none blocks applying the
-additive DDL.
+Two blockers a previous revision of this document recorded are now **closed**,
+and were replaced rather than softened:
+
+- **A run left in flight by a process restart CAN now be settled.** A
+  provider-neutral recovery service — `ExecutionReconciler`, plus the
+  `AgentExecutionRecovery` adoption port on `AgentRuntime` — re-adopts a durable
+  in-flight attempt by *asking* the provider (never resubmitting) and settles it
+  through the SAME orchestrator path a live settle uses. It is proven by the
+  adoption matrix (`tests/workforce-step5-adoption.test.ts`, 9/9) and by the
+  multi-process restart proof (`tests/workforce-step5-app-restart.test.ts`, 4/4,
+  asserting `runsStartedByC === 0` and exactly one execution row). A run the
+  provider no longer knows becomes `UNKNOWN`/`UNKNOWN_REMOTE` and is escalated to
+  a human — never auto-retried.
+- **The persistence guard no longer refuses the production host by design.** The
+  loopback-only allowlist was replaced by an explicit, fail-closed environment
+  policy: `AI_WORKFORCE_DATABASE_TARGET` (`local` | `production`) together with
+  `AI_WORKFORCE_DATABASE_HOSTS` (exact hostnames). Loopback is always allowed; a
+  remote host is accepted only under `target=production` AND when it is
+  explicitly allowlisted; malformed URLs, unlisted hosts and unknown targets are
+  refused. Nothing is hardcoded — no project ref or secret appears in source —
+  and no credential is ever logged. `assertIsolatedDatabaseUrl` remains strictly
+  loopback for the isolated-test path. See
+  `tests/workforce-persistence-host-policy.test.ts` (13/13).
+
+The DDL is safe to apply, and the lifecycle stays off until the owner decides to
+activate it.
 
 ---
 
@@ -317,5 +335,8 @@ additive DDL.
 |----------|----------------|
 | [`docs/evidence/step5-dev-migration-2026-10-07.json`](evidence/step5-dev-migration-2026-10-07.json) | the apply on a real, isolated, pre-migration database, with the additive checks and the replay defect measured |
 | [`docs/evidence/step5-app-acceptance-2026-10-07.json`](evidence/step5-app-acceptance-2026-10-07.json) | the lifecycle end to end through the application boundary, Command idempotency, and the multi-process restart proof |
+| [`docs/evidence/step5-http-boundary-2026-10-07.json`](evidence/step5-http-boundary-2026-10-07.json) | the real HTTP routes against a running `next start` server: 401/403 auth, Command issue, idempotent retry, reused-key 409, malformed 400, read/settle/human decision, and no secret in any error body |
+| [`docs/evidence/step5-production-migration-history-2026-10-07.json`](evidence/step5-production-migration-history-2026-10-07.json) | the READ-ONLY production `_prisma_migrations` pre-flight: 14 registered in the repo, and that the production host could not be reached from this machine (no mutation attempted) |
+| [`docs/AI_WORKFORCE_STEP5_PREPRODUCTION_CLOSURE.md`](AI_WORKFORCE_STEP5_PREPRODUCTION_CLOSURE.md) | the final pre-production closure: in-flight re-adoption, the host policy, the HTTP boundary, and the single readiness verdict |
 | [`docs/AI_WORKFORCE_STEP4_STEP5_CLOSURE.md`](AI_WORKFORCE_STEP4_STEP5_CLOSURE.md) | the graded Step 4 / Step 5 audit |
 | [`docs/AI_WORKFORCE_AUDIT_EVIDENCE.md`](AI_WORKFORCE_AUDIT_EVIDENCE.md) | the gated commands behind every claim |

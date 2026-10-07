@@ -453,6 +453,43 @@ export class MissionOrchestrator {
   }
 
   /* ═══════════════════════════════════════════════════
+     Unverifiable attempts
+     ═══════════════════════════════════════════════════ */
+
+  /**
+   * Parks a RUNNING task for a HUMAN because its attempt could not be confirmed
+   * after a restart (the runtime no longer knows the execution).
+   *
+   * It deliberately does NOT fail the task and does NOT retry it. Both would be
+   * guesses: the run may have finished successfully before we lost track of it,
+   * and an automatic retry would then execute the same work a second time. So
+   * the task goes to REVIEW with a review row that says exactly what happened,
+   * and the decision is a human's — retry (REVISION → READY) or cancel.
+   */
+  async escalateUnverifiedExecution(
+    missionId: MissionId,
+    taskId: TaskId,
+    input: { detail: string },
+  ): Promise<TaskAdvanceOutcome> {
+    const task = await requireTask(this.deps.tasks, taskId);
+    if (task.state !== "RUNNING" || !task.executionRecordId) {
+      throw new AiWorkforceError(
+        "INVALID_MISSION_TRANSITION",
+        `Task "${taskId}" is ${task.state}; only a RUNNING attempt can be escalated`,
+        { taskId, state: task.state },
+      );
+    }
+    await this.parkForReview(task, missionId, task.executionRecordId, {
+      reason: input.detail,
+      summary: `Attempt ${task.attempt} of "${task.title}" could not be verified after a restart: ${input.detail}. The provider may have finished this run — decide whether to retry or cancel.`,
+    });
+    // Let the mission state follow the task, without dispatching anything.
+    await this.advance(missionId, { startNext: false });
+    const settled = await requireTask(this.deps.tasks, taskId);
+    return { taskId, state: settled.state, executionRecordId: task.executionRecordId };
+  }
+
+  /* ═══════════════════════════════════════════════════
      Human authority
      ═══════════════════════════════════════════════════ */
 
@@ -555,20 +592,38 @@ export class MissionOrchestrator {
      Internals
      ═══════════════════════════════════════════════════ */
 
-  private async parkForReview(task: MissionTask, missionId: MissionId, executionRecordId: string): Promise<MissionTask> {
+  private async parkForReview(
+    task: MissionTask,
+    missionId: MissionId,
+    executionRecordId: string,
+    /**
+     * Override for the escalation that is NOT an acceptance request — an attempt
+     * that could not be verified. A review row is still created, because the
+     * Decision Queue is built from pending reviews: parking a task in REVIEW
+     * without one would hide it from the human who has to decide.
+     */
+    escalation?: { reason: string; summary: string },
+  ): Promise<MissionTask> {
     const mission = await this.deps.missions.require(missionId);
     const reviewer = await this.resolveReviewer(mission);
     const review = await this.deps.reviews.request({
       taskId: task.id,
       missionId,
       executionRecordId,
-      summary: `Task "${task.title}" produced a result; ${reviewer ? `${reviewer.displayName} must accept it` : "a human must accept it"}`,
+      summary:
+        escalation?.summary ??
+        `Task "${task.title}" produced a result; ${reviewer ? `${reviewer.displayName} must accept it` : "a human must accept it"}`,
       reviewerActorId: reviewer?.id ?? null,
       requestedBy: task.assignedActorId ?? "orchestrator",
     });
 
     const inReview: MissionTask = {
-      ...applyTaskTransition(task, "REVIEW", "execution succeeded; awaiting human authority", this.deps.now().toISOString()),
+      ...applyTaskTransition(
+        task,
+        "REVIEW",
+        escalation?.reason ?? "execution succeeded; awaiting human authority",
+        this.deps.now().toISOString(),
+      ),
       reviewId: review.id,
     };
     const stored = await this.deps.tasks.update(inReview, [task.state]);

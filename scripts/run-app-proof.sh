@@ -12,9 +12,10 @@
 #     (retry → same mission, no duplicate execution; reused key → refused).
 #
 #   tests/workforce-step5-app-restart.test.ts
-#     two/three REAL OS processes: A exits holding an open human decision, B
-#     rehydrates it from the rows and completes the mission, C measures the
-#     in-flight-handle case that does not work.
+#     REAL OS processes: A exits holding an open human decision (or an in-flight
+#     run), B rehydrates it from the rows and completes the mission, C RE-ADOPTS
+#     the in-flight execution without resubmitting it, and E covers the run the
+#     provider no longer knows (UNKNOWN → escalated to a human).
 #
 # It needs the isolated development cluster (port 5501 by default):
 #

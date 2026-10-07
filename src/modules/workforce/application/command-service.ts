@@ -12,6 +12,8 @@ import type {
 import type { ReviewDecision, TaskReview } from "../review/task-review";
 import type { MissionId, ReviewId, TaskId } from "../core/refs";
 
+import type { ExecutionReconciler, ExecutionReconciliation } from "../execution/execution-reconciler";
+
 import {
   commandFingerprint,
   parseMissionCommand,
@@ -50,6 +52,12 @@ export type WorkforceCommandServiceDeps = {
   intents: CommandIntentRepository;
   /** Where a task with no explicit actor/capability is routed. */
   route: CommandTaskRouter;
+  /**
+   * Re-adopts executions this process did not start. It is a dependency of the
+   * APPLICATION boundary, not of the orchestrator, because "who is watching the
+   * handle" is a property of the process, and the process is what restarts.
+   */
+  reconciler: ExecutionReconciler;
 };
 
 export type CommandIssued = {
@@ -175,7 +183,28 @@ export class WorkforceCommandService {
 
   /** Reconciles a mission: promote what is dispatchable, start at most one task. */
   async advance(missionId: MissionId, options: { startNext?: boolean } = {}): Promise<MissionAdvanceResult> {
+    // Deliberately no reconciliation here: `advance` is the read-only reconciler
+    // of MISSION STATE and must stay free of provider calls, so a caller can
+    // look at a mission without touching a runtime. Recovery is `drain`/`reconcile`.
     return this.deps.orchestrator.advance(missionId, options);
+  }
+
+  /**
+   * Re-adopts every in-flight attempt of this mission through the runtime port.
+   *
+   * This is what makes a restart survivable: the durable records name the
+   * handle, the provider execution and the attempt, so a NEW process can ask the
+   * runtime what became of work it never submitted — without resubmitting it.
+   * Nothing is dispatched, and an attempt that cannot be verified is escalated
+   * to a human rather than guessed at.
+   */
+  async reconcile(missionId: MissionId): Promise<ExecutionReconciliation[]> {
+    return this.deps.reconciler.reconcileMission(missionId);
+  }
+
+  /** The same re-adoption sweep, across the most recently touched missions. */
+  async reconcileInFlight(limit?: number): Promise<ExecutionReconciliation[]> {
+    return this.deps.reconciler.reconcileInFlight(limit);
   }
 
   /**
@@ -196,6 +225,14 @@ export class WorkforceCommandService {
    * starts more than one task, so a retry cannot stampede the provider.
    */
   async drain(missionId: MissionId, options: { waitTimeoutMs?: number } = {}): Promise<MissionAdvanceResult> {
+    // 1. ADOPT FIRST. A task left RUNNING by a previous process has a handle
+    //    this process never minted, so settling it directly would fail with
+    //    RUNTIME_NOT_FOUND. Re-adoption puts the handle back under our watch
+    //    (and settles anything the runtime has already finished) without ever
+    //    resubmitting the job.
+    const reconciliations = await this.deps.reconciler.reconcileMission(missionId);
+
+    // 2. Then settle whatever is STILL running through the ordinary port path.
     const snapshot = await this.snapshot(missionId);
     for (const task of snapshot.tasks) {
       if (task.state === "RUNNING") {
@@ -206,7 +243,15 @@ export class WorkforceCommandService {
         );
       }
     }
-    return this.deps.orchestrator.advance(missionId);
+
+    // 3. Then let the mission follow its tasks and promote the next dispatchable
+    //    one. A replayed Command never gets here, which is why a retry cannot
+    //    cause a second execution.
+    const advanced = await this.deps.orchestrator.advance(missionId);
+    const notes = reconciliations.map(
+      (row) => `execution:${row.executionRecordId}:${row.kind} (${row.status})`,
+    );
+    return notes.length > 0 ? { ...advanced, changes: [...notes, ...advanced.changes] } : advanced;
   }
 
   /** The human authority path: an approve/reject/needs-revision decision. */

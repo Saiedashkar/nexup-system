@@ -1,6 +1,6 @@
 import { analyze, compatChecks, type CompatOptions } from "./hermes-compat";
 import { SCOPE_BANNER } from "./output";
-import type { Check, CheckOutcome, HostProbe, Suite } from "./runner";
+import type { Check, CheckOutcome, CommandResult, HostProbe, Suite } from "./runner";
 
 /**
  * Read-only VPS pre-flight probe for the containerised deployment (revised C).
@@ -13,8 +13,9 @@ import type { Check, CheckOutcome, HostProbe, Suite } from "./runner";
  * Three checks EXECUTE something, and all three are opt-in (`--exec-probes`):
  *
  *   P0.2c  runs `grep` INSIDE the bridge image (no network, no port, no config)
- *   P0.6   runs the bridge image twice with a deliberately invalid bind so it
- *          exits BEFORE `listen`, to prove the bind guard
+ *   P0.6   runs the bridge image four times with a deliberately invalid bind or
+ *          profile so it exits BEFORE `listen`, to prove the bind and profile
+ *          guards
  *   P4.12  opens a TCP connection to the serve endpoint from inside the Hermes
  *          container to prove it answers on loopback
  *
@@ -81,6 +82,33 @@ const BUNDLE_GUARD_STRING = "is not permitted by the NEXUP bridge";
 /** Synthetic values for the opt-in execution probes; never real, never written anywhere. */
 const SYNTHETIC_SECRET = "nexup-preflight-synthetic-secret-not-a-real-key";
 const SYNTHETIC_TOKEN = "nexup-preflight-synthetic-token-not-real";
+
+/**
+ * Fixed container-name prefix for the opt-in probe containers. The name is
+ * DETERMINISTIC, not random: a probe orphaned by an earlier crashed run can then
+ * be addressed and cleaned before the next attempt, and the argv is reproducible.
+ */
+export const PROBE_CONTAINER_PREFIX = "nexup-preflight-probe";
+
+/**
+ * The `docker run` argv for ONE opt-in probe container.
+ *
+ * The environment is a MAPPING, so each name appears EXACTLY ONCE in the argv.
+ * That matters because Docker resolves a repeated `-e NAME=VALUE` LAST-WINS: an
+ * ordered list that carried a shared `HERMES_PROFILE=saieed` AFTER a probe's own
+ * override would silently replace it — the defect this replaces, where the
+ * "forbidden profile" probe ran as `saieed`, configured, bound the port and
+ * stalled to the 15 s timeout. A map makes the override authoritative by
+ * construction: there is no second assignment left to win.
+ */
+export function bridgeProbeArgs(
+  imageRef: string,
+  name: string,
+  env: Readonly<Record<string, string>>,
+): string[] {
+  const assignments = Object.entries(env).flatMap(([key, value]) => ["-e", `${key}=${value}`]);
+  return ["run", "--rm", "--name", name, ...assignments, imageRef];
+}
 
 /** The environment the bridge reads. `NEXUP_BRIDGE_MAX_BODY_BYTES` is deliberately
  * excluded: it is covered by the dedicated P1.1 reconciliation check instead. */
@@ -438,6 +466,54 @@ function firstLine(text: string): string {
   return (text.split("\n")[0] ?? "").trim();
 }
 
+/**
+ * The offset of the `{` that opens the body of the method `name`, or -1 when the
+ * file does not DEFINE that method.
+ *
+ * In a class file the first textual occurrence of a name is usually a CALL
+ * (`this.sweepBuckets(nowMs)`), which is what a naive `indexOf` + fixed-width
+ * slice reads — and the actual method, with the property under test, can sit well
+ * beyond that window. A call is preceded by `.`, so it can never be taken for a
+ * definition; a definition (`private sweepBuckets(nowMs: number): void {`) is
+ * preceded by an identifier boundary and followed by a parameter list closed by
+ * `)` and a body brace on the same line.
+ */
+function methodBodyOpen(content: string, name: string): number {
+  const pattern = new RegExp(`(^|[^.\\w])${name}\\s*\\(`, "gm");
+  for (let match = pattern.exec(content); match !== null; match = pattern.exec(content)) {
+    const start = (match.index ?? 0) + (match[1]?.length ?? 0);
+    const lineEnd = content.indexOf("\n", start);
+    const line = content.slice(start, lineEnd === -1 ? content.length : lineEnd);
+    // A definition closes its parameter list and is followed by a return type
+    // and/or a body brace; a call ends at `)` or `);` with no brace after it.
+    if (!/\)\s*(?::\s*[^{;]*)?\{/.test(line)) continue;
+    return content.indexOf("{", start);
+  }
+  return -1;
+}
+
+/**
+ * The full body of the method `name` (braces included), or NULL when the file
+ * does not define it. Bounded to the method's own braces rather than a fixed
+ * window from the name: a 600-character window from a signature overruns into the
+ * NEXT method, whose `break;` would satisfy the assertion for a sweep that no
+ * longer has one. Returns NULL so the caller fails closed.
+ */
+export function methodBodyText(content: string, name: string): string | null {
+  const open = methodBodyOpen(content, name);
+  if (open < 0) return null;
+  let depth = 0;
+  for (let index = open; index < content.length; index += 1) {
+    const char = content[index];
+    if (char === "{") depth += 1;
+    else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return content.slice(open, index + 1);
+    }
+  }
+  return content.slice(open);
+}
+
 const pass = (evidence: string): CheckOutcome => ({ status: "pass", evidence });
 const fail = (reason: string, evidence?: string): CheckOutcome =>
   evidence ? { status: "fail", reason, evidence } : { status: "fail", reason };
@@ -511,6 +587,25 @@ export function createPreflightSuite(
     if (result.code !== 0) return { ran: false, digest: null, reason: `docker image inspect exited ${result.code}` };
     const digest = normalizeDigest(firstLine(result.stdout));
     return digest ? { ran: true, digest } : { ran: false, digest: null, reason: `unparseable digest from "${firstLine(result.stdout)}"` };
+  };
+
+  /**
+   * Runs ONE opt-in probe container under a fixed name and ALWAYS removes it.
+   *
+   * `--rm` removes a container only when the CLI exits normally, but the probe's
+   * 15 s timeout kills the CLI — NOT the container — so a run that stalls leaves
+   * an orphan (the defect that left a stray probe behind before the profile
+   * override was made authoritative). Cleaning BEFORE (a stale name from a
+   * crashed run) and AFTER (success, refusal and timeout alike) makes the
+   * container lifecycle unconditional. The cleanup result is deliberately
+   * ignored: `rm -f` on an absent name is not an error.
+   */
+  const runProbeContainer = (slug: string, env: Record<string, string>): CommandResult => {
+    const name = `${PROBE_CONTAINER_PREFIX}-${slug}`;
+    probe.run("docker", ["rm", "-f", name]);
+    const result = probe.run("docker", bridgeProbeArgs(imageRef, name, env));
+    probe.run("docker", ["rm", "-f", name]);
+    return result;
   };
 
   const checks: Check[] = [
@@ -672,7 +767,7 @@ export function createPreflightSuite(
     safety("P0.6", "The bind and profile guards hold inside the shipped image (opt-in)", () => {
       if (!options.execProbes) {
         return skip(
-          "not run: this check executes the bridge image three times with configurations it must REFUSE, and each run " +
+          "not run: this check executes the bridge image four times with configurations it must REFUSE, and each run " +
             "exits BEFORE `listen` (no port, no config, no state). Re-run with --exec-probes to prove the guards",
         );
       }
@@ -680,39 +775,47 @@ export function createPreflightSuite(
       // `--entrypoint /usr/local/bin/node` REPLACES the entrypoint and drops the
       // bundle argument, so node would start a REPL, read EOF and exit 0 — a check
       // that could never observe a refusal. Found against the real daemon.
-      const base = ["run", "--rm", "-e", "NEXUP_BRIDGE_HOST=0.0.0.0"];
-      const shared = [
-        "-e",
-        `NEXUP_BRIDGE_HMAC_SECRET=${SYNTHETIC_SECRET}`,
-        "-e",
-        `NEXUP_BRIDGE_ALLOWED_KEY_IDS=${EXPECTED_KEY_ID}`,
-        "-e",
-        `HERMES_SESSION_TOKEN=${SYNTHETIC_TOKEN}`,
-        "-e",
-        `HERMES_PROFILE=${TARGET_PROFILE}`,
-        "-e",
-        `HERMES_RPC_URL=ws://127.0.0.1:${HERMES_PORT}/api/ws`,
-        imageRef,
-      ];
+      //
+      // The environment is a MAP, never an ordered list: Docker resolves a
+      // repeated `-e NAME=VALUE` LAST-WINS, so the probe's own override must not
+      // be preceded by a shared assignment of the same name. Each of the four
+      // probes therefore names its profile exactly once (see `bridgeProbeArgs`).
+      const shared: Record<string, string> = {
+        NEXUP_BRIDGE_HMAC_SECRET: SYNTHETIC_SECRET,
+        NEXUP_BRIDGE_ALLOWED_KEY_IDS: EXPECTED_KEY_ID,
+        HERMES_SESSION_TOKEN: SYNTHETIC_TOKEN,
+        HERMES_RPC_URL: `ws://127.0.0.1:${HERMES_PORT}/api/ws`,
+      };
 
-      const withoutOptIn = probe.run("docker", [...base, ...shared]);
+      // 1. The bind guard: a non-loopback bind without the opt-in must be refused.
+      //    The config resolver validates the PROFILE allowlist BEFORE the bind
+      //    (config.ts), so reaching this refusal also proves `HERMES_PROFILE=saieed`
+      //    was ACCEPTED — a refused profile would have exited with a profile reason.
+      const withoutOptIn = runProbeContainer("bind-guard", {
+        ...shared,
+        NEXUP_BRIDGE_HOST: "0.0.0.0",
+        HERMES_PROFILE: TARGET_PROFILE,
+      });
       if (!withoutOptIn.ran) return skip(`could not execute the image (${withoutOptIn.reason})`);
-      if (!(withoutOptIn.code === 1 && /loopback/i.test(withoutOptIn.stderr))) {
+      if (
+        !(withoutOptIn.code === 1 && /loopback/i.test(withoutOptIn.stderr)) ||
+        /ALLOWED_PROFILES|forbidden/i.test(withoutOptIn.stderr)
+      ) {
         return fail(
-          `expected exit=1 with a loopback refusal for NEXUP_BRIDGE_HOST=0.0.0.0 without the opt-in, got ` +
-            `exit=${withoutOptIn.code}`,
+          `expected exit=1 with a loopback refusal for NEXUP_BRIDGE_HOST=0.0.0.0 without the opt-in (and NOT a ` +
+            `profile refusal, which would mean ${TARGET_PROFILE} itself was rejected), got exit=${withoutOptIn.code}`,
           firstLine(withoutOptIn.stderr),
         );
       }
 
-      const withLoopbackBoundary = probe.run("docker", [
-        ...base,
-        "-e",
-        "NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND=true",
-        "-e",
-        "NEXUP_BRIDGE_TRUSTED_PROXIES=127.0.0.1,::1",
+      // 2. The opt-in alone is not enough: the edge boundary must be named.
+      const withLoopbackBoundary = runProbeContainer("bind-boundary", {
         ...shared,
-      ]);
+        NEXUP_BRIDGE_HOST: "0.0.0.0",
+        NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND: "true",
+        NEXUP_BRIDGE_TRUSTED_PROXIES: "127.0.0.1,::1",
+        HERMES_PROFILE: TARGET_PROFILE,
+      });
       if (!withLoopbackBoundary.ran) return skip(`could not execute the image (${withLoopbackBoundary.reason})`);
       if (!(withLoopbackBoundary.code === 1 && /TRUSTED_PROXIES/.test(withLoopbackBoundary.stderr))) {
         return fail(
@@ -722,16 +825,13 @@ export function createPreflightSuite(
         );
       }
 
-      // The profile allowlist is proved on the ARTIFACT, not just in the config
-      // tests: the real daemon accepted `HERMES_PROFILE=adel` before this row was
-      // added, and `adel` names the same `/opt/data` root as `default`.
-      const offScopeProfile = probe.run("docker", [
-        "run",
-        "--rm",
-        "-e",
-        `HERMES_PROFILE=${FORBIDDEN_OFF_SCOPE_PROFILE}`,
+      // 3. The profile allowlist is proved on the ARTIFACT, not just in the config
+      //    tests: the real daemon accepted `HERMES_PROFILE=adel` before this row was
+      //    added, and `adel` names the same `/opt/data` root as `default`.
+      const offScopeProfile = runProbeContainer("profile-adel", {
         ...shared,
-      ]);
+        HERMES_PROFILE: FORBIDDEN_OFF_SCOPE_PROFILE,
+      });
       if (!offScopeProfile.ran) return skip(`could not execute the image (${offScopeProfile.reason})`);
       if (!(offScopeProfile.code === 1 && /ALLOWED_PROFILES|forbidden/i.test(offScopeProfile.stderr))) {
         return fail(
@@ -741,10 +841,26 @@ export function createPreflightSuite(
         );
       }
 
+      // 4. `default` is the primary forbidden profile — the root profile, which is
+      //    never addressable — and is checked explicitly, not left implied by (3).
+      const forbiddenDefault = runProbeContainer("profile-default", {
+        ...shared,
+        HERMES_PROFILE: FORBIDDEN_PROFILE,
+      });
+      if (!forbiddenDefault.ran) return skip(`could not execute the image (${forbiddenDefault.reason})`);
+      if (!(forbiddenDefault.code === 1 && /default is never addressable|forbidden/i.test(forbiddenDefault.stderr))) {
+        return fail(
+          `expected exit=1 refusing HERMES_PROFILE=${FORBIDDEN_PROFILE} (the root profile is never addressable), got ` +
+            `exit=${forbiddenDefault.code}`,
+          firstLine(forbiddenDefault.stderr),
+        );
+      }
+
       return pass(
-        `exit=1 without the opt-in ("loopback" refusal), exit=1 with it while the trusted boundary is still ` +
-          `loopback-only (so client identity cannot collapse into one bucket), and exit=1 for ` +
-          `HERMES_PROFILE=${FORBIDDEN_OFF_SCOPE_PROFILE}`,
+        `HERMES_PROFILE=${TARGET_PROFILE} was ACCEPTED — the run reached the bind guard, which config.ts evaluates ` +
+          `AFTER the profile allowlist — and was refused only for the bind; exit=1 with the opt-in while the trusted ` +
+          `boundary is still loopback-only (so client identity cannot collapse into one bucket); ` +
+          `HERMES_PROFILE=${FORBIDDEN_OFF_SCOPE_PROFILE} refused; HERMES_PROFILE=${FORBIDDEN_PROFILE} refused`,
       );
     }),
 
@@ -1013,8 +1129,18 @@ export function createPreflightSuite(
       const record =
         'run `npx vitest run tests/security.test.ts -t "refills over time and keeps its bucket state bounded"` on the build ' +
         "machine and record it green; no test asserts a live bucket survives cap eviction (§8 L4). No host action";
-      const sweep = read.content.slice(read.content.indexOf("sweepBuckets"));
-      return sweep.length > 0 && sweep.slice(0, 600).includes("break;")
+      // Read the METHOD BODY, not the first time the name appears. In this file
+      // the first textual `sweepBuckets` is the `this.sweepBuckets(nowMs)` CALL
+      // inside `check()`; slicing from there lands ~3 kB short of the body, so a
+      // correct method could only pass with a hand-trimmed fragment.
+      const sweep = methodBodyText(read.content, "sweepBuckets");
+      if (sweep === null) {
+        return fail(
+          "pre-auth-guard.ts no longer DEFINES `sweepBuckets` (only a call site was found), so the accepted sweep order " +
+            `in §8 L4 cannot be evidenced. ${record}`,
+        );
+      }
+      return sweep.includes("break;")
         ? pass(
             "sweepBuckets still breaks on the first live bucket (insertion order ≈ recency), so stale buckets linger until " +
               `the cap — accepted. ${record}`,

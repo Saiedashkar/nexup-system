@@ -1,6 +1,6 @@
 import { AiWorkforceError } from "@/modules/ai-workforce/core/errors";
 import type { Clock, IdFactory, JobId, JsonObject } from "@/modules/ai-workforce/core/types";
-import type { ActorId } from "../core/refs";
+import type { ActorId, TaskId } from "../core/refs";
 import {
   applyMissionTransition,
   isTerminalMission,
@@ -54,6 +54,7 @@ export class MissionService {
       priority: input.priority ?? "NORMAL",
       contextRefs: input.contextRefs ? [...input.contextRefs] : [],
       jobRefs: [],
+      taskRefs: [],
       approvals: [],
       outputs: [],
       history: [],
@@ -107,6 +108,13 @@ export class MissionService {
     const mission = await this.require(id);
     if (!mission.jobRefs.includes(jobId)) return mission;
     return this.save({ ...mission, jobRefs: mission.jobRefs.filter((ref) => ref !== jobId) }, [mission.state]);
+  }
+
+  /** Attaches a task to the mission (idempotent — no duplicate refs). */
+  async attachTask(id: string, taskId: TaskId): Promise<Mission> {
+    const mission = await this.require(id);
+    if (mission.taskRefs.includes(taskId)) return mission;
+    return this.save({ ...mission, taskRefs: [...mission.taskRefs, taskId] }, [mission.state]);
   }
 
   async addParticipant(id: string, actorId: ActorId): Promise<Mission> {

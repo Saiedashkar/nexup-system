@@ -10,6 +10,13 @@ import { DeterministicRuntimeAdapter } from "./runtimes/deterministic-runtime-ad
 import type { AgentRuntime } from "./runtimes/agent-runtime";
 import { InMemoryMissionRepository, type MissionRepository } from "./missions/mission-repository";
 import { MissionService } from "./missions/mission-service";
+import { InMemoryTaskRepository, type TaskRepository } from "./missions/task-repository";
+import {
+  ExecutionRecorder,
+  InMemoryExecutionRecordRepository,
+  type ExecutionRecordRepository,
+} from "./execution/execution-record";
+import { ReviewService } from "./review/task-review";
 
 /**
  * Workforce Runtime Core — module surface (Phase 2A).
@@ -33,6 +40,9 @@ export type CreateWorkforceDomainOptions = {
   missionRepository?: MissionRepository;
   /** Runtime adapters to register immediately. */
   runtimeAdapters?: AgentRuntime[];
+  /** Injected repositories, so a test may share state across a "restart". */
+  tasks?: TaskRepository;
+  executionRecords?: ExecutionRecordRepository;
   /** Register the EXEC + Founder actor seeds. */
   seedExecutive?: boolean;
 };
@@ -44,6 +54,14 @@ export type WorkforceDomain = {
   runtimes: RuntimeRegistry;
   missions: MissionService;
   missionRepository: MissionRepository;
+  /** Mission TASKS — the assigned units of work inside a goal. */
+  tasks: TaskRepository;
+  /** The append-only audit of every execution attempt. */
+  executionRecords: ExecutionRecordRepository;
+  /** Turns runtime outcomes into execution records. */
+  executions: ExecutionRecorder;
+  /** The human-authority decision boundary. */
+  reviews: ReviewService;
   ids: IdFactory;
   now: Clock;
 };
@@ -59,12 +77,29 @@ export function createWorkforceDomain(options: CreateWorkforceDomainOptions = {}
 
   const assignments = new ActorAssignmentService({ actors, capabilities, ids, now });
   const missions = new MissionService({ missions: missionRepository, ids, now });
+  const tasks = options.tasks ?? new InMemoryTaskRepository();
+  const executionRecords = options.executionRecords ?? new InMemoryExecutionRecordRepository();
+  const executions = new ExecutionRecorder({ records: executionRecords, ids, now });
+  const reviews = new ReviewService({ ids, now, actors });
 
   for (const runtime of options.runtimeAdapters ?? []) {
     runtimes.register(runtime);
   }
 
-  return { actors, capabilities, assignments, runtimes, missions, missionRepository, ids, now };
+  return {
+    actors,
+    capabilities,
+    assignments,
+    runtimes,
+    missions,
+    missionRepository,
+    tasks,
+    executionRecords,
+    executions,
+    reviews,
+    ids,
+    now,
+  };
 }
 
 /**
@@ -130,7 +165,42 @@ export { InMemoryMissionRepository } from "./missions/mission-repository";
 export type { MissionRepository } from "./missions/mission-repository";
 export { MissionService } from "./missions/mission-service";
 
+export * from "./missions/task-contracts";
+export { InMemoryTaskRepository, requireTask } from "./missions/task-repository";
+export type { TaskRepository } from "./missions/task-repository";
+
 export * from "./execution/actor-execution-context";
+export {
+  ExecutionRecorder,
+  InMemoryExecutionRecordRepository,
+  executionTerminalStatus,
+  summarizeExecution,
+  EXECUTION_AUDIT_EVENT_TYPES,
+} from "./execution/execution-record";
+export type {
+  ExecutionAuditEvent,
+  ExecutionAuditEventType,
+  ExecutionRecord,
+  ExecutionRecordOpenInput,
+  ExecutionRecordRepository,
+} from "./execution/execution-record";
+
+export {
+  ReviewService,
+  REVIEW_DECISIONS,
+  REVIEW_STATES,
+  isReviewDecision,
+} from "./review/task-review";
+export type {
+  ReviewDecision,
+  ReviewRequestInput,
+  ReviewServiceLike,
+  ReviewState,
+  TaskReview,
+} from "./review/task-review";
 
 /* ── Step 4 — the first REAL actor wired to a real runtime ── */
 export * from "./orchestration/strategy-analyst";
+
+/* ── Step 5 — the real mission lifecycle, in ONE orchestrator ── */
+export * from "./orchestration/mission-orchestrator";

@@ -1,6 +1,6 @@
 import { AiWorkforceError } from "@/modules/ai-workforce/core/errors";
 import type { JobId, JsonObject } from "@/modules/ai-workforce/core/types";
-import type { ActorId, MissionId } from "../core/refs";
+import type { ActorId, MissionId, TaskId } from "../core/refs";
 
 /**
  * Mission contracts.
@@ -48,7 +48,10 @@ export type Mission = {
   state: MissionState;
   priority: MissionPriority;
   contextRefs: string[];
+  /** Phase-1 jobs attached to this mission (references, never embedded). */
   jobRefs: JobId[];
+  /** Mission TASKS — the assigned units of work inside this goal. */
+  taskRefs: TaskId[];
   /** Approval ids relevant to the mission (references, not policies). */
   approvals: string[];
   outputs: JsonObject[];

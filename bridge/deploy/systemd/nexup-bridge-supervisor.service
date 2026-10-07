@@ -20,6 +20,17 @@ ExecStart=/usr/local/bin/nexup-bridge-supervisor
 #                    (measured on the real daemon).
 EnvironmentFile=/etc/nexup-bridge/supervisor.env
 EnvironmentFile=/etc/nexup-bridge/deploy.env
+# Defaults the deployment MEASURED as required, carried in the unit itself so an
+# empty (or absent-key) supervisor.env cannot reproduce the broken deployment.
+# Both were found on the real host: a systemd service has no usable HOME, and
+# `ProtectHome=true` hides root's, so the docker CLI could not resolve its
+# plugins and `docker compose up -d` — this unit's entire recovery path — failed
+# as "not a docker command"; and a cold `hermes serve` takes ~10 s to accept a
+# connection, so the old 5x1 s window declared a healthy serve dead and had the
+# supervisor re-`exec` it on a loop. `EnvironmentFile=` is read after these and
+# wins, so supervisor.env may still override either value.
+Environment=HOME=/
+Environment=SERVE_START_ATTEMPTS=30
 Restart=always
 RestartSec=5
 # A reconcile pass is short; the loop sleeps between passes. SIGTERM during the

@@ -412,6 +412,70 @@ node dist/release-cli.js hermes-compat \
   the probes are exercised without touching the VPS. `--json` emits the same
   report for the change record.
 
+#### Running the checker on a host that has no Node (the Phase E method)
+
+The VPS is a minimal host: no Node, no npm, no checkout of this repository. The
+checker is a self-contained bundle, but it still needs *an* interpreter, and the
+only one guaranteed to exist is the one inside the pinned image. **Never install
+Node on the VPS** — the deployment would then depend on a toolchain it does not
+ship, and the checker would run on a different Node than the bridge does.
+
+One-time staging. All of it lives under `/tmp`, all of it is disposable, none of
+it is part of the deployment:
+
+```bash
+# 1. the bridge's OWN interpreter, copied out of the pinned image. `docker create`
+#    + `docker cp` works on every docker this runbook supports; the container is
+#    never started and is removed immediately.
+docker create --name nexup-pf-extract "$NEXUP_BRIDGE_IMAGE"
+docker cp nexup-pf-extract:/usr/local/bin/node /tmp/nexup-pf/node
+docker rm nexup-pf-extract
+/tmp/nexup-pf/node --version          # e.g. v22.x — the runtime's own major
+
+# 2. the checker itself. The image deliberately ships no release tooling (P0.4a),
+#    so dist/release-cli.js is staged separately, from the build machine, and
+#    digest-compared like every other artifact (§2).
+scp bridge/dist/release-cli.js <VPS_HOST>:/tmp/nexup-stage/nexup-bridge/release-cli.js
+
+# 3. the Hermes source. It lives INSIDE the Hermes container, which is not touched
+#    except by a read-only `docker cp`; the copy is ~1.3 GB and takes ~1 min.
+docker cp hermes-agent-r3j1-hermes-agent-1:/opt/hermes /tmp/nexup-hermes-src
+```
+
+Then run the two commands of “Machine-assisted pre-flight” with
+`/tmp/nexup-pf/node` in place of `node`:
+
+```bash
+cd /tmp/nexup-stage/nexup-bridge
+set -a; . /etc/nexup-bridge/deploy.env; set +a        # NOT optional: see P0.5b
+/tmp/nexup-pf/node release-cli.js preflight \
+  --hermes-src /tmp/nexup-hermes-src \
+  --expected-digest <SHA256_FROM_P0> \
+  --exec-probes
+/tmp/nexup-pf/node release-cli.js hermes-compat --hermes-src /tmp/nexup-hermes-src
+```
+
+- **Why `set -a; . /etc/nexup-bridge/deploy.env; set +a`:** the compose-grammar
+  check interpolates the *real* definition, whose `image:` is
+  `${NEXUP_BRIDGE_IMAGE:?…}` with no fallback. In a clean environment that
+  command exits 1 with `required variable NEXUP_BRIDGE_IMAGE is missing a value`
+  — the definition working as designed, not a defect — so the recorded invocation
+  sources the same file the unit loads.
+- **Why `--hermes-src /tmp/nexup-hermes-src`:** the default `/opt/hermes` exists
+  only inside the Hermes container.
+- **`--expected-digest` takes the `sha256:` value P0 recorded**, not the image tag.
+- **It stays read-only.** The Node-less method adds no mutation of its own:
+  `docker cp` out of a container, and the one container it creates is removed in
+  the next command and never started.
+- **Cleanup is part of the method — and it removes the tooling**, so run it after
+  the LAST run you need, never before one:
+  ```bash
+  rm -rf /tmp/nexup-pf /tmp/nexup-stage /tmp/nexup-hermes-src
+  ```
+  That deletes the host's only Node. `/tmp` is cleared on reboot regardless, and
+  the deployment uses none of it: the bridge runs from the image and the
+  supervisor from `/usr/local/bin`.
+
 ### Pre-flight gate
 
 Proceed to install only if P0, P1, P2 (PASS or recorded DEGRADE), P3 (all four
@@ -491,17 +555,41 @@ until the bridge is proven. Each step lists its expected output.
    # pass: exit != 0, "Failed to load environment files" — the same failure mode a
    # missing deploy.env produces for nexup-bridge-supervisor.service
    ```
-7. **Supervisor environment and unit:**
+7. **Supervisor environment and unit.** `supervisor.env` carries the three values
+   this deployment was measured to need; the unit itself now also defaults the two
+   that a missing key used to break (see the `Environment=` lines), but write them
+   down anyway so the file describes the deployment that is actually running:
    ```bash
-   install -o root -g root -m 0600 /dev/null /etc/nexup-bridge/supervisor.env   # then set HERMES_PROFILE=saieed
+   install -o root -g root -m 0600 /dev/null /etc/nexup-bridge/supervisor.env
    install -m 0644 bridge/deploy/systemd/nexup-bridge-supervisor.service /etc/systemd/system/
    install -m 0755 bridge/deploy/nexup-bridge-supervisor.sh /usr/local/bin/nexup-bridge-supervisor
    systemctl daemon-reload
    ```
+   Then, in that file (0600 root), all three lines:
+   ```bash
+   #   HERMES_PROFILE=saieed
+   #   HOME=/                     # systemd gives the service no usable HOME and
+   #                              # ProtectHome=true hides root's, so the docker
+   #                              # CLI cannot resolve the compose plugin and the
+   #                              # recovery path fails "not a docker command"
+   #   SERVE_START_ATTEMPTS=30    # a cold `hermes serve` takes ~10 s to accept a
+   #                              # connection; the 5x1 s default declared it dead
+   ```
    *Expected:* no output. The unit reads BOTH
    `/etc/nexup-bridge/supervisor.env` and `/etc/nexup-bridge/deploy.env` (step 6)
    — the second is what lets its recovery path run `docker compose up -d` with the
-   image reference interpolated.
+   image reference interpolated. **`HOME=/` is not cosmetic and must not be
+   "cleaned up":** the systemd hardening (`ProtectHome=true`, `CapabilityBoundingSet=`)
+   is kept deliberately, and `HOME=/` is what makes the docker CLI work *under* it.
+   The unit itself now carries both as `Environment=` defaults, so confirm the copy
+   that landed actually has them:
+   ```bash
+   grep -c '^Environment=' /etc/systemd/system/nexup-bridge-supervisor.service   # pass: 2
+   ```
+   Do **not** try to prove this with `systemctl show -p Environment`: it reports the
+   unit's `Environment=` only and never resolves `EnvironmentFile=`, so it shows
+   nothing for `HERMES_PROFILE` and would read as a failure on a working host.
+   The proof that the running process has the values is in step 9.
 8. **Pre-start sanity, without publishing anything.** With the env sourced:
    ```bash
    set -a; . /etc/nexup-bridge/bridge.env; set +a
@@ -518,6 +606,15 @@ until the bridge is proven. Each step lists its expected output.
    `BRIDGE-OK` (or `BRIDGE-STALE -> re-creating` on the first pass), and
    `systemctl is-active nexup-bridge-supervisor` → `active`. **No token value
    appears in the journal** — if one does, stop (§6).
+
+   Then prove the two measured settings reached the PROCESS (this is the check
+   the unit's own `Environment=` cannot make: `EnvironmentFile=` is resolved at
+   exec, so only `/proc` shows the result). Pass = `HOME=/` **and**
+   `SERVE_START_ATTEMPTS=30`, measured on the real host:
+   ```bash
+   MP=$(systemctl show -p MainPID --value nexup-bridge-supervisor)
+   tr '\0' '\n' < /proc/$MP/environ | grep -E '^(HOME|SERVE_START_ATTEMPTS)='
+   ```
 10. **Verify what is exposed:**
     ```bash
     docker inspect -f '{{.HostConfig.NetworkMode}}' nexup-bridge   # container:<hermes id>

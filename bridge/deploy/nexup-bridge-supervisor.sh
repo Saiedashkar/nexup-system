@@ -30,6 +30,16 @@ set -euo pipefail
 # ── configuration (overridable from the unit's EnvironmentFile) ──────────────
 DOCKER="${DOCKER:-docker}"
 
+# The docker CLI resolves its plugins (notably `compose`) through $HOME, and this
+# script's ONE recovery action is `docker compose up -d`. A systemd service has no
+# usable HOME of its own and the unit sets `ProtectHome=true`, so plugin lookup
+# failed and compose was reported as "not a docker command" — measured on the real
+# host. `/` is readable under ProtectHome=true and holds no `.docker/cli-plugins`
+# of its own, so the system-wide plugin path is found again. An operator's own
+# HOME is never disturbed.
+HOME="${HOME:-/}"
+export HOME
+
 # Stable NAME or alias. Never an ID and never an IP: the ID changes on every
 # recreation, and Docker renumbers the network with it.
 HERMES_CONTAINER="${HERMES_CONTAINER:-hermes-agent-r3j1-hermes-agent-1}"
@@ -53,7 +63,11 @@ SERVE_HOST="${SERVE_HOST:-127.0.0.1}"
 SERVE_PORT="${SERVE_PORT:-9119}"
 
 RECONCILE_INTERVAL="${RECONCILE_INTERVAL:-10}"
-SERVE_START_ATTEMPTS="${SERVE_START_ATTEMPTS:-5}"
+# 30, not 5: a cold `hermes serve` was measured at ~10 s to accept a TCP
+# connection on the real host, so the old 5x1 s budget declared a healthy serve
+# dead and re-started it forever. 30 attempts ≈ 30 s of budget, which the unit
+# spends sleeping, not working.
+SERVE_START_ATTEMPTS="${SERVE_START_ATTEMPTS:-30}"
 
 log() {
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"

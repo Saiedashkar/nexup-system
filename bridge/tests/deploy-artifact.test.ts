@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -116,7 +116,40 @@ describe("deployment image identity", () => {
   });
 });
 
+describe("one authoritative image identity in the repository", () => {
+  // Every artifact an operator copies out of `deploy/`, read recursively. The
+  // digest must be resolvable from ONE of them: a second, independently
+  // executable copy is a stale deployment waiting to happen. The example file
+  // says this in prose ("Do not restate the digest anywhere else"); this asserts
+  // it against the files that actually ship.
+  const DEPLOY_DIR = path.resolve(here, "../deploy");
+  const DIGEST_REF = /nexup-bridge@sha256:[0-9a-f]{64}/g;
+
+  const deployTexts = (): { file: string; text: string }[] =>
+    (readdirSync(DEPLOY_DIR, { recursive: true }) as string[])
+      .map((file) => {
+        try {
+          return { file, text: readFileSync(path.join(DEPLOY_DIR, file), "utf8") };
+        } catch {
+          return null; // a directory entry, not a file
+        }
+      })
+      .filter((entry): entry is { file: string; text: string } => entry !== null);
+
+  it("carries the image digest in exactly one shipped file", () => {
+    const hits = deployTexts().flatMap(({ file, text }) =>
+      (text.match(DIGEST_REF) ?? []).map((match) => ({ file, match })),
+    );
+    expect(hits.map((hit) => hit.file)).toEqual(["nexup-bridge.deploy.env.example"]);
+  });
+
+  it("names the digest the deployment actually recorded, not a stale build", () => {
+    const example = deployTexts().find((e) => e.file === "nexup-bridge.deploy.env.example");
+    expect(example?.text).toContain(ref(RECORDED));
+  });
+});
 describe("recorded fixture vs shipped artifact", () => {
+
   const fixture = JSON.parse(readFileSync(PASS_FIXTURE, "utf8")) as {
     files: Record<string, string>;
     commands: Record<string, { stdout?: string }>;

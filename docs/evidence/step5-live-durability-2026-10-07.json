@@ -7,10 +7,10 @@
     "database": "THROWAWAY PostgreSQL 18.6 cluster on loopback, created and deleted by scripts/run-persistence-proof.sh; the proposed migration SQL was applied to it",
     "productionDatabase": "NOT touched — and this is the reason Step 5 remains OPEN"
   },
-  "testedCommit": "359d922d5c9cd3b0bd0a22ba1a46d6cbf3f0e92c",
+  "testedCommit": "359d922829c75ba1324e1c198e7c8e945250d188",
   "treeFingerprint": "sha256:4ea239dcf98f84643ea20eeeeae936d755d7cfb95e8244b72d45129b2609f942",
   "closureCommit": "bcd8821ed3867bd5f0cc308ddaa2928840722ac3",
-  "fingerprintCertification": "sha256(git diff 359d922d5c9cd3b0bd0a22ba1a46d6cbf3f0e92c bcd8821ed3867bd5f0cc308ddaa2928840722ac3) == treeFingerprint. The live proof was re-run on this exact tree after the last edit to its driver.",
+  "fingerprintCertification": "sha256(git diff 359d922829c75ba1324e1c198e7c8e945250d188 bcd8821ed3867bd5f0cc308ddaa2928840722ac3) == treeFingerprint. The live proof was re-run on this exact tree after the last edit to its driver.",
   "gatedCommand": "NEXUP_BRIDGE_E2E=1 HERMES_RUNTIME_PROFILE=saieed HERMES_RUNTIME_TRANSPORT=BRIDGE HERMES_RUNTIME_BRIDGE_URL=https://bridge.srv1995415.hstgr.cloud HERMES_RUNTIME_BRIDGE_KEY_ID=nexup-vercel HERMES_RUNTIME_BRIDGE_SECRET=\"$SECRET\" HERMES_RUNTIME_TIMEOUT_MS=120000 PROOF_TEST=tests/workforce-step5-live-durability.test.ts bash scripts/run-persistence-proof.sh",
   "testFile": "tests/workforce-step5-live-durability.test.ts",
   "secretHandling": "NEXUP_BRIDGE_HMAC_SECRET is read on the host into an environment variable and passed by reference; it appears in no file in this repository and is not recorded here.",

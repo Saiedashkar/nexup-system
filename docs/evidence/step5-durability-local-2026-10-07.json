@@ -1,16 +1,26 @@
 {
   "proof": "the Step-5 mission lifecycle over the DURABLE Prisma repositories, on a real PostgreSQL, with the process that ran it gone before the records are read back",
-  "testedAt": "2026-10-07T15:48:11Z (first run) and again on the certified tree before this artifact was written; both runs 7/7",
+  "testedAt": "2026-10-07T15:48:11Z (first run) and re-run on each tree before the corresponding certification below; every run 7/7",
   "environment": {
     "runner": "local build machine",
     "database": "THROWAWAY PostgreSQL 18.6 cluster created by scripts/run-persistence-proof.sh — initdb in a temp directory, loopback only, trust auth, deleted on exit",
     "productionDatabase": "NOT touched. No migration was applied to Supabase or to any existing cluster.",
     "existingLocalClusterOn5432": "NOT touched (its credentials were never used or guessed)"
   },
-  "testedCommit": "359d922d5c9cd3b0bd0a22ba1a46d6cbf3f0e92c",
-  "treeFingerprint": "sha256:4ea239dcf98f84643ea20eeeeae936d755d7cfb95e8244b72d45129b2609f942",
-  "closureCommit": "bcd8821ed3867bd5f0cc308ddaa2928840722ac3",
-  "fingerprintCertification": "sha256(git diff 359d922d5c9cd3b0bd0a22ba1a46d6cbf3f0e92c bcd8821ed3867bd5f0cc308ddaa2928840722ac3) == treeFingerprint.",
+  "testedCommit": "06e1611e2ba749c54cac6420f0cde97171e4a147",
+  "testedCommitNote": "the code tree the suite was executed on. The commit that carries THIS artifact adds only documentation, so it changes no tested behaviour.",
+  "treeFingerprint": "sha256:01cbdc956975e2cf9119d7209088ce3c3b103d4834465d93174ea9d63179c3c8",
+  "certifiedDeltaFrom": "29e7f35db398701cdf185bc3788cf2d749c12a88",
+  "fingerprintCertification": "sha256(git diff 29e7f35db398701cdf185bc3788cf2d749c12a88 06e1611e2ba749c54cac6420f0cde97171e4a147) == treeFingerprint — the certified code delta is exactly the Command Center query-surface commit.",
+  "previousCertifications": [
+    {
+      "testedCommit": "359d922829c75ba1324e1c198e7c8e945250d188",
+      "treeFingerprint": "sha256:4ea239dcf98f84643ea20eeeeae936d755d7cfb95e8244b72d45129b2609f942",
+      "closureCommit": "bcd8821ed3867bd5f0cc308ddaa2928840722ac3",
+      "result": "7 passed"
+    }
+  ],
+  "reCertifiedBecause": "the Command Center query-surface commit strengthened one assertion in this suite (the provider-execution reference is now compared as present-or-absent rather than as two possibly-undefined values). The suite was re-run on the new tree and passed 7/7 again; both trees are listed so either can be checked out and reproduced.",
   "gatedCommand": "bash scripts/run-persistence-proof.sh",
   "testFile": "tests/workforce-step5-persistence.test.ts",
   "migrationsApplied": [
@@ -43,11 +53,13 @@
     "The schema enforces its own contracts: a task cannot reference a missing mission (foreign key), and two tasks cannot share a mission sequence (unique).",
     "Saving an execution record that does not exist is a typed RUN_NOT_FOUND, never a silent insert."
   ],
+  "adjacentCoverage": "tests/workforce-command-center-queries.test.ts (7 tests, offline, no database) exercises the read-only Command Center surfaces over the same ports — including a before/after hash of every repository proving the queries write nothing.",
   "migrationRehearsal": "the exact proposed SQL that will eventually run on a real server was executed here first, in order (1A -> 1B -> PHASE_2), against a real PostgreSQL 18.6",
   "reproduce": [
-    "git checkout bcd8821ed3867bd5f0cc308ddaa2928840722ac3",
+    "git checkout 06e1611e2ba749c54cac6420f0cde97171e4a147",
     "bash scripts/run-persistence-proof.sh",
-    "expect: 7 passed, and the throwaway cluster removed afterwards"
+    "expect: 7 passed, and the throwaway cluster removed afterwards",
+    "(the earlier certification is still reproducible: git checkout bcd8821ed3867bd5f0cc308ddaa2928840722ac3, same command, same 7 passed)"
   ],
   "secretScan": {
     "secretsInThisFile": 0,

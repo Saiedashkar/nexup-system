@@ -46,7 +46,11 @@ import { DeterministicHermesTransport } from "@/modules/workforce/runtimes/herme
  *
  * What it refuses to skip: a restart. Every "process" here owns its own client,
  * its own registries and its own domain, so re-reading a completed mission is a
- * genuine re-hydration, not the same object handed back.
+ * genuine re-hydration, not the same object handed back. Those reconstructions
+ * still share this vitest process, which is why the first test ALSO reads the
+ * finished chain from a real separate OS process — `scripts/read-durable-
+ * mission.cjs`, which imports nothing from `src/` and therefore cannot see any
+ * registry, cache or module state this test built.
  */
 
 const BASE_URL = process.env.AI_WORKFORCE_TEST_DATABASE_URL;
@@ -150,6 +154,30 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
     const task = tasks.find((candidate) => candidate.title === title);
     if (!task) throw new Error(`no task titled "${title}"`);
     return task;
+  }
+
+  /**
+   * Reads the chain in a SEPARATE operating-system process.
+   *
+   * A fresh domain inside this vitest process is a real reconstruction, but it
+   * is still the same process. `scripts/read-durable-mission.cjs` imports
+   * nothing from `src/`, so it has no access to any registry, cache or module
+   * state this test built — if it can see the mission, the database is the only
+   * possible source.
+   */
+  function readOutOfProcess(missionId: string): {
+    found: boolean;
+    mission: { state: string; projectRef: string | null; clientRef: string | null; historyTo: string[] };
+    tasks: Array<{ id: string; title: string; state: string; attempt: number; executionHandleId: string | null; reviewId: string | null }>;
+    executions: Array<{ id: string; taskId: string; attempt: number; handleId: string; providerExecutionId: string | null; idempotencyKey: string | null; status: string; auditTypes: string[] }>;
+    reviews: Array<{ id: string; taskId: string; state: string; decidedBy: string | null; decidedAt: string | null }>;
+  } {
+    const raw = execSync(`node scripts/read-durable-mission.cjs "${DB_URL}" "${missionId}"`, {
+      cwd: REPO_ROOT,
+      stdio: "pipe",
+      env: process.env,
+    }).toString();
+    return JSON.parse(raw);
   }
 
   beforeAll(async () => {
@@ -303,6 +331,34 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
     const finalExecutions = await third.domain.executionRecords.listForMission(mission.id);
     expect(finalExecutions).toHaveLength(1);
     expect(finalExecutions[0].status).toBe("SUCCEEDED");
+
+    // --- and a FOURTH reader: a separate OS process, importing nothing from
+    //     src/, for which the database is the only possible source of truth ---
+    const outOfProcess = readOutOfProcess(mission.id);
+    expect(outOfProcess.found).toBe(true);
+    expect(outOfProcess.mission.state).toBe("COMPLETED");
+    expect(outOfProcess.mission.projectRef).toBe("prj_strategy");
+    expect(outOfProcess.mission.clientRef).toBe("cli_1");
+    expect(outOfProcess.mission.historyTo).toEqual(["PLANNING", "RUNNING", "WAITING", "COMPLETED"]);
+
+    expect(outOfProcess.tasks).toHaveLength(1);
+    expect(outOfProcess.tasks[0].id).toBe(task.id);
+    expect(outOfProcess.tasks[0].state).toBe("COMPLETED");
+    expect(outOfProcess.tasks[0].attempt).toBe(1);
+    expect(outOfProcess.tasks[0].executionHandleId).toBe(firstHandle);
+    expect(outOfProcess.tasks[0].reviewId).toBe(pending.id);
+
+    expect(outOfProcess.executions).toHaveLength(1);
+    expect(outOfProcess.executions[0].handleId).toBe(firstHandle);
+    expect(outOfProcess.executions[0].providerExecutionId ?? null).toBe(providerExecutionId);
+    expect(outOfProcess.executions[0].idempotencyKey).toBe(`task:${task.id}:attempt:1`);
+    expect(outOfProcess.executions[0].status).toBe("SUCCEEDED");
+    expect(outOfProcess.executions[0].auditTypes).toEqual(["REQUESTED", "TERMINAL"]);
+
+    expect(outOfProcess.reviews).toHaveLength(1);
+    expect(outOfProcess.reviews[0].state).toBe("APPROVED");
+    expect(outOfProcess.reviews[0].decidedBy).toBe(FOUNDER);
+    expect(outOfProcess.reviews[0].decidedAt).toBeTruthy();
   }, 180_000);
 
   it("refuses a STALE snapshot: a transition that lost the compare-and-set does not land", async () => {

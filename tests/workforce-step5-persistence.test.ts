@@ -72,6 +72,9 @@ const INSTRUCTION = `Return exactly: ${MARKER}`;
 
 const describeIfDatabase = BASE_URL ? describe : describe.skip;
 
+/** Whatever the deterministic test transport can be told to do. */
+type TransportOptions = ConstructorParameters<typeof DeterministicHermesTransport>[0];
+
 function psql(sql: string, database = "postgres") {
   return execSync(
     `"${PSQL_BIN}" -h 127.0.0.1 -p ${PORT} -U postgres -w -v ON_ERROR_STOP=1 -c "${sql}" -d ${database}`,
@@ -120,7 +123,7 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
    * own in-memory registries — the durable rows are the only thing it shares
    * with any other process.
    */
-  async function boot(prefix: string): Promise<Process> {
+  async function boot(prefix: string, transportOptions: TransportOptions = {}): Promise<Process> {
     const handle = createWorkforcePrismaClient(DB_URL);
     handles.push(handle);
 
@@ -133,7 +136,7 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
     // The real Step-4 actor, wired to the deterministic transport: offline, but
     // through the real adapter, dispatcher and orchestrator.
     const adapter = createHermesRuntime(hermesConfig(), {
-      transport: new DeterministicHermesTransport(),
+      transport: new DeterministicHermesTransport(transportOptions),
       ids,
       now,
       allowTestTransport: true,
@@ -521,6 +524,112 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
     expect(reviews.length).toBeGreaterThanOrEqual(2);
     expect(reviews.some((entry) => entry.state === "NEEDS_REVISION")).toBe(true);
     expect(reviews.some((entry) => entry.state === "APPROVED")).toBe(true);
+  }, 180_000);
+
+  it("persists EXHAUSTION: the allowance runs out and FAILED survives the restart", async () => {
+    const first = await boot("e1", { failWith: "UNAVAILABLE" });
+    const mission = await first.orchestrator.createMission({
+      title: "exhaustion",
+      goal: "a task that never succeeds must end FAILED, durably",
+      createdBy: FOUNDER,
+      owner: FOUNDER,
+    });
+    const planned = await first.orchestrator.plan(mission.id, [
+      {
+        title: "always-fails",
+        objective: "fail twice, then stop trying",
+        input: { instruction: INSTRUCTION },
+        assignedActorId: first.actorId,
+        requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
+        maxAttempts: 2,
+      },
+    ]);
+    const task = taskByTitle(planned.tasks, "always-fails");
+
+    // Attempt 1 fails RETRYABLY: the task goes back to READY, it does not fail yet.
+    const afterFirst = await first.orchestrator.settleTask(mission.id, task.id);
+    expect(afterFirst.state).toBe("READY");
+    const firstAttempts = await first.domain.executionRecords.listForTask(task.id);
+    expect(firstAttempts.map((record) => record.attempt)).toEqual([1]);
+    expect(firstAttempts[0].status).toBe("FAILED");
+    expect(firstAttempts[0].error?.category).toBe("TRANSPORT");
+    expect(firstAttempts[0].error?.retryable).toBe(true);
+
+    // The stepper re-dispatches it; attempt 2 exhausts the allowance.
+    const advanced = await first.orchestrator.advance(mission.id);
+    const retried = taskByTitle(advanced.tasks, "always-fails");
+    expect(retried.attempt).toBe(2);
+    const afterSecond = await first.orchestrator.settleTask(mission.id, retried.id);
+    expect(afterSecond.state).toBe("FAILED");
+
+    // Everything above comes back from processes that never saw any of it.
+    const second = await boot("e2");
+    const storedMission = await second.domain.missions.require(mission.id);
+    expect(storedMission.state).toBe("FAILED");
+    expect(storedMission.finishedAt).toBeTruthy();
+
+    const storedTasks = await second.domain.tasks.listForMission(mission.id);
+    expect(storedTasks[0].state).toBe("FAILED");
+    expect(storedTasks[0].attempt).toBe(2);
+
+    const attempts = await second.domain.executionRecords.listForTask(task.id);
+    expect(attempts.map((record) => record.attempt)).toEqual([1, 2]);
+    expect(attempts.every((record) => record.status === "FAILED")).toBe(true);
+    expect(attempts.every((record) => record.error?.category === "TRANSPORT")).toBe(true);
+    expect(new Set(attempts.map((record) => record.idempotencyKey)).size).toBe(2);
+
+    const outOfProcess = readOutOfProcess(mission.id);
+    expect(outOfProcess.mission.state).toBe("FAILED");
+    expect(outOfProcess.tasks[0].state).toBe("FAILED");
+    expect(outOfProcess.executions.map((execution) => execution.status)).toEqual(["FAILED", "FAILED"]);
+  }, 180_000);
+
+  it("persists CANCELLATION: the execution, the task and the mission all end CANCELLED", async () => {
+    // The completion is held, so the run is genuinely in flight when cancelled.
+    const first = await boot("k1", { holdCompletionMs: 60_000 });
+    const mission = await first.orchestrator.createMission({
+      title: "cancellation",
+      goal: "an in-flight run cancelled through the port, durably",
+      createdBy: FOUNDER,
+      owner: FOUNDER,
+    });
+    const planned = await first.orchestrator.plan(mission.id, [
+      {
+        title: "long-running",
+        objective: "still working when the cancel arrives",
+        input: { instruction: INSTRUCTION },
+        assignedActorId: first.actorId,
+        requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
+      },
+    ]);
+    const task = taskByTitle(planned.tasks, "long-running");
+    expect(task.state).toBe("RUNNING");
+    expect(task.executionHandleId).toBeTruthy();
+
+    const cancelled = await first.orchestrator.cancelMission(mission.id, "test cancellation");
+    expect(cancelled.mission.state).toBe("CANCELLED");
+    expect(cancelled.tasks[0].state).toBe("CANCELLED");
+
+    const record = (await first.domain.executionRecords.listForTask(task.id))[0];
+    expect(record.status).toBe("CANCELLED");
+    expect(record.cancelled?.at).toBeTruthy();
+    expect(record.cancelled?.reason).toContain("test cancellation");
+
+    // A process that never saw the cancel reads the same terminal state.
+    const second = await boot("k2");
+    const storedMission = await second.domain.missions.require(mission.id);
+    expect(storedMission.state).toBe("CANCELLED");
+    const storedTasks = await second.domain.tasks.listForMission(mission.id);
+    expect(storedTasks[0].state).toBe("CANCELLED");
+    const storedRecord = (await second.domain.executionRecords.listForTask(task.id))[0];
+    expect(storedRecord.status).toBe("CANCELLED");
+    expect(storedRecord.cancelled?.at).toBeTruthy();
+    expect(storedRecord.cancelled?.reason).toContain("test cancellation");
+
+    const outOfProcess = readOutOfProcess(mission.id);
+    expect(outOfProcess.mission.state).toBe("CANCELLED");
+    expect(outOfProcess.tasks[0].state).toBe("CANCELLED");
+    expect(outOfProcess.executions[0].status).toBe("CANCELLED");
   }, 180_000);
 
   it("enforces the schema contracts: foreign keys and one task per sequence", async () => {

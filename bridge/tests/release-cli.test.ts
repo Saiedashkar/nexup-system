@@ -85,6 +85,30 @@ describe("release CLI — preflight through the entry point", () => {
     expect(lastLine(out)).toBe("PREFLIGHT: PASS");
   });
 
+  it("judges the image the DEFINITION resolves when --image is not given", () => {
+    // Measured on the real VPS: without `--image`, P0.2a/P0.2b/P0.2c/P0.6 looked
+    // for the unpinned default name (`nexup-bridge`, i.e. `nexup-bridge:latest`),
+    // so a correctly digest-pinned deployment FAILED four safety checks and the
+    // run ended NO-GO. The other direction is worse: a stray `nexup-bridge:latest`
+    // built from an older bundle would have satisfied them — the same false green
+    // these probes exist to prevent. The definition is the deployment's identity
+    // of record, so it is the default; `--image` stays an explicit override.
+    const { code, out } = run([
+      "preflight",
+      "--fixture",
+      PASS,
+      "--hermes-src",
+      "/opt/hermes",
+      "--expected-digest",
+      PASS_DIGEST,
+      "--exec-probes",
+    ]);
+    expect(out).toContain(IMAGE_REF);
+    expect(out).not.toContain("[FAIL]");
+    expect(out).toContain("gating failures: 0");
+    expect(code).toBe(0);
+  });
+
   it("carries the DEFAULT/ADEL out-of-scope banner in text and in --json", () => {
     const text = run(passPreflight);
     expect(text.out).toContain("DEFAULT / ADEL:");

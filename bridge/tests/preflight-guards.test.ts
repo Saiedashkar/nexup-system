@@ -35,6 +35,20 @@ import type { CheckOutcome, HostProbe } from "../src/release/runner";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PRE_AUTH_GUARD = path.resolve(here, "../src/auth/pre-auth-guard.ts");
 
+/*
+ * The deployed image IDENTITY, as the suite resolves it: the definition
+ * interpolates `${NEXUP_BRIDGE_IMAGE}` and `docker compose config` renders it
+ * with the digest the host pinned. The P0.6 probes must judge THAT reference —
+ * with no `--image` the check defaults to what the deployment runs, never to an
+ * unpinned name (measured on the real VPS: `nexup-bridge`/`nexup-bridge:latest`
+ * made a correctly digest-pinned deployment fail four safety checks).
+ */
+const COMPOSE_PATH = "/opt/nexup-bridge/docker-compose.bridge.yml";
+const DEPLOYED_IMAGE = "nexup-bridge@sha256:d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4";
+const DEPLOYED_COMPOSE =
+  "services:\n  nexup-bridge:\n    image: ${NEXUP_BRIDGE_IMAGE:?set NEXUP_BRIDGE_IMAGE in /etc/nexup-bridge/deploy.env}\n";
+const COMPOSE_RENDERED = `services:\n  nexup-bridge:\n    image: ${DEPLOYED_IMAGE}\n`;
+
 /** A probe that reads files from a map and cannot run commands. */
 function fileProbe(files: Record<string, string>): HostProbe {
   return {
@@ -144,6 +158,10 @@ function fakeDockerProbe(): { probe: HostProbe; calls: RunCall[] } {
     now: () => new Date(0),
     run(command, args = []) {
       calls.push({ command, args: [...args] });
+      // The deployment's OWN resolution of the image identity.
+      if (command === "docker" && args[0] === "compose") {
+        return { ran: true, code: 0, stdout: COMPOSE_RENDERED, stderr: "" };
+      }
       if (command !== "docker" || args[0] !== "run") return { ran: true, code: 0, stdout: "", stderr: "" };
       const env = envMap(args);
       const refused = (reason: string) => ({ ran: true, code: 1, stdout: "", stderr: `[nexup-bridge] disabled: ${reason}\n` });
@@ -180,7 +198,10 @@ function fakeDockerProbe(): { probe: HostProbe; calls: RunCall[] } {
       }
       return { ran: false, code: null, stdout: "", stderr: "", reason: "ETIMEDOUT" };
     },
-    read: () => ({ ok: false, content: null, reason: "not recorded" }),
+    read: (target) =>
+      target === COMPOSE_PATH
+        ? { ok: true, content: DEPLOYED_COMPOSE }
+        : { ok: false, content: null, reason: "not recorded" },
     stat: () => ({ exists: false }),
     searchTree: () => ({ ran: false, hits: {}, scannedFiles: 0, reason: "not recorded" }),
   };
@@ -246,10 +267,16 @@ describe("P0.6 — the forbidden-profile probe is authoritative by construction"
       now: () => new Date(0),
       run(command, args = []) {
         calls.push({ command, args: [...args] });
+        if (command === "docker" && args[0] === "compose") {
+          return { ran: true, code: 0, stdout: COMPOSE_RENDERED, stderr: "" };
+        }
         if (command === "docker" && args[0] === "run") return { ran: false, code: null, stdout: "", stderr: "", reason: "ETIMEDOUT" };
         return { ran: true, code: 0, stdout: "", stderr: "" };
       },
-      read: () => ({ ok: false, content: null, reason: "not recorded" }),
+      read: (target) =>
+        target === COMPOSE_PATH
+          ? { ok: true, content: DEPLOYED_COMPOSE }
+          : { ok: false, content: null, reason: "not recorded" },
       stat: () => ({ exists: false }),
       searchTree: () => ({ ran: false, hits: {}, scannedFiles: 0, reason: "not recorded" }),
     };
@@ -266,18 +293,33 @@ describe("P0.6 — the forbidden-profile probe is authoritative by construction"
 
 describe("the recorded P0.6 evidence is the argv the check actually builds", () => {
   const PASS_FIXTURE = path.resolve(here, "../fixtures/release/host-pass.json");
-  // The digest the recorded host holds; the check's argv embeds this image ref.
-  const PASS_DIGEST = "d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4d1e2f3a4";
 
   it("records every `docker run` key the production probe emits, so the fixture cannot drift", () => {
+    // No `--image`: this pins the DEFAULT path, which is what the runbook uses.
     const { probe, calls } = fakeDockerProbe();
-    runCheck(probe, "P0.6", { execProbes: true, image: `nexup-bridge@sha256:${PASS_DIGEST}` });
+    runCheck(probe, "P0.6", { execProbes: true });
     const fixture = JSON.parse(readFileSync(PASS_FIXTURE, "utf8")) as { commands: Record<string, unknown> };
     const runs = runCalls(calls);
     expect(runs.length).toBeGreaterThanOrEqual(4);
     for (const call of runs) {
+      // The probe judges the digest-pinned image the DEFINITION resolves — the
+      // fixture's whole value depends on that being the same reference.
+      expect(call.args[call.args.length - 1]).toBe(DEPLOYED_IMAGE);
       expect(fixture.commands[commandKey("docker", call.args)]).toBeDefined();
     }
+  });
+
+  it("fails closed instead of judging an unpinned name when nothing resolves", () => {
+    const { probe, calls } = fakeDockerProbe();
+    const noDefinition: HostProbe = {
+      ...probe,
+      read: () => ({ ok: false, content: null, reason: "not recorded" }),
+    };
+    const outcome = runCheck(noDefinition, "P0.6", { execProbes: true });
+    // A safety check that cannot establish the identity of record is a NO-GO.
+    expect(outcome.status).toBe("skip");
+    expect(outcome.status === "skip" ? outcome.reason : "").toMatch(/no image identity/);
+    expect(runCalls(calls)).toHaveLength(0);
   });
 });
 

@@ -41,8 +41,6 @@ export const BRIDGE_CONTAINER = "nexup-bridge";
 export const TRAEFIK_CONTAINER = "traefik-traefik-1";
 export const SUPERVISOR_SERVICE = "nexup-bridge-supervisor.service";
 
-/** Default bridge image reference; overridden by `--image` with the pinned digest. */
-export const IMAGE_REF_DEFAULT = "nexup-bridge";
 
 export const BRIDGE_PORT = 9220;
 export const HERMES_PORT = 9119;
@@ -556,7 +554,6 @@ export function createPreflightSuite(
 ): { suite: Suite; secrets: string[] } {
   const envFile = options.envFile ?? ENV_FILE;
   const composePath = options.composePath ?? COMPOSE_PATH;
-  const imageRef = options.image ?? IMAGE_REF_DEFAULT;
   const minFreeMiB = options.minFreeMiB ?? MIN_FREE_MIB;
 
   const envRead = probe.read(envFile);
@@ -564,6 +561,60 @@ export function createPreflightSuite(
 
   const composeRead = probe.read(composePath);
   const compose = composeRead.ok && composeRead.content !== null ? composeRead.content : null;
+
+  /**
+   * `docker compose config` runs at most ONCE per suite, whichever check needs it
+   * first: it is the deployment's own resolution of `${NEXUP_BRIDGE_IMAGE}`, and
+   * P0.5b and the image checks must be judging the same rendering of it.
+   */
+  let renderedConfig: CommandResult | undefined;
+  const composeRendered = (): CommandResult =>
+    (renderedConfig ??= probe.run("docker", ["compose", "-f", composePath, "config"]));
+
+  /**
+   * The image reference the image-reading checks judge.
+   *
+   * `--image` is an explicit override (an operator may deliberately judge some
+   * other artifact). With no flag the reference is the identity the DEPLOYMENT
+   * resolves — the definition's `image:` after interpolation, which is what P0.5b
+   * compares against the recorded build digest — and NEVER the unpinned default
+   * name. Measured against the real host: defaulting to `nexup-bridge`
+   * (`nexup-bridge:latest`) made P0.2a/P0.2b/P0.2c/P0.6 look for an image the
+   * deployment does not run, so a correctly digest-pinned deployment FAILED four
+   * SAFETY checks; the reverse is worse, because a stray `nexup-bridge:latest`
+   * built from an older bundle would have satisfied them.
+   */
+  const declaredImage = compose === null ? null : composeValue(compose, "image");
+  let resolvedDefinitionImage: string | null | undefined; // undefined = not resolved yet
+  const definitionImage = (): string | null => {
+    if (resolvedDefinitionImage !== undefined) return resolvedDefinitionImage;
+    if (declaredImage === null) {
+      resolvedDefinitionImage = null;
+    } else if (!declaredImage.includes("${NEXUP_BRIDGE_IMAGE")) {
+      // A literal reference needs no interpolation: it IS the identity.
+      resolvedDefinitionImage = declaredImage;
+    } else {
+      const rendered = composeRendered();
+      resolvedDefinitionImage =
+        rendered.ran && rendered.code === 0 ? composeValue(rendered.stdout, "image") : null;
+    }
+    return resolvedDefinitionImage;
+  };
+
+  const imageRef = options.image ?? definitionImage();
+
+  /**
+   * Fail closed when the deployment's image identity cannot be established. A
+   * `skip` on a safety check is a gating failure, which is the intended verdict:
+   * with no identity of record there is nothing to judge, and judging an unpinned
+   * name would report on something the deployment does not run.
+   */
+  const noImageIdentity = (): CheckOutcome =>
+    skip(
+      "the deployment definition resolves to no image identity, so there is nothing to judge: pass " +
+        "`--image <name>@sha256:<digest>`, or make ${NEXUP_BRIDGE_IMAGE} resolvable from the deployment " +
+        "environment (sourced from /etc/nexup-bridge/deploy.env, which is what the unit loads)",
+    );
 
   const listeners = (): { ran: boolean; list: Listener[]; reason?: string } => {
     const withPids = probe.run("ss", ["-ltnp"]);
@@ -581,8 +632,8 @@ export function createPreflightSuite(
   };
 
   /** The image digest the host actually holds, from its repo digest. */
-  const hostImageDigest = (): { ran: boolean; digest: string | null; reason?: string } => {
-    const result = probe.run("docker", ["image", "inspect", "--format", "{{index .RepoDigests 0}}", imageRef]);
+  const hostImageDigest = (ref: string): { ran: boolean; digest: string | null; reason?: string } => {
+    const result = probe.run("docker", ["image", "inspect", "--format", "{{index .RepoDigests 0}}", ref]);
     if (!result.ran) return { ran: false, digest: null, reason: result.reason ?? "docker could not be executed" };
     if (result.code !== 0) return { ran: false, digest: null, reason: `docker image inspect exited ${result.code}` };
     const digest = normalizeDigest(firstLine(result.stdout));
@@ -600,10 +651,10 @@ export function createPreflightSuite(
    * container lifecycle unconditional. The cleanup result is deliberately
    * ignored: `rm -f` on an absent name is not an error.
    */
-  const runProbeContainer = (slug: string, env: Record<string, string>): CommandResult => {
+  const runProbeContainer = (ref: string, slug: string, env: Record<string, string>): CommandResult => {
     const name = `${PROBE_CONTAINER_PREFIX}-${slug}`;
     probe.run("docker", ["rm", "-f", name]);
-    const result = probe.run("docker", bridgeProbeArgs(imageRef, name, env));
+    const result = probe.run("docker", bridgeProbeArgs(ref, name, env));
     probe.run("docker", ["rm", "-f", name]);
     return result;
   };
@@ -618,13 +669,18 @@ export function createPreflightSuite(
       ),
     ),
 
-    safety("P0.2a", `The bridge image ${imageRef} is present on the host`, () => {
-      const result = probe.run("docker", ["image", "inspect", "--format", "{{.Id}}", imageRef]);
-      if (!result.ran) return skip(`docker is not executable (${result.reason})`);
-      return result.code === 0
-        ? pass(`present: ${firstLine(result.stdout) || "<no id>"}`)
-        : fail(`docker has no image ${imageRef}; build it and pin it before deploying (§2)`);
-    }),
+    safety(
+      "P0.2a",
+      `The bridge image ${imageRef ?? "the definition resolves"} is present on the host`,
+      () => {
+        if (imageRef === null) return noImageIdentity();
+        const result = probe.run("docker", ["image", "inspect", "--format", "{{.Id}}", imageRef]);
+        if (!result.ran) return skip(`docker is not executable (${result.reason})`);
+        return result.code === 0
+          ? pass(`present: ${firstLine(result.stdout) || "<no id>"}`)
+          : fail(`docker has no image ${imageRef}; build it and pin it before deploying (§2)`);
+      },
+    ),
 
     safety("P0.2b", "Host image digest matches the digest recorded at build time", () => {
       if (!options.expectedDigest) {
@@ -633,9 +689,10 @@ export function createPreflightSuite(
             "stale or replaced image cannot be detected",
         );
       }
+      if (imageRef === null) return noImageIdentity();
       const expected = normalizeDigest(options.expectedDigest);
       if (!expected) return fail(`--expected-digest is not a sha256 digest: "${options.expectedDigest}"`);
-      const digest = hostImageDigest();
+      const digest = hostImageDigest(imageRef);
       if (!digest.ran || !digest.digest) return skip(`digest unavailable (${digest.reason})`);
       return digest.digest === expected
         ? pass(`${digest.digest} on ${imageRef}`)
@@ -652,6 +709,7 @@ export function createPreflightSuite(
             `--exec-probes to prove the compile-time allowlist refusal is in the artifact`,
         );
       }
+      if (imageRef === null) return noImageIdentity();
       const result = probe.run("docker", [
         "run",
         "--rm",
@@ -735,7 +793,7 @@ export function createPreflightSuite(
       let resolvedImage: string | null = null;
       let resolveNote = "the definition names no ${NEXUP_BRIDGE_IMAGE}";
       if (declaredImage !== null && declaredImage.includes("${NEXUP_BRIDGE_IMAGE")) {
-        const rendered = probe.run("docker", ["compose", "-f", composePath, "config"]);
+        const rendered = composeRendered();
         if (!rendered.ran) {
           resolveNote = `\`docker compose config\` could not run (${rendered.reason})`;
         } else if (rendered.code !== 0) {
@@ -771,6 +829,7 @@ export function createPreflightSuite(
             "exits BEFORE `listen` (no port, no config, no state). Re-run with --exec-probes to prove the guards",
         );
       }
+      if (imageRef === null) return noImageIdentity();
       // NOTE: the image's OWN entrypoint is used (`node /app/dist/main.js`). Adding
       // `--entrypoint /usr/local/bin/node` REPLACES the entrypoint and drops the
       // bundle argument, so node would start a REPL, read EOF and exit 0 — a check
@@ -791,7 +850,7 @@ export function createPreflightSuite(
       //    The config resolver validates the PROFILE allowlist BEFORE the bind
       //    (config.ts), so reaching this refusal also proves `HERMES_PROFILE=saieed`
       //    was ACCEPTED — a refused profile would have exited with a profile reason.
-      const withoutOptIn = runProbeContainer("bind-guard", {
+      const withoutOptIn = runProbeContainer(imageRef, "bind-guard", {
         ...shared,
         NEXUP_BRIDGE_HOST: "0.0.0.0",
         HERMES_PROFILE: TARGET_PROFILE,
@@ -809,7 +868,7 @@ export function createPreflightSuite(
       }
 
       // 2. The opt-in alone is not enough: the edge boundary must be named.
-      const withLoopbackBoundary = runProbeContainer("bind-boundary", {
+      const withLoopbackBoundary = runProbeContainer(imageRef, "bind-boundary", {
         ...shared,
         NEXUP_BRIDGE_HOST: "0.0.0.0",
         NEXUP_BRIDGE_ALLOW_NON_LOOPBACK_BIND: "true",
@@ -828,7 +887,7 @@ export function createPreflightSuite(
       // 3. The profile allowlist is proved on the ARTIFACT, not just in the config
       //    tests: the real daemon accepted `HERMES_PROFILE=adel` before this row was
       //    added, and `adel` names the same `/opt/data` root as `default`.
-      const offScopeProfile = runProbeContainer("profile-adel", {
+      const offScopeProfile = runProbeContainer(imageRef, "profile-adel", {
         ...shared,
         HERMES_PROFILE: FORBIDDEN_OFF_SCOPE_PROFILE,
       });
@@ -843,7 +902,7 @@ export function createPreflightSuite(
 
       // 4. `default` is the primary forbidden profile — the root profile, which is
       //    never addressable — and is checked explicitly, not left implied by (3).
-      const forbiddenDefault = runProbeContainer("profile-default", {
+      const forbiddenDefault = runProbeContainer(imageRef, "profile-default", {
         ...shared,
         HERMES_PROFILE: FORBIDDEN_PROFILE,
       });

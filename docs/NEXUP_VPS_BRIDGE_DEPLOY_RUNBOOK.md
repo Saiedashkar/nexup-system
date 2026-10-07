@@ -382,7 +382,20 @@ node dist/release-cli.js preflight \
   --expected-digest <SHA256_FROM_P0>                # add --exec-probes for P0.6
 node dist/release-cli.js hermes-compat \
   --hermes-src /opt/hermes                           # add --accept-degraded to record §6.5 DEGRADE
+# On the VPS the image checks need the deployment environment sourced:
+#   set -a; . /etc/nexup-bridge/deploy.env; set +a
 ```
+
+The image-reading checks (P0.2a/P0.2b/P0.2c/P0.6) judge the identity the
+**definition** resolves — `${NEXUP_BRIDGE_IMAGE}` after interpolating the
+deployment environment, i.e. exactly what the deployment runs and what P0.5b
+compares with the recorded build digest. `--image <ref>` is an override for
+deliberately judging a *different* artifact, and is not needed for a normal run;
+there is no unpinned fallback, so a definition whose image cannot be resolved
+makes those checks NO-GO rather than quietly judging `nexup-bridge:latest`. That
+fallback was measured on the real host: it failed four safety checks on a
+correctly digest-pinned deployment, and would have *passed* them against a stray
+`nexup-bridge:latest` built from an older bundle.
 
 - **Read-only.** It only runs `docker version`, `docker compose version`,
   `docker inspect`, `docker image inspect`, `ss`, `stat`, `df`, `sha256sum`,

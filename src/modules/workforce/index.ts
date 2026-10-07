@@ -6,7 +6,6 @@ import { execActorRegistration, founderActorRegistration } from "./actors/exec-a
 import { InMemoryCapabilityRegistry, type CapabilityRegistry } from "./capabilities/capability-registry";
 import { ActorAssignmentService } from "./assignments/actor-assignment-service";
 import { InMemoryRuntimeRegistry, type RuntimeRegistry } from "./runtimes/runtime-registry";
-import { DeterministicRuntimeAdapter } from "./runtimes/deterministic-runtime-adapter";
 import type { AgentRuntime } from "./runtimes/agent-runtime";
 import { InMemoryMissionRepository, type MissionRepository } from "./missions/mission-repository";
 import { MissionService } from "./missions/mission-service";
@@ -103,18 +102,18 @@ export function createWorkforceDomain(options: CreateWorkforceDomainOptions = {}
 }
 
 /**
- * Convenience bootstrap for the running application: an in-memory domain with a
- * deterministic runtime and the EXEC/Founder seeds registered. Tests should use
- * `createWorkforceDomain` directly so an empty registry stays empty.
+ * Convenience bootstrap for the running application.
+ *
+ * It registers NO runtime of its own. A runtime is a REAL capability the
+ * deployment wires in explicitly (see `bootstrapStrategyAnalyst`), and the
+ * application must never start with a command stream that replays canned
+ * output. Tests that want the deterministic local runtime register it
+ * themselves, through `runtimeAdapters` or `runtimes.register`.
  */
 export async function bootstrapWorkforceDomain(
   options: CreateWorkforceDomainOptions = {},
 ): Promise<WorkforceDomain> {
-  const domain = createWorkforceDomain({
-    ...options,
-    runtimeAdapters: options.runtimeAdapters ?? [],
-  });
-  domain.runtimes.register(new DeterministicRuntimeAdapter({ ids: domain.ids, now: domain.now }));
+  const domain = createWorkforceDomain(options);
   if (options.seedExecutive) {
     await domain.actors.register(execActorRegistration());
     await domain.actors.register(founderActorRegistration());

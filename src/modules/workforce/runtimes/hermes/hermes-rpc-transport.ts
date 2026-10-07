@@ -1,4 +1,4 @@
-import { assertAddressableProfile } from "./hermes-config";
+import { assertNexupProfile } from "./hermes-config";
 import { DEFAULT_HERMES_RPC_PROTOCOL, type HermesRpcProtocol } from "./hermes-protocol";
 import { boundText, redactSecrets } from "./hermes-spawn";
 import type {
@@ -177,6 +177,7 @@ type JsonRpcFrame = {
 
 export class HermesRpcTransport implements HermesTransport {
   readonly kind = "RPC";
+  readonly provenance = "PRODUCTION" as const;
 
   private readonly options: HermesRpcTransportOptions;
   private readonly protocol: HermesRpcProtocol;
@@ -198,9 +199,10 @@ export class HermesRpcTransport implements HermesTransport {
   async invoke(request: HermesTransportRequest): Promise<HermesTransportResult> {
     const startedAt = Date.now();
 
-    // Refuse a forbidden profile (e.g. `default`) before touching the socket.
+    // Refuse anything outside the NEXUP allowlist (e.g. `default`, another
+    // operator's profile) before touching the socket.
     try {
-      assertAddressableProfile(request.profile);
+      assertNexupProfile(request.profile);
     } catch {
       return this.failure("FORBIDDEN", startedAt);
     }

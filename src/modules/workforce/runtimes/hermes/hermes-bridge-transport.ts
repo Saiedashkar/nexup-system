@@ -1,5 +1,5 @@
 import type { HermesBridgeClient } from "./bridge-client";
-import { assertAddressableProfile } from "./hermes-config";
+import { assertNexupProfile } from "./hermes-config";
 import { boundText, redactSecrets } from "./hermes-spawn";
 import type {
   HermesAsyncTransport,
@@ -55,6 +55,7 @@ function mapBridgeErrorCode(code: string | undefined): HermesTransportErrorKind 
 
 export class HermesBridgeTransport implements HermesTransport, HermesAsyncTransport {
   readonly kind = "BRIDGE";
+  readonly provenance = "PRODUCTION" as const;
 
   private readonly options: HermesBridgeTransportOptions;
 
@@ -66,7 +67,7 @@ export class HermesBridgeTransport implements HermesTransport, HermesAsyncTransp
     const startedAt = Date.now();
 
     try {
-      assertAddressableProfile(request.profile);
+      assertNexupProfile(request.profile);
     } catch {
       return this.failure("FORBIDDEN", startedAt);
     }
@@ -103,7 +104,7 @@ export class HermesBridgeTransport implements HermesTransport, HermesAsyncTransp
     const startedAt = Date.now();
 
     try {
-      assertAddressableProfile(request.profile);
+      assertNexupProfile(request.profile);
     } catch {
       return { state: "NOT_STARTED", result: this.failure("FORBIDDEN", startedAt) };
     }

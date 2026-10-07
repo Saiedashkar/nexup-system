@@ -76,6 +76,13 @@ export type HermesRuntimeAdapterOptions = {
   eventSink?: RuntimeEventSink;
   /** Adapter-local capability overrides (tests use this to disable cancel). */
   capabilities?: Partial<HermesRuntimeCapabilities>;
+  /**
+   * Explicitly permit binding a `provenance: "TEST"` transport. TEST fixtures
+   * set this; the production factory (`createHermesRuntimeFromEnv`) never does,
+   * and neither does any application composition, so canned output cannot be
+   * wired into a real actor execution by accident. Omitted ⇒ refused.
+   */
+  allowTestTransport?: boolean;
 };
 
 export class HermesRuntimeAdapter implements AgentRuntime, AsyncAgentRuntime {
@@ -103,6 +110,20 @@ export class HermesRuntimeAdapter implements AgentRuntime, AsyncAgentRuntime {
   private localCounter = 0;
 
   constructor(options: HermesRuntimeAdapterOptions) {
+    // PROVENANCE GATE — fail-closed. A transport must DECLARE that it reaches a
+    // real runtime. Anything else (a test double, an object that simply forgot
+    // the field) is refused unless the caller explicitly asked for test
+    // transports, so a mock cannot silently become the production path. This is
+    // a declared boundary, not a provider-name check on a generic contract.
+    const provenance = (options.transport as { provenance?: string } | undefined)?.provenance;
+    if (provenance !== "PRODUCTION" && !options.allowTestTransport) {
+      throw new AiWorkforceError(
+        "RUNTIME_UNSUPPORTED",
+        `Refusing to bind a Hermes transport with provenance "${provenance ?? "undeclared"}" — real actor execution requires a PRODUCTION transport`,
+        { reason: "NON_PRODUCTION_TRANSPORT", provenance: provenance ?? "UNDECLARED" },
+      );
+    }
+
     this.config = options.config;
     this.transport = options.transport;
     this.now = options.now ?? (() => new Date());

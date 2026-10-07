@@ -110,8 +110,26 @@ const SAFE_PROFILE_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 /**
  * Profiles this adapter must NEVER address or fall back to. `default` is the
  * Hermes launch profile — using it would escape NEXUP's scoped runtime.
+ *
+ * This is a BLACKLIST and is deliberately kept only as a named, explicit
+ * refusal. It is NOT the NEXUP isolation invariant: a blacklist can only grow,
+ * and every profile nobody thought to add would silently be addressable. The
+ * invariant is `NEXUP_ALLOWED_PROFILES` below — a POSITIVE allowlist.
  */
 export const HERMES_FORBIDDEN_PROFILES: readonly string[] = ["default"];
+
+/**
+ * The ONLY Hermes profiles NEXUP may address. A POSITIVE allowlist: adding a
+ * profile is an explicit, reviewable act, and everything else — `default`,
+ * another operator's profile, a typo, an unknown name — is refused before any
+ * network call.
+ *
+ * This is NEXUP's own invariant, enforced in NEXUP's code. The deployed bridge
+ * has a separate allowlist (`NEXUP_BRIDGE_ALLOWED_PROFILES`); NEXUP must not
+ * depend on it, because a NEXUP deployment can be pointed at a bridge whose
+ * configuration has drifted.
+ */
+export const NEXUP_ALLOWED_PROFILES: readonly string[] = [NEXUP_HERMES_PROFILE];
 
 export function isSafeProfile(profile: string): boolean {
   return typeof profile === "string" && SAFE_PROFILE_PATTERN.test(profile);
@@ -123,8 +141,21 @@ export function isForbiddenProfile(profile: string): boolean {
 }
 
 /**
+ * True when the profile is on the NEXUP positive allowlist. Case-sensitive on
+ * purpose: a profile name is an opaque identifier, so `Saieed` is NOT `saieed`
+ * and is refused rather than silently normalized into an allowlisted name.
+ */
+export function isNexupAllowedProfile(profile: string): boolean {
+  return typeof profile === "string" && NEXUP_ALLOWED_PROFILES.includes(profile);
+}
+
+/**
  * The single guard every caller uses before addressing a profile: it must be a
  * safe slug AND not a forbidden profile (`default`).
+ *
+ * The BRIDGE deploys its own allowlist on top of this (see
+ * `NEXUP_BRIDGE_ALLOWED_PROFILES`), so this stays the generic addressability
+ * check rather than the NEXUP-specific policy (that is `assertNexupProfile`).
  *
  * @throws RUNTIME_UNSUPPORTED when the profile is unsafe or forbidden.
  * @returns the profile unchanged when addressable.
@@ -138,6 +169,29 @@ export function assertAddressableProfile(profile: string): string {
     );
   }
   return assertSafeProfile(profile);
+}
+
+/**
+ * NEXUP's OWN profile guard: addressable (safe slug, not forbidden) AND on the
+ * positive allowlist.
+ *
+ * Every NEXUP-side surface that can name a profile calls this — the config
+ * boundary and each transport — so an unlisted profile is refused before any
+ * connection, request or process is created, however the transport was built.
+ *
+ * @throws RUNTIME_UNSUPPORTED with `reason: "PROFILE_NOT_ALLOWED"`.
+ * @returns the profile unchanged when it is the one NEXUP may address.
+ */
+export function assertNexupProfile(profile: string): string {
+  const addressable = assertAddressableProfile(profile);
+  if (!isNexupAllowedProfile(addressable)) {
+    throw new AiWorkforceError(
+      "RUNTIME_UNSUPPORTED",
+      `Hermes profile "${addressable}" is not in the NEXUP allowlist (allowed: ${NEXUP_ALLOWED_PROFILES.join(", ")})`,
+      { reason: "PROFILE_NOT_ALLOWED", profile: addressable },
+    );
+  }
+  return addressable;
 }
 
 /**
@@ -223,6 +277,15 @@ export function resolveHermesConfig(
   }
   if (!isSafeProfile(profile)) {
     return { enabled: false, reason: "HERMES_RUNTIME_PROFILE is not a safe slug" };
+  }
+  // NEXUP's POSITIVE allowlist, checked here — at the config boundary — so no
+  // transport, client or executable is ever constructed for another operator's
+  // profile. A NEXUP deployment can only ever address its own scoped profile.
+  if (!isNexupAllowedProfile(profile)) {
+    return {
+      enabled: false,
+      reason: `HERMES_RUNTIME_PROFILE "${profile}" is not in the NEXUP allowlist (allowed: ${NEXUP_ALLOWED_PROFILES.join(", ")})`,
+    };
   }
 
   const transport = ((env.HERMES_RUNTIME_TRANSPORT?.trim().toUpperCase() as HermesTransportKind | undefined) ??

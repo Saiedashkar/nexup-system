@@ -7,7 +7,6 @@ import {
   createHermesRuntime,
   createHermesRuntimeFromEnv,
   createWorkforceDomain,
-  DeterministicHermesTransport,
   DeterministicRuntimeAdapter,
   founderActorRegistration,
   INTERNAL_STRATEGY_ANALYST_ACTOR_ID,
@@ -19,10 +18,15 @@ import {
   type HermesAsyncTransport,
   type HermesRuntimeConfig,
   type HermesTransport,
+  type HermesTransportProvenance,
   type HermesTransportRequest,
   type HermesTransportResult,
   type RuntimeEvent,
 } from "@/modules/workforce";
+
+// The mock transport is NOT on the production module surface: it lives in its
+// own test-support module and declares `provenance: "TEST"`.
+import { DeterministicHermesTransport } from "@/modules/workforce/runtimes/hermes/testing/deterministic-transport";
 
 /**
  * STEP 4/8 — the asynchronous execution contract, and the first REAL actor.
@@ -80,10 +84,13 @@ function hermesConfig(overrides: Partial<HermesRuntimeConfig> = {}): HermesRunti
 /** Blind delegation that also counts what the adapter asked the transport to do. */
 class CountingTransport implements HermesAsyncTransport {
   readonly kind = "DETERMINISTIC";
+  readonly provenance: HermesTransportProvenance;
   startCalls = 0;
   statusCalls = 0;
   cancelCalls = 0;
-  constructor(private readonly inner: HermesAsyncTransport) {}
+  constructor(private readonly inner: HermesAsyncTransport) {
+    this.provenance = inner.provenance;
+  }
 
   async startRun(request: HermesTransportRequest) {
     this.startCalls += 1;
@@ -102,6 +109,9 @@ function deterministicAdapter(transport: HermesTransport, sink?: (event: Runtime
     transport,
     ids: createSequentialIdFactory("h"),
     now: sequentialClock("2026-05-01T00:00:00.000Z", 1000),
+    // These fixtures run on `provenance: "TEST"` transports, so the adapter's
+    // provenance gate must be opted into — exactly what production never does.
+    allowTestTransport: true,
     ...(sink ? { eventSink: sink } : {}),
   };
   return { adapter: createHermesRuntime(hermesConfig(), options) };
@@ -552,7 +562,10 @@ describe("STEP 4 D — the chain refuses what it must", () => {
     const configured = resolveHermesConfig({ ...base, HERMES_RUNTIME_PROFILE: "saieed" });
     expect(configured.enabled).toBe(true);
     if (!configured.enabled) return;
-    const adapter = createHermesRuntime(configured.config, { transport: new DeterministicHermesTransport() });
+    const adapter = createHermesRuntime(configured.config, {
+      transport: new DeterministicHermesTransport(),
+      allowTestTransport: true,
+    });
     expect(adapter.identity.metadata.profileRef).toBe("saieed");
   });
 });

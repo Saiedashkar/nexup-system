@@ -9,19 +9,23 @@ import {
   createMissionOrchestrator,
   createWorkforceDomain,
   dependenciesMet,
-  DeterministicHermesTransport,
   founderActorRegistration,
   isTerminalTask,
   STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
   STRATEGY_INTERNAL_BRIEF_CAPABILITY_VERSION,
   type HermesAsyncTransport,
   type HermesRuntimeConfig,
+  type HermesTransportProvenance,
   type HermesTransportRequest,
   type HermesTransportResult,
   type MissionTask,
   type RuntimeEvent,
   type WorkforceDomain,
 } from "@/modules/workforce";
+
+// The mock transport is NOT on the production module surface: it lives in its
+// own test-support module and declares `provenance: "TEST"`.
+import { DeterministicHermesTransport } from "@/modules/workforce/runtimes/hermes/testing/deterministic-transport";
 
 /**
  * STEP 5/8 — the REAL mission lifecycle.
@@ -53,9 +57,12 @@ const FOUNDER = "actor_founder";
 
 class CountingTransport implements HermesAsyncTransport {
   readonly kind = "DETERMINISTIC";
+  readonly provenance: HermesTransportProvenance;
   startCalls = 0;
   cancelCalls = 0;
-  constructor(private readonly inner: HermesAsyncTransport) {}
+  constructor(private readonly inner: HermesAsyncTransport) {
+    this.provenance = inner.provenance;
+  }
   async startRun(request: HermesTransportRequest) {
     this.startCalls += 1;
     return this.inner.startRun(request);
@@ -103,7 +110,7 @@ async function wired(options: { holdCompletionMs?: number; failWith?: "UNAVAILAB
       ...(options.failWith ? { failWith: options.failWith } : {}),
     }),
   );
-  const adapter = createHermesRuntime(hermesConfig(), { transport, ids, now });
+  const adapter = createHermesRuntime(hermesConfig(), { transport, ids, now, allowTestTransport: true });
   const built = await bootstrapStrategyAnalyst(domain, { runtime: adapter });
   if (!built.enabled) throw new Error(built.reason);
   await domain.actors.register(founderActorRegistration());

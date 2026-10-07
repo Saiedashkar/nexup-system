@@ -21,7 +21,6 @@ import {
   DEFAULT_HERMES_CLI_ONESHOT_PROTOCOL,
   DEFAULT_HERMES_CLI_PROTOCOL,
   DEFAULT_HERMES_HTTP_PROTOCOL,
-  DeterministicHermesTransport,
   DeterministicRuntimeAdapter,
   FORBIDDEN_HERMES_FLAGS,
   hasCredentials,
@@ -40,6 +39,7 @@ import {
   type HermesRuntimeAdapterOptions,
   type HermesRuntimeConfig,
   type HermesTransport,
+  type HermesTransportProvenance,
   type HermesTransportRequest,
   type HermesTransportResult,
   type RuntimeEvent,
@@ -59,6 +59,10 @@ import {
   type HermesWebSocketFactory,
   type HermesWebSocketLike,
 } from "@/modules/workforce";
+
+// The mock transport is NOT on the production module surface: it lives in its
+// own test-support module and declares `provenance: "TEST"`.
+import { DeterministicHermesTransport } from "@/modules/workforce/runtimes/hermes/testing/deterministic-transport";
 
 /* ═══════════════════════════════════════════════════════
    Fixtures
@@ -84,8 +88,11 @@ function hermesConfig(overrides: Partial<HermesRuntimeConfig> = {}): HermesRunti
 /** Records every request while delegating to an inner transport. */
 class RecordingTransport implements HermesTransport {
   readonly kind = "DETERMINISTIC";
+  readonly provenance: HermesTransportProvenance;
   readonly requests: HermesTransportRequest[] = [];
-  constructor(private readonly inner: HermesTransport) {}
+  constructor(private readonly inner: HermesTransport) {
+    this.provenance = inner.provenance;
+  }
   async invoke(request: HermesTransportRequest): Promise<HermesTransportResult> {
     this.requests.push(request);
     return this.inner.invoke(request);
@@ -105,6 +112,9 @@ function hermesAdapter(options: {
     transport: options.transport,
     ids,
     now,
+    // These fixtures run on the deterministic transport, so the adapter's
+    // provenance gate has to be opted into — exactly what production never does.
+    allowTestTransport: true,
   };
   if (options.capabilities) adapterOptions.capabilities = options.capabilities;
   if (options.sink) adapterOptions.eventSink = options.sink;
@@ -341,8 +351,44 @@ describe("5. failure", () => {
 
   it("names an unresolvable runtime as a typed outcome, never a fake success", async () => {
     const domain = createWorkforceDomain({ ids: createSequentialIdFactory("w"), now: () => new Date() });
-    const dispatcher = new AgentRuntimeDispatcher({ runtimes: domain.runtimes });
-    const outcome = await dispatcher.dispatch({ actorId: "a", runtimeId: "runtime_ghost", capabilityId: "c" });
+    // Authorization is mandatory now, so the refusal under test has to get PAST
+    // it: a real actor bound to the ghost runtime, holding a real assignment.
+    const actor = await domain.actors.register({
+      slug: "ghost-bound",
+      displayName: "Ghost-bound agent",
+      type: "AI_AGENT",
+      role: "specialist",
+      department: "growth-revenue",
+      reportsTo: null,
+      collaborators: [],
+      lifecycle: "SHADOW",
+      runtimeBinding: { runtimeId: "runtime_ghost", runtimeType: "EXTERNAL_AGENT_RUNTIME" },
+      modelPolicy: { strategy: "RUNTIME_DEFAULT" },
+      autonomyLevel: "ASSISTED",
+      memoryScope: { scope: "DEPARTMENT", retention: "SESSION" },
+      permissions: [{ permission: "aiworkforce.access" }],
+      approvalPolicy: { mode: "INHERIT" },
+      escalationTarget: null,
+      metadata: {},
+    });
+    const capability = await domain.capabilities.register({
+      id: "ghost.capability",
+      name: "Ghost capability",
+      kind: "SKILL",
+      version: "1.0.0",
+      description: "test capability",
+      owner: actor.id,
+      riskLevel: "LOW",
+      status: "ACTIVE",
+      procedureRef: "sop://test/ghost",
+    });
+    await domain.assignments.assign({ actorId: actor.id, capabilityId: capability.id, grantedBy: "founder" });
+    const dispatcher = new AgentRuntimeDispatcher({
+      runtimes: domain.runtimes,
+      actors: domain.actors,
+      assignments: domain.assignments,
+    });
+    const outcome = await dispatcher.dispatch({ actorId: actor.id, runtimeId: "runtime_ghost", capabilityId: capability.id });
     expect(outcome.dispatched).toBe(false);
     expect(outcome.reason).toBe("RUNTIME_UNRESOLVED");
     expect(outcome.error?.code).toBe("RUNTIME_NOT_FOUND");
@@ -377,6 +423,7 @@ describe("6. security", () => {
     // A well-behaved transport bounds its own output to `maxOutputBytes`.
     const bigTransport: HermesTransport = {
       kind: "DETERMINISTIC",
+      provenance: "TEST",
       async invoke(request) {
         const bounded = boundText(huge, request.maxOutputBytes);
         return { ok: true, raw: bounded.text, truncated: bounded.truncated, durationMs: 1 };
@@ -699,6 +746,7 @@ describe("10. end-to-end adapter architecture test", () => {
     const dispatcher = new AgentRuntimeDispatcher({
       runtimes: domain.runtimes,
       actors: domain.actors,
+      assignments: domain.assignments,
       missions: domain.missions,
     });
 

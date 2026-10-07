@@ -87,8 +87,34 @@ export type HermesTransportResult = {
   httpStatus?: number;
 };
 
+/* ═══════════════════════════════════════════════════════
+   Provenance — DECLARED, never inferred
+   ═══════════════════════════════════════════════════════
+
+   The runtime composition has to be able to tell a transport that reaches a
+   real agent from one that replays canned output, WITHOUT inspecting a
+   provider name or duck-typing a class. So every transport DECLARES where its
+   behaviour comes from, and the composition decides whether that provenance is
+   acceptable in the environment it is composing for.
+
+   This is deliberately part of the port, not a convention: a transport cannot
+   compile without answering the question. */
+
+export type HermesTransportProvenance =
+  /** Reaches a real agent runtime over a real connection or process. */
+  | "PRODUCTION"
+  /** Canned/in-memory behaviour. Valid ONLY in tests and local fixtures. */
+  | "TEST";
+
 export interface HermesTransport {
   readonly kind: HermesTransportImplementation;
+  /**
+   * Where this transport's behaviour comes from. REQUIRED: the runtime refuses
+   * a `"TEST"` transport unless the caller explicitly opted into test
+   * transports, so a mock can never be wired into a real actor execution by
+   * accident.
+   */
+  readonly provenance: HermesTransportProvenance;
   invoke(request: HermesTransportRequest): Promise<HermesTransportResult>;
 }
 

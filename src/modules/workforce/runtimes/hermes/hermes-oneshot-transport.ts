@@ -1,4 +1,4 @@
-import { assertSafeProfile } from "./hermes-config";
+import { assertNexupProfile } from "./hermes-config";
 import { DEFAULT_HERMES_INSTRUCTION } from "./hermes-mapping";
 import { DEFAULT_HERMES_CLI_ONESHOT_PROTOCOL, type HermesCliOneshotProtocol } from "./hermes-protocol";
 import {
@@ -78,6 +78,7 @@ export function composeOneshotPrompt(request: HermesTransportRequest, includeCon
 
 export class HermesCliOneshotTransport implements HermesTransport {
   readonly kind = "CLI_ONESHOT";
+  readonly provenance = "PRODUCTION" as const;
 
   private readonly options: HermesCliOneshotTransportOptions;
   /** VERIFIED flag mapping (`-p`/`-z`), adapter-owned. */
@@ -93,7 +94,7 @@ export class HermesCliOneshotTransport implements HermesTransport {
    * The prompt is a single element. No other operation is buildable.
    */
   buildArgs(request: HermesTransportRequest): string[] {
-    assertSafeProfile(request.profile);
+    assertNexupProfile(request.profile);
     if (request.operation !== "submit") return [];
     const prompt = composeOneshotPrompt(request, this.options.includeContext ?? true);
     return [this.protocol.profileFlag, request.profile, this.protocol.oneshotFlag, prompt];

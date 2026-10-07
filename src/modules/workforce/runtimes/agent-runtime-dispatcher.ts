@@ -25,14 +25,21 @@ import type { RuntimeRegistry } from "./runtime-registry";
  * wrong, so the seam is this dispatcher: it resolves the actor, its authority
  * and its runtime, and hands the job over — nothing more.
  *
- * It authorises NOTHING by itself: the approval loop and permission policy
- * still run upstream. What it does enforce, when the caller supplies the
- * registries, is the STRUCTURE of the hand-over:
+ * It decides no POLICY of its own: the approval loop and permission policy
+ * still run upstream. What it enforces is the STRUCTURE of the hand-over, and
+ * it enforces it UNCONDITIONALLY — there is no way to compose this dispatcher
+ * without an authorization source:
  *
+ *   - the actor registry and the assignment service are REQUIRED dependencies;
+ *     a dispatch with no authority to consult is refused
+ *     (`AUTHORIZATION_UNAVAILABLE`) rather than allowed,
  *   - the capability must be ASSIGNED to the actor (an agent cannot invoke a
  *     capability it was never granted),
  *   - the runtime must be the actor's OWN binding (no cross-runtime dispatch),
  *   - a human actor is never sent to a machine runtime.
+ *
+ * Every one of those refusals happens BEFORE the runtime is resolved, so a
+ * refused dispatch performs no submit, no transport call and no network I/O.
  *
  * A missing runtime reference is a first-class, non-error answer: legacy jobs
  * have none, and they keep using the local path untouched.
@@ -78,6 +85,8 @@ export type AgentJobLike = {
 export type AgentDispatchReason =
   | "NO_RUNTIME_REFERENCE"
   | "NO_ACTOR"
+  /** No authorization source was supplied: dispatch is REFUSED, never allowed. */
+  | "AUTHORIZATION_UNAVAILABLE"
   | "HUMAN_ACTOR"
   | "UNKNOWN_ACTOR"
   | "RUNTIME_NOT_BOUND_TO_ACTOR"
@@ -98,12 +107,22 @@ export type AgentDispatchOutcome = {
 
 export type AgentRuntimeDispatcherDeps = {
   runtimes: RuntimeRegistry;
-  actors?: ActorRegistry;
   /**
-   * When supplied, the dispatcher enforces that the actor holds an ACTIVE
-   * assignment for the capability it is asked to run.
+   * REQUIRED. The actor registry is the only thing that can tell a human from
+   * an agent and bind an actor to its own runtime.
    */
-  assignments?: ActorAssignmentService;
+  actors: ActorRegistry;
+  /**
+   * REQUIRED. The dispatcher refuses to hand work to a runtime unless the
+   * actor holds an ACTIVE assignment for the capability it is asked to run.
+   *
+   * This used to be optional, and an omitted service silently meant "allow" —
+   * which is the wrong default for an authorization decision. It is now
+   * mandatory: a dispatch that has no authorization source is refused with
+   * `AUTHORIZATION_UNAVAILABLE` before any runtime is resolved. There is no
+   * "ungated" dispatch of a real actor execution.
+   */
+  assignments: ActorAssignmentService;
   missions?: MissionService;
 };
 
@@ -287,57 +306,72 @@ export class AgentRuntimeDispatcher {
     if (!input.runtimeId) return { outcome: { dispatched: false, reason: "NO_RUNTIME_REFERENCE" } };
     if (!input.actorId) return { outcome: { dispatched: false, reason: "NO_ACTOR" } };
 
-    // 2. Resolve the actor when a registry is available: refuse to send a human
-    //    actor to a machine runtime, and refuse cross-runtime dispatch.
-    if (this.deps.actors) {
-      const actor = await this.deps.actors.get(input.actorId);
-      if (!actor) return { outcome: { dispatched: false, reason: "UNKNOWN_ACTOR" } };
-      if (actor.type === "HUMAN") return { outcome: { dispatched: false, reason: "HUMAN_ACTOR" } };
-      const boundRuntimeId = actor.runtimeBinding?.runtimeId;
-      if (boundRuntimeId && boundRuntimeId !== input.runtimeId) {
-        return {
-          outcome: {
-            dispatched: false,
-            reason: "RUNTIME_NOT_BOUND_TO_ACTOR",
-            runtimeId: input.runtimeId,
-            error: {
-              code: "RUNTIME_UNSUPPORTED",
-              message: `Actor "${actor.slug}" is bound to runtime "${boundRuntimeId}", not "${input.runtimeId}"`,
-            },
+    // 2. Authorization is MANDATORY and FAIL-CLOSED. Without both an actor
+    //    registry and an assignment service there is no authority to consult,
+    //    and "no authority" must never mean "allow". Refuse before touching a
+    //    runtime, a transport or the network.
+    if (!this.deps.actors || !this.deps.assignments) {
+      return {
+        outcome: {
+          dispatched: false,
+          reason: "AUTHORIZATION_UNAVAILABLE",
+          runtimeId: input.runtimeId,
+          error: {
+            code: "PERMISSION_DENIED",
+            message: "Agent dispatch requires an actor registry and an assignment service; refusing to dispatch without an authorization source",
           },
-        };
-      }
+        },
+      };
     }
 
-    // 3. Capability assignment. Opt-in: only enforced when the caller supplies
-    //    the assignment service, so the legacy path is untouched.
-    if (this.deps.assignments) {
-      if (!input.capabilityId) {
-        return {
-          outcome: {
-            dispatched: false,
-            reason: "CAPABILITY_NOT_ASSIGNED",
-            runtimeId: input.runtimeId,
-            error: { code: "INVALID_ASSIGNMENT", message: "A dispatch on this path must name a capability" },
+    // 3. Resolve the actor: refuse to send a human actor to a machine runtime,
+    //    and refuse cross-runtime dispatch.
+    const actor = await this.deps.actors.get(input.actorId);
+    if (!actor) return { outcome: { dispatched: false, reason: "UNKNOWN_ACTOR" } };
+    if (actor.type === "HUMAN") return { outcome: { dispatched: false, reason: "HUMAN_ACTOR" } };
+    const boundRuntimeId = actor.runtimeBinding?.runtimeId;
+    if (boundRuntimeId && boundRuntimeId !== input.runtimeId) {
+      return {
+        outcome: {
+          dispatched: false,
+          reason: "RUNTIME_NOT_BOUND_TO_ACTOR",
+          runtimeId: input.runtimeId,
+          error: {
+            code: "RUNTIME_UNSUPPORTED",
+            message: `Actor "${actor.slug}" is bound to runtime "${boundRuntimeId}", not "${input.runtimeId}"`,
           },
-        };
-      }
-      if (!this.deps.assignments.hasCapability(input.actorId, input.capabilityId, input.capabilityVersion)) {
-        return {
-          outcome: {
-            dispatched: false,
-            reason: "CAPABILITY_NOT_ASSIGNED",
-            runtimeId: input.runtimeId,
-            error: {
-              code: "PERMISSION_DENIED",
-              message: `Actor "${input.actorId}" has no active assignment for capability "${input.capabilityId}"`,
-            },
-          },
-        };
-      }
+        },
+      };
     }
 
-    // 4. Resolve the runtime — a typed, honest failure (never a fake success).
+    // 4. Capability assignment — MANDATORY. An agent cannot invoke a capability
+    //    it was never granted, and the check runs BEFORE the runtime is resolved
+    //    or called, so a refusal costs zero runtime/transport work.
+    if (!input.capabilityId) {
+      return {
+        outcome: {
+          dispatched: false,
+          reason: "CAPABILITY_NOT_ASSIGNED",
+          runtimeId: input.runtimeId,
+          error: { code: "INVALID_ASSIGNMENT", message: "A dispatch on this path must name a capability" },
+        },
+      };
+    }
+    if (!this.deps.assignments.hasCapability(input.actorId, input.capabilityId, input.capabilityVersion)) {
+      return {
+        outcome: {
+          dispatched: false,
+          reason: "CAPABILITY_NOT_ASSIGNED",
+          runtimeId: input.runtimeId,
+          error: {
+            code: "PERMISSION_DENIED",
+            message: `Actor "${input.actorId}" has no active assignment for capability "${input.capabilityId}"`,
+          },
+        },
+      };
+    }
+
+    // 5. Resolve the runtime — a typed, honest failure (never a fake success).
     let runtime: ReturnType<RuntimeRegistry["require"]>;
     try {
       runtime = this.deps.runtimes.require(input.runtimeId);
@@ -353,7 +387,7 @@ export class AgentRuntimeDispatcher {
       };
     }
 
-    // 5. Build the neutral request. `context` is optional enrichment the
+    // 6. Build the neutral request. `context` is optional enrichment the
     //    adapter MAY read; a runtime that ignores it is unaffected.
     const request: AgentJobRequest & { context?: AgentDispatchContext; idempotencyKey?: string } = {
       actorId: input.actorId,

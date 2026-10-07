@@ -23,6 +23,7 @@ export type FakeBehavior = {
 
 export class FakeHermesTransport implements HermesTransport {
   readonly kind = "DETERMINISTIC";
+  readonly provenance = "TEST" as const;
 
   constructor(
     private readonly behavior: FakeBehavior,

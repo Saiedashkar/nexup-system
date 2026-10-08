@@ -138,4 +138,24 @@ export type { ControlCore, CreateControlCoreOptions, WorkforceRepositories } fro
 export { prismaWorkforcePorts, resolveBusinessScope } from "./adapters/prisma-read-ports";
 export { actorFromSession, canUseWorkforce } from "./adapters/session-actor";
 export { resolvePersistence, assertIsolatedDatabaseUrl } from "./policies/persistence-safety";
+/* Step 5A — the fail-closed budget gate. The PORT and the DENY default only; the
+   ModelRouter and the real Governor are Step 5C. Exported so an application
+   composes a governor deliberately rather than inheriting an absent one. */
+export {
+  BUDGET_DECISION_REASONS,
+  BUDGET_SPEND_CLASSES,
+  DEFAULT_BUDGET_GOVERNOR_POLICY_REF,
+  DENY_VARIABLE_AI_SPEND_POLICY_REF,
+  DenyVariableAiSpendBudgetGovernor,
+  denyVariableAiSpendBudgetGovernor,
+  isBudgetSpendClass,
+  summarizeBudgetDecision,
+} from "./policies/budget-governor";
+export type {
+  BudgetDecision,
+  BudgetDecisionReason,
+  BudgetEvaluationInput,
+  BudgetGovernor,
+  BudgetSpendClass,
+} from "./policies/budget-governor";
 export { controlPlaneToolAdapters, workforceToolAdapters } from "./tools";

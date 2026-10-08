@@ -208,6 +208,16 @@ export type {
   ExecutionRecordRepository,
 } from "./execution/execution-record";
 
+/* ── Step 5A — the execution-POLICY boundary ──
+   The authority a request acts under, the execution-attempt contracts the
+   orchestrator reasons in, and the durable claim that gates every external
+   execution. Contracts and the reference claim implementation only: nothing here
+   is wired into the mission path yet, and `AgentRuntime` provider neutrality is
+   untouched (no provider field appears in any of these types). */
+export * from "./execution/execution-authority";
+export * from "./execution/capability-execution-contracts";
+export * from "./execution/execution-claim";
+
 export {
   InMemoryReviewRepository,
   ReviewService,

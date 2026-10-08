@@ -35,6 +35,19 @@ import {
  */
 
 export const EXECUTION_AUDIT_EVENT_TYPES = [
+  /**
+   * The execution-POLICY decision for this attempt, recorded before anything was
+   * dispatched: which descriptor was evaluated, which leg would execute, the
+   * permission decision, the approval state and the budget decision.
+   *
+   * Step 5A added it because the mission path previously reached a runtime with
+   * NO recorded authorization: a reviewer could see that a run happened and
+   * nothing about why it was permitted. Folding the decision into this existing
+   * ordered trail (rather than writing a second `ai_runs`-style ledger) keeps ONE
+   * audit spine for an attempt — the same reasoning that removed the duplicating
+   * `ai_tool_invocations` table in Phase 1B.
+   */
+  "PREFLIGHT",
   "REQUESTED",
   "ACCEPTED",
   "STATUS",

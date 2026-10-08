@@ -15,6 +15,10 @@
 #
 # Usage:  bash scripts/demo-run.sh        # Ctrl+C to stop
 # Env:    DEMO_PORT (from .demo/env, default 3300)
+#
+# Prefer `node scripts/demo-start.mjs`: it does the same start AND handles the
+# stale port, the dev database, and waiting for /login to answer. This script
+# stays as the minimal "the environment already exists, just run the app" path.
 
 set -euo pipefail
 

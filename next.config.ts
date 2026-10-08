@@ -1,6 +1,18 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  /* Development-only: accept the dev client from BOTH loopback names.
+
+     Next.js serves its development client (HMR socket, /__nextjs_* endpoints,
+     refresh runtime) under a cross-origin guard that only trusts `localhost`
+     plus whatever is listed here. A page loaded from `127.0.0.1` therefore has
+     its dev-resource requests answered with 403, the client bundle never
+     finishes initialising, and React never hydrates: the login form silently
+     degrades to a native <form> GET, which reloads /login with the credentials
+     in the query string. Allowing both loopback hostnames keeps the documented
+     `http://127.0.0.1:<port>` URL working. Ignored by production builds. */
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
+
   /* TypeScript checking during build */
   typescript: {
     ignoreBuildErrors: false,

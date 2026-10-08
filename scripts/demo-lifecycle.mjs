@@ -83,7 +83,7 @@ async function call(method, url, { body, cookie: override } = {}) {
       redirect: "manual",
     });
   } catch (error) {
-    fail(`Could not reach ${BASE}. Start the app first:  bash scripts/demo-run.sh`, error.message);
+    fail(`Could not reach ${BASE}. Start the app first:  node scripts/demo-start.mjs`, error.message);
   }
   const text = await res.text();
   let json = null;
@@ -149,7 +149,7 @@ async function main() {
     if (issued.status !== 201 && issued.status !== 200) fail(`issue failed (${issued.status})`, issued.json);
     const missionId = issued.json.mission.id;
     printSnapshot("after issue", issued.json);
-    console.log("\n  Now RESTART the app (Ctrl+C the server, then `bash scripts/demo-run.sh` again),");
+    console.log("\n  Now RESTART the app (`node scripts/demo-start.mjs --stop && node scripts/demo-start.mjs`),");
     console.log("  and continue from the database with:");
     console.log(`    node scripts/demo-lifecycle.mjs --finish ${missionId}\n`);
     return;

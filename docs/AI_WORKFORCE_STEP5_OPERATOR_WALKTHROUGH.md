@@ -45,13 +45,29 @@ its own explicit `127.0.0.1` URL.
 
 ## 2. Shortest safe startup procedure
 
-```bash
-# 0) once, or whenever you want a clean slate
-node scripts/demo-env.mjs
+**One command.** It reuses an existing healthy environment, repairs a missing or
+half-built one, starts (or recovers) the database, reclaims the app port from any
+previous NEXUP process, starts the app, and waits until `/login` actually answers
+before printing anything:
 
-# 1) start the application  (leave this window running; Ctrl+C stops it)
-bash scripts/demo-run.sh
+```bash
+node scripts/demo-start.mjs          # start (or reuse) everything
+node scripts/demo-start.mjs --stop   # stop the app again
 ```
+
+It prints only the URL, the demo email, and where the password lives.
+
+> **Why the URL host matters.** `127.0.0.1` and `localhost` are *different
+> origins* to Next.js. Its development client (HMR socket, `/__nextjs_*`
+> endpoints) is guarded against unlisted origins, and only `localhost` is trusted
+> by default — so from `127.0.0.1` the dev resources were answered with `403`,
+> React never hydrated, and the login form silently fell back to a **native GET**
+> that reloaded `/login` with the email and password in the query string. Fixed
+> in three places: `allowedDevOrigins: ["127.0.0.1", "localhost"]` in
+> `next.config.ts`, a middleware matcher that no longer auth-gates `/_next` and
+> `/__nextjs_*`, and `method="post"` on the form so a hydration failure can never
+> put a credential in a URL. Login now goes through the real `POST /api/auth/login`
+> in every case.
 
 | | |
 |---|---|
@@ -59,6 +75,7 @@ bash scripts/demo-run.sh
 | **Login** | email `superadmin@nexup` · password in `.demo/credentials.txt` (generated, throwaway) |
 | **Auth flow** | the real one — `POST /api/auth/login` → signed `nexup_session` cookie; the middleware protects every route |
 | **Readiness check** | `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3300/api/ai-workforce/missions` → **`401`** means the app and the route are up (unauthenticated is the healthy answer) |
+| **Stop** | `node scripts/demo-start.mjs --stop` (the database is left running) |
 
 `demo-run.sh` exports, over the app's own `.env`:
 
@@ -186,7 +203,8 @@ The Mission, Task, Execution record, review and the idempotency ledger are all
 
 ```bash
 node scripts/demo-lifecycle.mjs --issue-only     # leaves work in flight, prints the mission id
-#   Ctrl+C the app, then:  bash scripts/demo-run.sh
+node scripts/demo-start.mjs --stop               # restart the app
+node scripts/demo-start.mjs
 node scripts/demo-lifecycle.mjs --finish <missionId>   # settles from the DATABASE, then you decide
 ```
 
@@ -198,14 +216,14 @@ second execution (`--retry` shows this).
 ### J. How to stop / reset the local demo safely
 | Goal | Command |
 |---|---|
-| Stop the app | `Ctrl+C` in the `demo-run.sh` window |
+| Stop the app | `node scripts/demo-start.mjs --stop` |
 | Reset to a clean demo (keeps the tooling) | `node scripts/demo-env.mjs` |
 | Stop the database, keep its data | `node scripts/dev-db.mjs down` |
 | Remove the demo database entirely | `node scripts/dev-db.mjs destroy` |
 
 None of these touches any other PostgreSQL instance, and none touches
-production. To start again later, run `node scripts/demo-env.mjs` then
-`bash scripts/demo-run.sh`.
+production. To start again later, run `node scripts/demo-start.mjs` — it rebuilds
+what is missing and reuses what is not.
 
 ---
 
@@ -239,13 +257,15 @@ other PostgreSQL instance is affected.
 
 ## OWNER — OPEN NEXUP NOW
 
-Run these two commands, in this order, in a terminal at
-`nexup-business-system/`:
+Run this **one** command in a terminal at `nexup-business-system/`:
 
 ```bash
-node scripts/demo-env.mjs
-bash scripts/demo-run.sh
+node scripts/demo-start.mjs
 ```
+
+It builds the demo environment if it is missing, starts the database and the
+app, and prints the URL, the email, and where the password is. (Re-running it is
+always safe: it reclaims the port and reuses a healthy environment.)
 
 Then, in the browser:
 
@@ -269,8 +289,8 @@ To try the restart yourself:
 
 ```bash
 node scripts/demo-lifecycle.mjs --issue-only
-# Ctrl+C the app, then:  bash scripts/demo-run.sh
+node scripts/demo-start.mjs --stop && node scripts/demo-start.mjs
 node scripts/demo-lifecycle.mjs --finish <missionId>
 ```
 
-To stop: `Ctrl+C` in the app window. To reset clean: `node scripts/demo-env.mjs`.
+To stop: `node scripts/demo-start.mjs --stop`. To reset clean: `node scripts/demo-env.mjs`.

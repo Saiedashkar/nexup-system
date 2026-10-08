@@ -213,7 +213,7 @@ async function main() {
 ═══════════════════════════════════════════════════════════════════
   Demo environment ready.
 
-  1. start the app :  bash scripts/demo-run.sh
+  1. start the app :  node scripts/demo-start.mjs
   2. open          :  http://127.0.0.1:${APP_PORT}/login
   3. log in as     :  ${EMAIL}
                       (password in .demo/credentials.txt)

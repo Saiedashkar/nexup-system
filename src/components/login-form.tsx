@@ -22,7 +22,12 @@ export function LoginForm() {
       window.location.assign(target);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Login failed."); } finally { setLoading(false); }
   }
-  return <form onSubmit={submit}>
+  // method="post" is a safety net, not the real flow: the real login is the
+  // fetch POST in `submit`. But if this component ever fails to hydrate, the
+  // browser performs the native form action instead — and the default is a GET
+  // that would put the password in the URL and the server logs. POST keeps the
+  // credentials out of the query string.
+  return <form onSubmit={submit} method="post">
     <label className="field">Email<input name="email" type="email" autoComplete="email" required /></label>
     <label className="field">Password<input name="password" type="password" autoComplete="current-password" required /></label>
     {error && <p className="error" role="alert">{error}</p>}

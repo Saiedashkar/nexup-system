@@ -90,4 +90,8 @@ export default async function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"] };
+// Exclude Next.js internals from auth entirely: only real app routes should be
+// gated. The previous matcher only skipped `/_next/static`, so `next dev`
+// resources such as `/_next/hmr` and `/__nextjs_*` were redirected to /login —
+// which broke the HMR socket and the dev overlay.
+export const config = { matcher: ["/((?!_next|__nextjs|favicon.ico).*)"] };

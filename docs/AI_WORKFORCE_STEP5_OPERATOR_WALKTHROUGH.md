@@ -122,8 +122,15 @@ What the browser *does* show today:
 | Surface | What it is | Real or mock |
 |---|---|---|
 | `/login` | the real login form | **real** |
+| **`/command`** | **the NEXUP COMMAND — Executive Command Center.** The authoritative owner UI: the command bar, the organization graph, People & Actors, Connected Systems, Recent Activity, Active Missions and the Decision Queue. | **UI only** — it reads its own demo model (`src/components/command/state/demo-scenarios.ts`); it makes **no** API call and is **not** wired to the lifecycle. That wiring is Step 6. |
 | `/office`, `/office/nexup`, ... | the existing business app | real (its own data) |
-| `/office/ai-workforce` | the **Phase-1B control-core** page: registered tools, persistent jobs, recent runs, pending approvals, and the isolation banner | **real reads** of the control core; it is **not** the mission lifecycle |
+| `/office/ai-workforce` | the **Phase-1B control-core** page: registered tools, persistent jobs, recent runs, pending approvals, and the isolation banner. **Legacy/internal — not the Command Center.** | **real reads** of the control core; it is **not** the mission lifecycle |
+
+> **Two pages, one confusingly similar name.** `NEXUP COMMAND` is the title of
+> **`/command`** (the current Command Center). The older Phase-1B page at
+> `/office/ai-workforce` is *also* labelled "NEXUP COMMAND" in the Phase-1B/Phase-0
+docs, which is why an operator reading those docs can land on the wrong screen.
+> **`/command` is the one the owner uses.**
 
 **The cleanest existing way to inspect and operate the lifecycle right now** is
 the real HTTP API plus the durable read tool — not a mock screen:
@@ -152,17 +159,24 @@ reject / needs-revision actions. The data and the operations already exist; Step
 `http://127.0.0.1:3300/login`
 
 ### B. What I should see
-The NEXUP login page. After signing in you land in the existing app
-(`/office`). Open `http://127.0.0.1:3300/office/ai-workforce` for the AI
-Workforce page — it shows the runtime, where persistence lives, the registered
-tools, the pending approvals and the isolation banner.
+The NEXUP login page. After signing in, open the authoritative owner UI:
+`http://127.0.0.1:3300/command` — **NEXUP COMMAND / Executive Command Center**
+(command bar, organization graph D1–D5, People & Actors, Connected Systems,
+Recent Activity, Active Missions, Decision Queue, EXEC).
+
+The older Phase-1B page `http://127.0.0.1:3300/office/ai-workforce` still exists
+for legacy/internal use — it shows the runtime, where persistence lives, the
+registered tools, the pending approvals and the isolation banner. It is *not* the
+Command Center.
 
 ### C. What is real vs still mocked
 - **Real:** authentication and session, the durable database, the mission
   lifecycle API, the deterministic runtime, the human-decision boundary, the
   stop/reset tooling.
-- **Still mocked / not built:** the Command Center UI. Nothing on screen renders
-  Command → Mission → Task → Execution → Review yet; that is Step 6. The
+- **UI only (mock model):** everything on `/command` — its KPIs, Active Missions,
+  Decision Queue, departments, actors and EXEC read the demo model and make no
+  API call. Nothing on screen renders the real Command → Mission → Task →
+  Execution → Review lifecycle yet; that wiring is Step 6. The
   `/office/ai-workforce` page is the earlier control core, not that lifecycle.
 
 ### D. How I issue a safe test Command
@@ -272,7 +286,8 @@ Then, in the browser:
 1. Open **http://127.0.0.1:3300/login**
 2. Log in with **`superadmin@nexup`** — the password is on the line
    `password ...` in **`.demo/credentials.txt`**
-3. Open **http://127.0.0.1:3300/office/ai-workforce** to see the AI Workforce page
+3. Open **http://127.0.0.1:3300/command** — the NEXUP COMMAND / Executive Command
+   Center (the authoritative owner UI; its figures are the demo model until Step 6)
 4. In a second terminal, run the lifecycle and watch it complete:
 
 ```bash

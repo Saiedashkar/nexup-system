@@ -1,5 +1,9 @@
 # NEXUP AI WORKFORCE — PHASE 0 REPORT (READ-ONLY INVENTORY)
 
+> **Routing note (2026-10-08):** any reference here to `office/ai-workforce/` as
+> the "Command Center (UI جديد)" is historical naming. The owner's current UI is
+> **`/command`** (NEXUP COMMAND — Executive Command Center).
+
 > **الحالة:** تقرير مخزون فقط. لم يتم تنفيذ أي بناء، ولا أي تعديل على الكود أو قاعدة البيانات.
 >
 > **الفرع:** `feature/ai-workforce-foundation`

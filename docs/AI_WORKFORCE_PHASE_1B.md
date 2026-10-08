@@ -1,6 +1,12 @@
 # NEXUP COMMAND — AI WORKFORCE
 ## Phase 1B — Persistence + Approval Loop
 
+> **ملاحظة توجيه (2026-10-08):** هذه الصفحة القديمة تعيش على مسار
+> `/office/ai-workforce` وتحمل عنوان "NEXUP COMMAND"، وهذا سبب التباس.
+> **واجهة NEXUP COMMAND الحالية التي يستخدمها المالك هي `/command`**
+> (Executive Command Center). أبقينا `/office/ai-workforce` للاستخدام
+> القديم/الداخلي كما هي، ولم تُعدَّل.
+
 **الفرع:** `feature/ai-workforce-foundation` · **الحالة:** مُنفَّذ ومُختبَر · **الـDB changes المطبَّقة:** صفر
 **التاريخ:** 2026-09-30
 

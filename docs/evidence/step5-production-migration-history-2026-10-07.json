@@ -1,10 +1,10 @@
 {
   "proof": "a READ-ONLY inspection of the production migration history: the prerequisite the production migration package depends on",
-  "generatedAt": "2026-10-07T21:26:57.395Z",
+  "generatedAt": "2026-10-08T05:46:04.284Z",
   "readOnly": "select statements only; no DDL, no migration, no write, no schema change",
   "host": "db.hoahuemoxjwivbuvxlkt.supabase.co",
   "readable": false,
-  "reason": "getaddrinfo ENOTFOUND db.hoahuemoxjwivbuvxlkt.supabase.co",
+  "reason": "getaddrinfo ENOENT db.hoahuemoxjwivbuvxlkt.supabase.co",
   "registeredMigrations": [
     "20260823221818_init",
     "20260824120000_add_business_multitenancy",

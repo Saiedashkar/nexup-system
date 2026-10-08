@@ -1,6 +1,6 @@
 {
   "proof": "the AI Workforce HTTP boundary, exercised against a RUNNING next start server with real signed session cookies, on a throwaway database inside the isolated development cluster",
-  "generatedAt": "2026-10-07T21:45:26.433Z",
+  "generatedAt": "2026-10-08T05:49:44.549Z",
   "exitStatus": "0",
   "counts": {
     "testFiles": 2,
@@ -43,33 +43,15 @@
       "status": "passed"
     }
   ],
-  "testedCommit": "4fde70bffb316ff9dcf341dc05e23065097c3883",
+  "testedCommit": "87a808b3c1bbf8a3fd430b42a006d3e995e405d4",
   "workingTreeDirty": true,
   "workingTreeChanges": [
-    "M src/modules/ai-workforce/policies/persistence-safety.ts",
-    "M src/modules/workforce/application/command-service.ts",
-    "M src/modules/workforce/application/composition.ts",
-    "M src/modules/workforce/application/runtime.ts",
-    "M src/modules/workforce/execution/execution-record.ts",
-    "M src/modules/workforce/orchestration/mission-orchestrator.ts",
-    "M src/modules/workforce/runtimes/agent-runtime.ts",
-    "M src/modules/workforce/runtimes/deterministic-runtime-adapter.ts",
-    "M src/modules/workforce/runtimes/hermes/hermes-bridge-transport.ts",
-    "M src/modules/workforce/runtimes/hermes/hermes-runtime-adapter.ts",
-    "M src/modules/workforce/runtimes/hermes/testing/deterministic-transport.ts",
-    "M tests/process/app-process-c.test.ts",
-    "M tests/process/support.ts",
-    "M tests/workforce-step5-app-restart.test.ts",
-    "?? docs/evidence/step5-http-boundary-2026-10-07.json",
-    "?? docs/evidence/step5-production-migration-history-2026-10-07.json",
-    "?? scripts/check-production-migration-history.mjs",
-    "?? scripts/run-api-http-proof.sh",
-    "?? src/modules/workforce/execution/execution-reconciler.ts",
-    "?? tests/process/app-process-e.test.ts",
-    "?? tests/workforce-api-http.test.ts",
-    "?? tests/workforce-bridge-adoption.test.ts",
-    "?? tests/workforce-persistence-host-policy.test.ts",
-    "?? tests/workforce-step5-adoption.test.ts"
+    "M docs/AI_WORKFORCE_PHASE_0.md",
+    "M docs/AI_WORKFORCE_PHASE_1B.md",
+    "M docs/AI_WORKFORCE_STEP5_OPERATOR_WALKTHROUGH.md",
+    "M docs/evidence/step5-app-acceptance-2026-10-07.json",
+    "M docs/evidence/step5-production-migration-history-2026-10-07.json",
+    "?? docs/AI_WORKFORCE_STEP6_BLUEPRINT.md"
   ],
   "environment": {
     "server": "next start on 127.0.0.1, built from this tree",

@@ -1181,3 +1181,84 @@ model AiTaskReview {
   @@index([reviewerActorId])
   @@map("ai_task_reviews")
 }
+
+/// STEP 5A-2 — the durable EXECUTION CLAIM.
+///
+/// ONE row per execution ATTEMPT, won by a single INSERT against the UNIQUE
+/// `idempotencyKey` (see `executionIdempotencyKeyForAttempt`) and written BEFORE
+/// any external call. It is the record of WHO owns attempt N of task T:
+///
+///   CLAIMED      the key was won; dispatch has NOT been entered. Reclaimable
+///                once its lease lapses.
+///   DISPATCHING  dispatch HAS been entered — the last durable write before the
+///                external request, and the point past which the outside world
+///                may already know about this attempt. NEVER reclaimed.
+///   DISPATCHED   an external execution is durably identified (handle recorded).
+///   RELEASED     a control refused BEFORE dispatch; no external run can exist.
+///   UNVERIFIED   dispatch was entered and no handle exists. A person resolves it.
+///
+/// There is deliberately NO foreign key and no relation here. A claim is a
+/// DELIVERY/LEASE ledger, not part of the mission lifecycle: `MissionOrchestrator`
+/// stays the only writer of mission/task state, and the ids below are opaque
+/// indexed columns — exactly like `ai_command_intents`, the other single-row
+/// ledger won by a unique insert. A relation to `ai_tasks` would additionally make
+/// the durable adapter reject inputs the in-memory reference accepts, so the two
+/// implementations could no longer be tested against the same contract.
+///
+/// LEASE TIMING IS THE DATABASE'S. Every timestamp here is written and compared
+/// with `now() AT TIME ZONE 'UTC'` in SQL; the adapter never reads an application
+/// clock for a lease decision, so a skewed process cannot expire a healthy peer's
+/// claim.
+///
+/// TWO uniqueness mechanisms guard ONE attempt, and both are enforced HERE rather
+/// than trusted to callers:
+///
+///   UNIQUE("idempotencyKey")      the idempotency guard — a retry of the SAME key
+///                                 resolves to the same row.
+///   UNIQUE("taskId", "attempt")  the ATTEMPT-IDENTITY guard — `taskId + attempt`
+///                                 IS the semantic identity of an execution
+///                                 attempt, so two rows for one attempt are
+///                                 impossible even if a future caller spells the
+///                                 key differently. Correctness must not rest on
+///                                 every caller deriving the identical string.
+///
+/// A conflict on EITHER is absorbed by the adapter into a typed claim outcome;
+/// neither may ever surface as a raw uniqueness error.
+///
+/// The composite unique index also serves `listForTask` (it is a `taskId` prefix
+/// index), so there is deliberately no separate index on `taskId`.
+model AiExecutionClaim {
+  id                String    @id
+  missionId         String
+  taskId            String
+  /// 1-based attempt number inside the task.
+  attempt           Int
+  actorId           String
+  capabilityId      String
+  /// The runtime that would host the attempt, when one is known at claim time.
+  runtimeId         String?
+  /// `task:<taskId>:attempt:<n>` — deterministic, never caller-supplied.
+  idempotencyKey    String    @unique
+  /// CLAIMED → DISPATCHING → DISPATCHED | UNVERIFIED, or CLAIMED → RELEASED.
+  /// Validated by the application state machine, never by a DB enum, so adding a
+  /// state is a code change rather than an ALTER TYPE.
+  state             String    @default("CLAIMED")
+  /// The durable execution record, once one exists.
+  executionRecordId String?
+  /// The runtime's own handle for this attempt (bridge run id on BRIDGE).
+  handleId          String?
+  /// The process/instance holding the lease. Not a security boundary.
+  leaseOwner        String?
+  /// When the lease stops being authoritative. Absent = not live.
+  leaseExpiresAt    DateTime?
+  /// Bounded, non-secret explanation of the current state.
+  detail            String?
+  claimedAt         DateTime
+  updatedAt         DateTime
+
+  @@unique([taskId, attempt])
+  @@index([missionId])
+  @@index([state])
+  @@index([leaseExpiresAt])
+  @@map("ai_execution_claims")
+}

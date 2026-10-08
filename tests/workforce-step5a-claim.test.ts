@@ -30,6 +30,8 @@ import {
   claimOutcomePermitsDispatch,
   executionBlockedClaimStates,
   isRedispatchableClaimState,
+  recoveryForClaim,
+  type ExecutionClaim,
   type ExecutionClaimOutcome,
   type ExecutionClaimRequest,
 } from "@/modules/workforce/execution/execution-claim";
@@ -139,7 +141,7 @@ describe("Step 5A claim — exactly one claimant wins", () => {
 
     // One row, one identity: the loser addressed the winner's claim.
     expect(second.claim.id).toBe(first.claim.id);
-    expect(claims.count()).toBe(1);
+    expect(await claims.count()).toBe(1);
   });
 
   it("is keyed by attempt, so a different attempt is a different claim", async () => {
@@ -152,10 +154,40 @@ describe("Step 5A claim — exactly one claimant wins", () => {
 
     expect(attempt1.kind).toBe("CLAIMED");
     expect(attempt2.kind).toBe("CLAIMED");
-    expect(claims.count()).toBe(2);
+    expect(await claims.count()).toBe(2);
 
     const forTask = await claims.listForTask("task_1");
     expect(forTask.map((claim) => claim.attempt)).toEqual([1, 2]);
+  });
+
+  it("fails closed when the same attempt arrives under a different key (fix 1)", async () => {
+    // The reference must enforce attempt IDENTITY, not just key spelling — the
+    // in-memory mirror of `UNIQUE (taskId, attempt)`. Two rows for one attempt,
+    // addressed under two spellings of the same key, is the bug this refuses.
+    const { claims } = harness();
+    const first = await claims.claim(request({ leaseOwner: "process_A" }));
+    expect(first.kind).toBe("CLAIMED");
+
+    // SAME attempt + SAME key → ordinary in-progress semantics.
+    const sameKey = await claims.claim(request({ leaseOwner: "process_B" }));
+    expect(sameKey.kind).toBe("IN_PROGRESS");
+    expect(sameKey.claim.id).toBe(first.claim.id);
+
+    // SAME attempt + DIFFERENT key → typed, fail-closed mismatch.
+    const misspelled = request({
+      idempotencyKey: `${executionIdempotencyKeyForAttempt("task_1", 1)}:typo`,
+      leaseOwner: "process_B",
+    });
+    await expect(claims.claim(misspelled)).rejects.toMatchObject({
+      code: "ATTEMPT_IDEMPOTENCY_MISMATCH",
+    });
+
+    // One row, the original key untouched, and no row under the misspelled key.
+    expect(await claims.count()).toBe(1);
+    expect(await claims.findByKey(executionIdempotencyKeyForAttempt("task_1", 1))).toMatchObject({
+      id: first.claim.id,
+    });
+    expect(await claims.findByKey(misspelled.idempotencyKey)).toBeNull();
   });
 });
 
@@ -280,7 +312,7 @@ describe("Step 5A claim — an expired CLAIMED claim may be retaken", () => {
     expect(second.claim.leaseOwner).toBe("process_B");
 
     // Still ONE row: reclaiming renews the same attempt, it does not create another.
-    expect(claims.count()).toBe(1);
+    expect(await claims.count()).toBe(1);
 
     const recovery = await claims.recoveryFor(second.claim.id, { requester: "process_C" });
     expect(recovery?.kind).toBe("IN_PROGRESS");
@@ -438,7 +470,7 @@ describe("Step 5A claim — a concurrent claim race produces one execution autho
 
     // One row for the whole race: this is the property that makes a second
     // concurrent mission advance unable to start a second real run.
-    expect(claims.count()).toBe(1);
+    expect(await claims.count()).toBe(1);
     const all = new Set(outcomes.map((outcome) => outcome.claim.id));
     expect(all.size).toBe(1);
   });
@@ -727,14 +759,77 @@ describe("Step 5A-1 — batch invariants (nothing is wired, nothing provider-spe
     }
   });
 
-  it("did not touch the schema, the migrations, or the bridge", () => {
-    // The batch added NO schema model and NO proposed migration: the owner gated
-    // schema work on necessity, and the port plus the in-memory implementation
-    // compile and test without either. When the durable adapter lands (batch
-    // 5A-2) this assertion is what forces the change to be deliberate.
+  it("keeps the claim schema ADDITIVE and PROPOSED, never in prisma/migrations (5A-2)", () => {
+    // 5A-1 asserted the schema was UNTOUCHED, precisely so that touching it
+    // would have to be deliberate. Batch 5A-2 is that deliberate change, so the
+    // assertion is INVERTED rather than deleted: the claim model and its
+    // proposal must now exist, and neither may appear where `prisma migrate
+    // deploy` would pick it up.
     const schema = fs.readFileSync(path.join(REPO_ROOT, "prisma", "schema.prisma"), "utf8");
-    expect(schema).not.toContain("AiExecutionClaim");
-    expect(schema).not.toContain("ai_execution_claims");
-    expect(fs.existsSync(path.join(REPO_ROOT, "prisma", "proposed-migrations", "AI_WORKFORCE_PHASE_4"))).toBe(false);
+    expect(schema).toContain("model AiExecutionClaim");
+    expect(schema).toContain('@@map("ai_execution_claims")');
+    // A delivery/lease ledger, not part of the mission lifecycle: no relation.
+    const claimModel = schema.slice(schema.indexOf("model AiExecutionClaim"));
+    expect(claimModel).not.toContain("@relation");
+
+    const proposal = path.join(
+      REPO_ROOT,
+      "prisma",
+      "proposed-migrations",
+      "AI_WORKFORCE_PHASE_4",
+      "migration.sql",
+    );
+    expect(fs.existsSync(proposal)).toBe(true);
+    expect(fs.readFileSync(proposal, "utf8")).toContain('CREATE TABLE "ai_execution_claims"');
+    // The directory that would actually be APPLIED stays untouched: no
+    // AI Workforce proposal may be registered there, and no migration Prisma
+    // would apply may name the claim table.
+    const appliedRoot = path.join(REPO_ROOT, "prisma", "migrations");
+    const applied = fs.readdirSync(appliedRoot, { withFileTypes: true });
+    expect(applied.filter((entry) => entry.name.includes("AI_WORKFORCE"))).toEqual([]);
+    for (const entry of applied) {
+      if (!entry.isDirectory()) continue;
+      const sql = fs.readFileSync(path.join(appliedRoot, entry.name, "migration.sql"), "utf8");
+      expect(sql).not.toContain("ai_execution_claims");
+    }
+  });
+
+  it("prefers the database's authoritative liveness over any supplied clock (5A-2)", () => {
+    // The durable ledger has no application clock at all; this is the SHARED
+    // classifier's half of that guarantee. When the storage layer supplies the
+    // answer it WINS, so a skewed instance can neither expire a healthy peer's
+    // claim nor resurrect a dead one.
+    const claim: ExecutionClaim = {
+      id: "claim_lease_1",
+      missionId: "mission_1",
+      taskId: "task_1",
+      attempt: 1,
+      actorId: "actor_analyst",
+      capabilityId: "strategy.internal-brief",
+      idempotencyKey: "task:task_1:attempt:1",
+      state: "CLAIMED",
+      leaseOwner: "process_A",
+      leaseExpiresAt: "2026-02-01T00:10:00.000Z",
+      claimedAt: "2026-02-01T00:00:00.000Z",
+      updatedAt: "2026-02-01T00:00:00.000Z",
+    };
+    const farFuture = new Date("2031-01-01T00:00:00.000Z");
+    const farPast = new Date("2021-01-01T00:00:00.000Z");
+
+    // Application time says the lease is long dead; the database says live.
+    expect(recoveryForClaim(claim, { now: farFuture, leaseIsLive: true }).kind).toBe("IN_PROGRESS");
+    // Application time says live; the database says dead.
+    expect(recoveryForClaim(claim, { now: farPast, leaseIsLive: false }).kind).toBe("RECLAIM");
+
+    // With no authoritative answer the supplied clock decides — which is the
+    // in-memory path, where that clock IS the only clock in existence.
+    expect(recoveryForClaim(claim, { now: farPast }).kind).toBe("IN_PROGRESS");
+    expect(recoveryForClaim(claim, { now: farFuture }).kind).toBe("RECLAIM");
+
+    // The same holds on the DISPATCHING branch, where being wrong is expensive:
+    // a live lease means WAIT, and a dead one means park as UNVERIFIED.
+    const entered: ExecutionClaim = { ...claim, state: "DISPATCHING" };
+    expect(recoveryForClaim(entered, { now: farFuture, leaseIsLive: true }).kind).toBe("IN_PROGRESS");
+    expect(recoveryForClaim(entered, { now: farPast, leaseIsLive: false }).kind).toBe("UNVERIFIED");
   });
 });

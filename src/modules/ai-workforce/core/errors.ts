@@ -71,6 +71,14 @@ export const AI_WORKFORCE_ERROR_CODES = [
   "COMMAND_KEY_REUSED",
   /** The key is claimed but its mission is not recorded yet — retry shortly. */
   "COMMAND_IN_PROGRESS",
+  // ── Step 5A-2 — the execution-claim identity boundary ──
+  /**
+   * The SAME `(taskId, attempt)` already holds a claim under a DIFFERENT
+   * idempotency key. Attempt identity governs and the key is only its spelling,
+   * so a disagreement means an upstream derivation has drifted: refuse, and
+   * leave the stored claim untouched.
+   */
+  "ATTEMPT_IDEMPOTENCY_MISMATCH",
 ] as const;
 
 export type AiWorkforceErrorCode = (typeof AI_WORKFORCE_ERROR_CODES)[number];

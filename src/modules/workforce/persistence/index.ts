@@ -44,5 +44,20 @@ export type {
   PrismaCommandIntentRepositoryOptions,
 } from "./prisma-command-intent-repository";
 
+/* ── Step 5A-2 — the durable EXECUTION CLAIM ledger ──
+   Exported so an application CAN compose the durable claim, and NOT bound into
+   `createWorkforceDomainFromPrisma`: the live mission dispatch still runs on the
+   pre-Step-5A path. Moving dispatch behind the claim is a separate ordering
+   change (design §K, batches 5A-4/5A-6), so the existing execution path stays
+   byte-identical in this batch. */
+export {
+  PrismaExecutionClaimRepository,
+  assertExecutionClaimSchema,
+} from "./prisma-execution-claim-repository";
+export type {
+  ExecutionClaimPrismaClient,
+  PrismaExecutionClaimRepositoryOptions,
+} from "./prisma-execution-claim-repository";
+
 /** What the composition helper accepts — a handle, or a bare client. */
 export type WorkforceLifecycleClientLike = WorkforcePrismaHandle | PrismaClient;

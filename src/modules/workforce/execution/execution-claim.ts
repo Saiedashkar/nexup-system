@@ -191,6 +191,37 @@ export type ExecutionClaimRequest = {
   leaseTtlMs?: number;
 };
 
+/**
+ * The typed, FAIL-CLOSED refusal for a caller whose `(taskId, attempt)` is
+ * already held under a DIFFERENT idempotency key.
+ *
+ * `taskId + attempt` is the semantic identity of an execution attempt; the key
+ * is only its deterministic spelling. When the two disagree, some upstream
+ * derivation has drifted, and the safe answer is to REFUSE — never to classify
+ * the caller as an ordinary retry (which would hand it, or imply, the existing
+ * attempt's authority), and never to create a second row. The stored claim is
+ * left exactly as it was, and no dispatch permission can come out of this.
+ *
+ * Shared so the in-memory reference and the durable adapter cannot disagree
+ * about what the mismatch means.
+ */
+export function attemptIdempotencyMismatch(
+  request: ExecutionClaimRequest,
+  stored: ExecutionClaim,
+): AiWorkforceError {
+  return new AiWorkforceError(
+    "ATTEMPT_IDEMPOTENCY_MISMATCH",
+    `Execution attempt ${stored.attempt} of task "${stored.taskId}" is already claimed under key "${stored.idempotencyKey}", but the caller supplied "${request.idempotencyKey}"`,
+    {
+      claimId: stored.id,
+      taskId: stored.taskId,
+      attempt: stored.attempt,
+      storedKey: stored.idempotencyKey,
+      suppliedKey: request.idempotencyKey,
+    },
+  );
+}
+
 /* ═══════════════════════════════════════════════════════
    Recovery verdicts
    ═══════════════════════════════════════════════════════ */
@@ -245,7 +276,21 @@ export type ExecutionClaimRecovery =
  */
 export function recoveryForClaim(
   claim: ExecutionClaim,
-  options: { now: Date; requester?: string },
+  options: {
+    now: Date;
+    requester?: string;
+    /**
+     * The AUTHORITATIVE liveness answer, when the caller already has one.
+     *
+     * A durable ledger must not decide this with application date arithmetic:
+     * instance A's clock is not evidence about instance B's lease. When the
+     * storage layer computed liveness itself — as PostgreSQL does, in the same
+     * query that read the row — it supplies the answer here and it WINS over
+     * `now`. Only the in-memory reference, which owns the one and only clock it
+     * can see, leaves this unset.
+     */
+    leaseIsLive?: boolean;
+  },
 ): ExecutionClaimRecovery {
   if (claim.state === "DISPATCHED" && claim.executionRecordId) {
     return {
@@ -258,8 +303,12 @@ export function recoveryForClaim(
 
   // A `DISPATCHED` row without a record is not adoptable — fall through to the
   // same doubt as `DISPATCHING`, because the durable identity is missing.
+  // ONE liveness answer for the whole verdict: the caller's authoritative boolean
+  // when it has one, otherwise arithmetic on the clock it supplied.
+  const live = options.leaseIsLive ?? isLeaseLive(claim, options.now);
+
   if (claim.state === "DISPATCHING") {
-    if (isLeaseLive(claim, options.now) && !leaseHeldBy(claim, options.requester)) {
+    if (live && !leaseHeldBy(claim, options.requester)) {
       return { kind: "IN_PROGRESS", reason: "LIVE_LEASE_HELD", claim, leaseOwner: claim.leaseOwner };
     }
     return {
@@ -281,7 +330,7 @@ export function recoveryForClaim(
   }
 
   // CLAIMED / RELEASED — dispatch was never entered.
-  if (isLeaseLive(claim, options.now) && !leaseHeldBy(claim, options.requester)) {
+  if (live && !leaseHeldBy(claim, options.requester)) {
     return { kind: "IN_PROGRESS", reason: "LIVE_LEASE_HELD", claim, leaseOwner: claim.leaseOwner };
   }
   return {
@@ -346,7 +395,15 @@ export interface ExecutionClaimRepository {
   /** The recovery verdict for one claim. Never dispatches; never mutates. */
   recoveryFor(claimId: string, options?: { requester?: string }): Promise<ExecutionClaimRecovery | null>;
 
-  count(): number;
+  /**
+   * How many claims the ledger holds.
+   *
+   * ASYNC, and corrected in Step 5A-2: the durable adapter cannot answer a
+   * count without a round trip, so a synchronous signature would have made the
+   * port itself unimplementable against a database — the one thing a port must
+   * never be. Callers `await` it.
+   */
+  count(): Promise<number>;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -377,6 +434,11 @@ function clone(claim: ExecutionClaim): ExecutionClaim {
   return { ...claim };
 }
 
+/** Collision-free key for the in-memory `UNIQUE (taskId, attempt)` index. */
+function attemptIdentityKey(taskId: string, attempt: number): string {
+  return JSON.stringify([taskId, attempt]);
+}
+
 /**
  * In-memory claim ledger — the REFERENCE implementation of the semantics.
  *
@@ -397,6 +459,12 @@ export class InMemoryExecutionClaimRepository implements ExecutionClaimRepositor
   private readonly byId = new Map<string, ExecutionClaim>();
   /** idempotencyKey → claim id. The unique index, in memory. */
   private readonly byKey = new Map<string, string>();
+  /**
+   * `taskId + attempt` → claim id. The OTHER unique index, in memory — the
+   * mirror of the durable `UNIQUE (taskId, attempt)`. It exists so the reference
+   * enforces attempt IDENTITY, not merely key spelling, exactly as PostgreSQL does.
+   */
+  private readonly byAttempt = new Map<string, string>();
 
   constructor(private readonly deps: ExecutionClaimRepositoryDeps) {}
 
@@ -411,6 +479,16 @@ export class InMemoryExecutionClaimRepository implements ExecutionClaimRepositor
     const existingId = this.byKey.get(request.idempotencyKey);
 
     if (existingId === undefined) {
+      // FAIL CLOSED on an identity mismatch. The key is absent, but this
+      // `(taskId, attempt)` may already be held under a DIFFERENT key — the
+      // mirror of the durable attempt-identity constraint. Attempt identity
+      // governs, so refuse rather than mint a second authority for one attempt.
+      const heldId = this.byAttempt.get(attemptIdentityKey(request.taskId, request.attempt));
+      if (heldId !== undefined) {
+        const held = this.byId.get(heldId);
+        if (held) throw attemptIdempotencyMismatch(request, clone(held));
+      }
+
       const at = now.toISOString();
       const claim: ExecutionClaim = {
         id: this.deps.ids.next("claim"),
@@ -429,6 +507,7 @@ export class InMemoryExecutionClaimRepository implements ExecutionClaimRepositor
       if (request.runtimeId) claim.runtimeId = request.runtimeId;
       this.byId.set(claim.id, claim);
       this.byKey.set(claim.idempotencyKey, claim.id);
+      this.byAttempt.set(attemptIdentityKey(claim.taskId, claim.attempt), claim.id);
       return { kind: "CLAIMED", claim: clone(claim) };
     }
 
@@ -566,7 +645,7 @@ export class InMemoryExecutionClaimRepository implements ExecutionClaimRepositor
     return recoveryForClaim(claim, { now: this.deps.now(), ...(options.requester ? { requester: options.requester } : {}) });
   }
 
-  count(): number {
+  async count(): Promise<number> {
     return this.byId.size;
   }
 

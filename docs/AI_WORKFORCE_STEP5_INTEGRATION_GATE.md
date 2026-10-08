@@ -256,7 +256,16 @@ feature branch is additive on top of `cec9056`; `master` is untouched at
 ## 13. Roadmap (unchanged)
 
 ```
-STEP 1/8 ✅   STEP 2/8 ✅   STEP 3/8 ✅   STEP 4/8 ✅
-STEP 5/8 🟡 — awaiting production migration approval
-STEP 6/8 ⏳   STEP 7/8 ⏳   STEP 8/8 ⏳
+STEP 1/8 ✅ Command Center
+STEP 2/8 ✅ Production Bridge
+STEP 3/8 ✅ First NEXUP → Bridge → Hermes run
+STEP 4/8 ✅ First real Agent
+STEP 5/8 🟡 Mission Lifecycle / Production activation — awaiting production migration approval
+STEP 6/8 ⏳ Real Command Center data
+STEP 7/8 ⏳ Character identities
+STEP 8/8 ⏳ Full end-to-end wow moment
 ```
+
+The measurable state behind this label — and the exact delta a production apply
+would produce — is in
+[`AI_WORKFORCE_STEP5_PRODUCTION_PREFLIGHT.md`](AI_WORKFORCE_STEP5_PRODUCTION_PREFLIGHT.md).

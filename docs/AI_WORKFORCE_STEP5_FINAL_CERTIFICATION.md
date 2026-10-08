@@ -6,14 +6,14 @@ mutations: NONE. Step 6: NOT STARTED.** No paid provider credits were spent; all
 testing was deterministic and local.
 
 ```
-STEP 1/8 ✅   mission lifecycle foundation
-STEP 2/8 ✅   persistence (Mission/Task/Execution/Review/Command intent)
-STEP 3/8 ✅   agent bridge + capability authorization
-STEP 4/8 ✅   async execution, cancellation, retry, reconciliation
-STEP 5/8 🟡   READY FOR OWNER PRODUCTION APPROVAL  (dev-proven; production not migrated)
-STEP 6/8 ⏳   NOT STARTED
-STEP 7/8 ⏳
-STEP 8/8 ⏳
+STEP 1/8 ✅   Command Center
+STEP 2/8 ✅   Production Bridge
+STEP 3/8 ✅   First NEXUP → Bridge → Hermes run
+STEP 4/8 ✅   First real Agent
+STEP 5/8 🟡   Mission Lifecycle / Production activation  (dev-proven; production not migrated)
+STEP 6/8 ⏳   Real Command Center data — NOT STARTED
+STEP 7/8 ⏳   Character identities
+STEP 8/8 ⏳   Full end-to-end wow moment
 ```
 
 ---

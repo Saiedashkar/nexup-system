@@ -253,15 +253,18 @@ of it; nothing in production depends on any of it.
 ## 8. Roadmap
 
 ```
-STEP 1/8 ✅
-STEP 2/8 ✅
-STEP 3/8 ✅
-STEP 4/8 ✅   ← safety closure complete, live cancel proven
-STEP 5/8 🟡 BLOCKED
-STEP 6/8 ⏳ NOT STARTED
-STEP 7/8 ⏳
-STEP 8/8 ⏳
+STEP 1/8 ✅ Command Center
+STEP 2/8 ✅ Production Bridge
+STEP 3/8 ✅ First NEXUP → Bridge → Hermes run
+STEP 4/8 ✅ First real Agent
+STEP 5/8 🟡 Mission Lifecycle / Production activation
+STEP 6/8 ⏳ Real Command Center data — NOT STARTED
+STEP 7/8 ⏳ Character identities
+STEP 8/8 ⏳ Full end-to-end wow moment
 ```
+
+Audit note: the Step-4 safety closure and the live-cancel proof were work done
+*inside* Step 4's scope, not a redefinition of the step.
 
 **Exact action required to close Step 5:** the owner must approve applying
 `prisma/proposed-migrations/AI_WORKFORCE_PHASE_2/migration.sql` (preceded by

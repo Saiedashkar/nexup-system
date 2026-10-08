@@ -10,6 +10,28 @@ been activated on a real deployment. See "GO / NO-GO" at the end.
 
 ---
 
+## 0. PREFLIGHT RESULT — MEASURED (2026-10-08)
+
+> **The prerequisite in §3 was finally read, from production itself, read-only.**
+> Full report: [`AI_WORKFORCE_STEP5_PRODUCTION_PREFLIGHT.md`](AI_WORKFORCE_STEP5_PRODUCTION_PREFLIGHT.md);
+> raw evidence: [`docs/evidence/step5-production-preflight-readonly.json`](evidence/step5-production-preflight-readonly.json);
+> repeat with `node scripts/check-production-preflight-readonly.mjs`.
+
+| Prerequisite | Measured reality |
+|---|---|
+| `_prisma_migrations` lists all 14 | **The table does not exist.** 0 of 14 recorded. |
+| Production's real ledger | Supabase CLI: `supabase_migrations.schema_migrations`, 3 entries (`add_mcp_audit_log`, `add_mcp_pending_action`, `add_capital_ledger_and_fixed_expenses`) |
+| 14 migrations' *schema effects* | **present** — production's 28 modelled legacy tables match the branch-point datamodel fingerprint exactly (`0e72c9ecdfd4a470…`, 282 columns) |
+| Any proposed object already applied | **none** — 0 `ai_*` tables, 0 `Ai*` enums, 0 of 84 net objects |
+| Objects 1B would drop | **absent** — the DROP is a guaranteed no-op; **no data-loss risk** |
+| Exact delta (authoritative diff vs production) | 7 enums, 9 tables, 52 indexes, 9 FKs, 7 columns — **all `ai_*`, nothing else**; no legacy change, nothing dropped |
+| Pre-existing drift (NOT this batch) | `McpAuditLog` (12 rows) + `McpPendingAction` (2 rows) unmodelled; `OfficeExpense_fixedExpenseId_idx` undeclared; `CapitalSpend_fixedExpenseId_key` missing (0 rows use that column) |
+
+**Consequences for this package: §6 Path A is STRUCK OUT, and its Path-B history
+step is corrected below. Never run `prisma db push` against production (§6, §11).**
+
+---
+
 ## 1. What would be applied
 
 Four files, applied in this order. Each is committed, and each is the exact
@@ -110,6 +132,12 @@ production's `_prisma_migrations`.** If that table does not list all 14
 registered migrations with `finished_at` set, `prisma migrate deploy` would
 attempt to replay the chain and fail at `20260824120000` — do **not** run it.
 
+**MEASURED (2026-10-08): the table does not exist, so this is settled — Path A is
+struck out and Path B is the only route.** Production's schema is managed by the
+Supabase CLI ledger, not by Prisma; the 14 migrations' *effects* are present but
+their *identities* are recorded nowhere Prisma can see (production even carries
+`Client_businessId_phone_key` where the chain would generate `Client_phone_key`).
+
 ---
 
 ## 4. Pre-flight checks (read-only)
@@ -118,14 +146,16 @@ Against the production database, via the project's normal connection:
 
 1. `select count(*) from "_prisma_migrations" where finished_at is not null;`
    → **must be 14**. If it is not (or the table is missing), use the
-   `db execute` path in §6.
+   `db execute` path in §6. **MEASURED 2026-10-08: the table is missing (0 of 14)
+   → §6 Path B, never Path A.**
 2. `select count(*) from "_prisma_migrations" where rolled_back_at is not null;`
    → **must be 0**.
 3. Confirm none of the 9 target tables already exist:
    `select table_name from information_schema.tables where table_schema='public' and table_name in
    ('ai_jobs','ai_runs','ai_run_events','ai_approvals','ai_missions','ai_tasks','ai_execution_records','ai_task_reviews','ai_command_intents');`
    → **must return 0 rows**. If any exists, the batch is partly applied: resolve
-   with the owner before continuing.
+   with the owner before continuing. **MEASURED 2026-10-08: 0 rows returned —
+   nothing is partly applied.**
 4. Confirm the legacy shape is intact (optional but cheap): `select count(*) from
    information_schema.tables where table_schema='public' and table_type='BASE TABLE';`
    → **28** expected (the branch-point datamodel's table count).
@@ -152,7 +182,15 @@ Against the production database, via the project's normal connection:
 
 ## 6. Exact apply procedure
 
-### Path A — production's migration history is complete (14 applied)
+### Path A — STRUCK OUT (production's history is not complete)
+
+> **Do not use Path A.** Measured 2026-10-08: `_prisma_migrations` does not exist
+> in production, so `prisma migrate deploy` would treat all 14 registered
+> migrations as pending and replay the chain onto a populated database — which
+> fails immediately, and additionally cannot replay onto an empty database
+> (§3). The historical procedure is kept below only for the record.
+
+#### (historical) Path A — production's migration history is complete (14 applied)
 
 ```bash
 # 1. move the files into the registered history, in order, with real timestamps
@@ -169,10 +207,14 @@ npx prisma migrate deploy
 # 4. verify (§8), then commit the moved files so the history is honest
 ```
 
-### Path B — production's `_prisma_migrations` is NOT complete
+### Path B — the route to use (production's Prisma history does not exist)
 
 Do **not** run `migrate deploy`. Apply the committed SQL directly, in order, and
-record it so the history stays truthful:
+record it so the history stays truthful. **Run this from a host that can reach the
+database**: the direct Supabase host is IPv6-only, so from an IPv4-only
+workstation use the project's Supavisor pooler
+(`aws-1-eu-west-1.pooler.supabase.com`, user `postgres.<ref>`) without editing any
+configuration file.
 
 ```bash
 # one file at a time, in order, each in its own statement batch
@@ -185,6 +227,23 @@ npx prisma db execute --file prisma/proposed-migrations/AI_WORKFORCE_PHASE_3/mig
 # (repeat per phase, with the timestamped name you chose)
 npx prisma migrate resolve --applied 20261008000000_ai_workforce_phase_1a
 ```
+
+> **CORRECTED 2026-10-08 — the `resolve` step above is wrong as written.**
+> `migrate resolve --applied` creates `_prisma_migrations` containing *only* the
+> names you give it. Recording the four new ones alone leaves the 14 legacy
+> migrations unrecorded, after which **any later `migrate deploy` — yours or CI's —
+> would attempt the legacy chain against production.** Owner decision, one of:
+>
+> - **baseline first:** record the 14 as applied (`migrate resolve --applied
+>   <name>` per migration — metadata only, it runs no SQL), *then* apply the four
+>   files and record them; or
+> - **keep no Prisma ledger here:** production is already tracked by the Supabase
+>   CLI ledger (3 entries), so apply the four files and record them through the
+>   same mechanism `prisma/migrations/` is treated as a historical artifact.
+>
+> Either way: **never run `prisma db push` against production** — it would drop
+> `McpAuditLog` and `McpPendingAction` (14 live rows) because the datamodel does
+> not describe them.
 
 `db execute` runs the file as one batch per statement and writes nothing else.
 Whichever path is used, the SQL is **byte-identical** to what the evidence file
@@ -293,12 +352,22 @@ schema-level, and neither blocks applying the additive DDL:
    are wired to the durable composition, but the Command Center still reads its
    demo model by design (Step 6), and no route has been exercised against a
    deployed origin.
-2. **Activation is an explicit owner decision, and its prerequisite is not
-   verified from this host.** The pre-flight this package depends on — that
-   `_prisma_migrations` lists all 14 registered migrations — could not be read
-   from this machine (DNS `getaddrinfo ENOTFOUND db.<ref>.supabase.co`; the
-   read-only check exits 2 and mutates nothing). It must be re-run from a host
-   that can reach the pooler before the migration path is chosen.
+2. **Activation is an explicit owner decision, and its prerequisite is now
+   MEASURED (2026-10-08).** The pre-flight this package depends on was read from
+   production read-only — through the project's IPv4 Supavisor pooler, because the
+   configured host is IPv6-only and this workstation has no IPv6 route. Result:
+   `_prisma_migrations` does not exist; 0 of 14 applied; 0 of 84 proposed objects
+   present; both 1B DROP targets absent (no data-loss risk); the 28 modelled legacy
+   tables still match the branch-point fingerprint exactly. The migration path is
+   therefore **Path B with the corrected history step in §6**, and Path A is struck
+   out. See `AI_WORKFORCE_STEP5_PRODUCTION_PREFLIGHT.md`.
+
+3. **Two pre-existing drift items are NOT part of this batch** and need their own
+   owner decision: production has `McpAuditLog` (12 rows) and `McpPendingAction`
+   (2 rows) that `schema.prisma` does not describe, plus one undeclared index
+   (`OfficeExpense_fixedExpenseId_idx`) and one missing unique index
+   (`CapitalSpend_fixedExpenseId_key`, which constrains nothing today — 0 rows use
+   that column). Applying the four files touches none of them.
 
 Two blockers a previous revision of this document recorded are now **closed**,
 and were replaced rather than softened:

@@ -59,5 +59,10 @@ export type {
   PrismaExecutionClaimRepositoryOptions,
 } from "./prisma-execution-claim-repository";
 
+/* ── Step 5A-3 — the AUTHORITATIVE business-scope resolver ──
+   Resolves an opaque business reference (slug OR database id) to the existing
+   `Business` registry row. No second registry is introduced. */
+export { prismaBusinessScopeResolver } from "./prisma-business-scope";
+
 /** What the composition helper accepts — a handle, or a bare client. */
 export type WorkforceLifecycleClientLike = WorkforcePrismaHandle | PrismaClient;

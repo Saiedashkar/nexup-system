@@ -6,16 +6,23 @@ import type { Clock, IdFactory } from "@/modules/ai-workforce/core/types";
 import type { WorkforcePrismaHandle } from "@/modules/ai-workforce/persistence/prisma-client";
 
 import { ExecutionReconciler } from "../execution/execution-reconciler";
+import {
+  createConfiguredHumanActorResolver,
+  type BusinessScopeResolver,
+  type HumanActorResolver,
+} from "../execution/authority-resolution";
 import type { WorkforceDomain } from "../index";
 import { createMissionOrchestrator, type MissionOrchestrator, type ReviewPolicy } from "../orchestration/mission-orchestrator";
 import { bootstrapStrategyAnalyst } from "../orchestration/strategy-analyst";
-import { execActorRegistration, founderActorRegistration } from "../actors/exec-actor";
+import { execActorRegistration, founderActorRegistration, humanActorRegistration } from "../actors/exec-actor";
+import type { ActorRegistrationInput } from "../actors/actor-contracts";
 import { createWorkforceDomainFromPrisma } from "../persistence/prisma-composition";
 import { PrismaCommandIntentRepository } from "../persistence/prisma-command-intent-repository";
 import type { AgentRuntime } from "../runtimes/agent-runtime";
 import type { CommandCenterQueries } from "../queries/command-center";
 
 import type { CommandTaskRouter } from "./command-contracts";
+import { MissionAccessService } from "./mission-access";
 import { WorkforceCommandService } from "./command-service";
 
 /**
@@ -54,6 +61,26 @@ export type WorkforceApplicationOptions = {
   reviewPolicy?: ReviewPolicy;
   /** The human who decides when a mission's owner is not a person. */
   defaultReviewerActorId?: string;
+  /**
+   * Config-seeded `userId → actorId` mapping for the authenticated HUMAN actor
+   * roster. Empty by default: an unmapped user FAILS CLOSED (AUTHORITY_UNRESOLVED)
+   * rather than impersonating the Founder. The durable roster is a later gap.
+   */
+  humanActorMap?: Record<string, readonly string[]>;
+  /** The authoritative business registry used for scope checks. Absent = none can be verified. */
+  businessScope?: BusinessScopeResolver;
+  /**
+   * ADDITIONAL human authorities to register alongside the Founder, as
+   * `{ id, slug, displayName }`. Empty by default.
+   *
+   * These exist so a proof can attribute a decision to a NAMED person rather than
+   * the Founder channel, which is the only way to demonstrate that a decision's
+   * identity follows the authenticated user's resolution instead of a constant.
+   * The running application supplies them ONLY in proof mode (a verified loopback
+   * database with the deterministic test transport); production passes none, so
+   * this is not a roster and not a production configuration surface.
+   */
+  humanActorSeeds?: ReadonlyArray<{ id: string; slug: string; displayName: string; role?: string }>;
   /** Defaults to true. A composition with no runtime refuses to start. */
   requireRuntime?: boolean;
   /** Pre-built dispatcher, for a caller that wants its own. */
@@ -79,6 +106,12 @@ export type WorkforceApplication = {
   /** The durable idempotency ledger this application claims commands in. */
   intents: PrismaCommandIntentRepository;
   routing: WorkforceRouting;
+  /** Resolves an authenticated user to the HUMAN actor that represents them. */
+  humanActors: HumanActorResolver;
+  /** The authoritative business registry, when one is configured. */
+  businesses?: BusinessScopeResolver;
+  /** Business-scope authorization over mission/review/query surfaces. */
+  access: MissionAccessService;
   bootstrap: { persistence: "DATABASE"; externalCalls: false };
   /** The provider-neutral re-adoption service (restart recovery). */
   reconciler: ExecutionReconciler;
@@ -121,6 +154,13 @@ export async function createWorkforceApplication(
   const domain = createWorkforceDomainFromPrisma(client, { ids, now });
   await domain.actors.register(execActorRegistration());
   await domain.actors.register(founderActorRegistration());
+  for (const seed of options.humanActorSeeds ?? []) {
+    const registration: ActorRegistrationInput = humanActorRegistration(seed);
+    // Idempotent, like the two seeds above: a re-composed process must not fail
+    // because the actor already exists.
+    const existing = await domain.actors.get(registration.id);
+    if (!existing) await domain.actors.register(registration);
+  }
 
   const bootstrap = await bootstrapStrategyAnalyst(domain, {
     ...(options.runtime ? { runtime: options.runtime } : {}),
@@ -184,6 +224,19 @@ export async function createWorkforceApplication(
 
   const commands = new WorkforceCommandService({ domain, orchestrator, intents, route, reconciler });
 
+  // Authenticated authority, resolved from SERVER-SIDE configuration. The map is
+  // empty unless the operator seeds it, so the default posture is fail-closed.
+  const humanActors = createConfiguredHumanActorResolver({
+    directory: domain.actors,
+    mapping: options.humanActorMap ?? {},
+  });
+  const access = new MissionAccessService({
+    missions: domain.missions,
+    missionList: domain.missionRepository,
+    reviews: domain.reviews,
+    ...(options.businessScope ? { businesses: options.businessScope } : {}),
+  });
+
   return {
     domain,
     orchestrator,
@@ -192,6 +245,9 @@ export async function createWorkforceApplication(
     intents,
     reconciler,
     routing,
+    humanActors,
+    ...(options.businessScope ? { businesses: options.businessScope } : {}),
+    access,
     bootstrap: { persistence: "DATABASE", externalCalls: false },
   };
 }

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkforceActor } from "@/modules/ai-workforce/adapters/api-guard";
 import { workforceErrorResponse } from "@/modules/ai-workforce/adapters/api-response";
 import { getWorkforceApplication } from "@/modules/workforce/application";
+import { authorityFromAuthenticatedActor } from "@/modules/workforce/execution/session-authority";
 import type { MissionId } from "@/modules/workforce/core/refs";
 
 export const runtime = "nodejs";
@@ -20,6 +21,11 @@ type RouteContext = { params: Promise<{ id: string }> };
  *      (never from process memory), settles anything already in flight through
  *      the runtime port, and promotes what is dispatchable — starting at most
  *      ONE task, so a retry cannot stampede a real provider.
+ *
+ * BOTH verbs AUTHORIZE the mission's business FIRST. A mission outside the
+ * caller's authenticated scope is refused with the typed `BUSINESS_SCOPE_DENIED`,
+ * which the error mapping turns into a 404 — so the response does not reveal
+ * whether the mission exists.
  */
 export async function GET(_request: NextRequest, { params }: RouteContext) {
   try {
@@ -28,6 +34,16 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
 
     const { id } = await params;
     const application = await getWorkforceApplication();
+    const authority = await authorityFromAuthenticatedActor({
+      actor: guard.actor,
+      humanActors: application.humanActors,
+    });
+
+    // 404-alike on a scope refusal: authorize BEFORE reading anything else. The
+    // redacting variant makes a cross-business mission indistinguishable from a
+    // missing one, so the response cannot reveal that the mission exists.
+    await application.access.authorizeMissionByIdForCaller(authority, id as MissionId);
+
     const snapshot = await application.commands.snapshot(id as MissionId);
     return NextResponse.json(snapshot);
   } catch (error) {
@@ -44,6 +60,12 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     const body = (await request.json().catch(() => null)) as { startNext?: boolean; waitTimeoutMs?: number } | null;
 
     const application = await getWorkforceApplication();
+    const authority = await authorityFromAuthenticatedActor({
+      actor: guard.actor,
+      humanActors: application.humanActors,
+    });
+    await application.access.authorizeMissionByIdForCaller(authority, id as MissionId);
+
     const wait =
       typeof body?.waitTimeoutMs === "number" && body.waitTimeoutMs > 0 ? { waitTimeoutMs: body.waitTimeoutMs } : {};
     // startNext:false reconciles the mission WITHOUT dispatching, for a caller

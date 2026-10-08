@@ -14,11 +14,16 @@ const STATUS_BY_CODE: Partial<Record<AiWorkforceErrorCode, number>> = {
   RUN_NOT_FOUND: 404,
   APPROVAL_NOT_FOUND: 404,
   TOOL_NOT_FOUND: 404,
+  MISSION_NOT_FOUND: 404,
   // Authorisation
   PERMISSION_DENIED: 403,
   SCOPE_DENIED: 403,
   SCOPE_MISSING: 403,
   APPROVAL_FORBIDDEN: 403,
+  AUTHORITY_UNRESOLVED: 403,
+  // 404-alike ON PURPOSE: a business-scope refusal must not reveal whether the
+  // object exists. Internally the typed reason is preserved for safe logging.
+  BUSINESS_SCOPE_DENIED: 404,
   // Conflicts / one-way doors
   APPROVAL_ALREADY_DECIDED: 409,
   JOB_CONCURRENT_UPDATE: 409,

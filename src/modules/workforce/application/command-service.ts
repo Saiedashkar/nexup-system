@@ -145,8 +145,14 @@ export class WorkforceCommandService {
       const mission = await this.deps.orchestrator.createMission({
         title: command.title,
         goal: command.goal,
-        createdBy: command.requestedBy,
-        owner: command.owner ?? command.requestedBy,
+        // IDENTITY VOCABULARY. `createdBy` and `owner` are ACTOR ids; only the
+        // command's `requestedBy` is a USER id (and it is used for the intent
+        // ledger, not written into the mission's actor fields). The fallback
+        // chain exists so a caller that supplies only actor identities keeps the
+        // pre-existing behaviour, while the live path supplies `createdBy`
+        // explicitly from the resolved authenticated actor.
+        createdBy: command.createdBy ?? command.owner ?? command.requestedBy,
+        owner: command.owner ?? command.createdBy ?? command.requestedBy,
         priority: command.priority ?? "NORMAL",
         ...(command.businessId ? { businessId: command.businessId } : {}),
         ...(command.workspaceRef ? { workspaceRef: command.workspaceRef } : {}),

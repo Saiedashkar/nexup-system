@@ -58,9 +58,25 @@ export type MissionCommand = {
   scope: string;
   title: string;
   goal: string;
-  /** The human or actor submitting this command. */
+  /**
+   * The authenticated USER submitting this command — a user identity, and the
+   * only place in a command that speaks it.
+   *
+   * It is NOT the mission's creator: `createdBy`/`owner` are ACTOR identities,
+   * and a UserId in either field would be a vocabulary error (the audit found
+   * exactly that mixture). The two are deliberately distinct fields.
+   */
   requestedBy: string;
-  /** Who is accountable for the mission; defaults to the requester. */
+  /**
+   * The ACTOR that created the mission. An actor id, never a user id.
+   *
+   * Optional on the wire so an in-process caller can derive it, but the live
+   * command path sets it explicitly from the resolved authenticated actor. When
+   * omitted it falls back to `owner`, then to `requestedBy`, preserving the
+   * pre-existing behaviour for callers that only ever supplied actor ids.
+   */
+  createdBy?: string;
+  /** Who is accountable for the mission (an ACTOR id); defaults to the creator. */
   owner?: string | null;
   priority?: MissionPriority;
   businessId?: string;
@@ -204,6 +220,12 @@ export function parseMissionCommand(raw: unknown): MissionCommand {
     tasks,
   };
 
+  // `createdBy` is an ACTOR id; `requestedBy` above is the USER id. They are parsed
+  // as separate fields on purpose, so a caller cannot collapse the vocabularies by
+  // passing only one of them.
+  const createdBy = optionalText(raw.createdBy, "createdBy must be a string");
+  if (createdBy !== undefined) command.createdBy = createdBy;
+
   const owner = optionalText(raw.owner, "owner must be a string or null");
   if (owner !== undefined) command.owner = owner;
 
@@ -246,6 +268,7 @@ export function commandFingerprint(command: MissionCommand): string {
     title: command.title,
     goal: command.goal,
     requestedBy: command.requestedBy,
+    createdBy: command.createdBy ?? null,
     owner: command.owner ?? null,
     priority: command.priority ?? "NORMAL",
     businessId: command.businessId ?? null,

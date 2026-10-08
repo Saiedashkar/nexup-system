@@ -17,5 +17,6 @@
 export * from "./command-contracts";
 export * from "./command-intent";
 export * from "./command-service";
+export * from "./mission-access";
 export * from "./composition";
 export * from "./runtime";

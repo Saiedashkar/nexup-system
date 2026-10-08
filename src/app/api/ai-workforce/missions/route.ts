@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireWorkforceActor } from "@/modules/ai-workforce/adapters/api-guard";
 import { workforceErrorResponse } from "@/modules/ai-workforce/adapters/api-response";
-import { getWorkforceApplication, workforceApplicationStatus } from "@/modules/workforce/application";
+import {
+  buildAuthorizedMissionCommand,
+  getWorkforceApplication,
+  MissionAccessService,
+  workforceApplicationStatus,
+} from "@/modules/workforce/application";
+import { resolveRequestedBusiness } from "@/modules/workforce/execution/authority-resolution";
+import { authorityFromAuthenticatedActor } from "@/modules/workforce/execution/session-authority";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,13 +22,18 @@ export const dynamic = "force-dynamic";
  *   Command (idempotency key) → durable Mission → Task plan → Actor
  *   → Capability authorisation → Runtime → Execution → Result → Review
  *
- * The actor comes from the session, never from the payload: `requestedBy` is the
- * signed-in user and `idempotencyKey` is the caller's retry token. A duplicate
- * submit with the same key returns the SAME mission (200, `replayed: true`) and
- * advances nothing, so a client's retry cannot cause a second real execution.
+ * IDENTITY IS SERVER-DERIVED. The route builds an `ExecutionAuthority` from the
+ * session AND the resolved HUMAN actor, then builds the command from that
+ * authority: `requestedBy` is the signed-in user and `owner` is the resolved
+ * actor. A payload can neither set them nor name another owner, and it cannot
+ * smuggle an unverified `businessId` past the scope check below.
  *
- * GET is the read-only Active Missions surface the Command Center will draw.
- * Neither verb replaces any UI mock — Step 6 is what wires the screens.
+ * BUSINESS SCOPE. A caller may name a business they already reach (narrowing);
+ * naming one outside their scope is refused, and an unverifiable reference is
+ * refused rather than ignored.
+ *
+ * GET is the read-only Active Missions surface the Command Center will draw,
+ * filtered to the caller's authorized businesses SERVER-SIDE.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -42,14 +54,27 @@ export async function GET(request: NextRequest) {
 
     const limit = Number(request.nextUrl.searchParams.get("limit") ?? 25);
     const application = await getWorkforceApplication();
+    const authority = await authorityFromAuthenticatedActor({
+      actor: guard.actor,
+      humanActors: application.humanActors,
+    });
     const bounded = Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 100) : 25;
 
-    const [activeMissions, executionStatus, recentActivity, decisionQueue] = await Promise.all([
+    // Resolve the caller's authorized missions ONCE, then filter every surface
+    // against that set. `null` means "all" (super-admin).
+    const visible = await application.access.authorizedMissionIds(authority, bounded * 4);
+
+    const [allMissions, allExecution, allActivity, allDecisions] = await Promise.all([
       application.queries.activeMissions(bounded),
       application.queries.executionStatus({ limit: bounded }),
       application.queries.recentActivity(bounded),
       application.queries.decisionQueue(bounded),
     ]);
+
+    const activeMissions = allMissions.filter((row) => MissionAccessService.allows(visible, row.missionId));
+    const executionStatus = allExecution.filter((row) => MissionAccessService.allows(visible, row.missionId));
+    const recentActivity = allActivity.filter((row) => MissionAccessService.allows(visible, row.missionId));
+    const decisionQueue = allDecisions.filter((row) => MissionAccessService.allows(visible, row.missionId));
 
     return NextResponse.json({
       count: activeMissions.length,
@@ -76,15 +101,23 @@ export async function POST(request: NextRequest) {
     if (!body) return NextResponse.json({ error: "A JSON body is required" }, { status: 400 });
 
     const application = await getWorkforceApplication();
+    const authority = await authorityFromAuthenticatedActor({
+      actor: guard.actor,
+      humanActors: application.humanActors,
+    });
 
-    // The session owns identity; the payload owns the work. A payload can never
-    // set `requestedBy`, and a payload without a key is refused by the parser.
-    const command = {
-      ...body,
-      requestedBy: guard.actor.userId,
-      scope: typeof body.scope === "string" && body.scope.trim() ? body.scope : `user:${guard.actor.userId}`,
-      owner: typeof body.owner === "string" && body.owner.trim() ? body.owner : "actor_founder",
-    };
+    // A business reference must resolve AND be within the caller's scope. Naming
+    // one narrows; it can never widen.
+    const reference =
+      typeof body.businessId === "string" && body.businessId.trim()
+        ? body.businessId
+        : typeof body.businessSlug === "string" && body.businessSlug.trim()
+          ? body.businessSlug
+          : undefined;
+    const business = await resolveRequestedBusiness(authority, application.businesses, reference);
+
+    // Identity comes from the authority; the payload owns only the work.
+    const command = buildAuthorizedMissionCommand({ body, authority, business });
 
     const outcome = await application.commands.issueCommand(command);
 

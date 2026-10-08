@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 
 import { SignJWT } from "jose";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 /**
  * STEP 5/8 — THE HTTP BOUNDARY.
@@ -29,8 +29,18 @@ const BASE_URL = process.env.WORKFORCE_API_BASE_URL;
 const AUTH_SECRET = process.env.AUTH_SECRET;
 const APP_DATABASE_URL = process.env.WORKFORCE_API_DATABASE_URL;
 const PSQL_BIN = process.env.PSQL_BIN || "C:\\Program Files\\PostgreSQL\\18\\bin\\psql.exe";
+// The canonical Business ids the proof seeded, and the second HUMAN actor it
+// registered — supplied by scripts/run-api-http-proof.sh.
+const NEXUP_BUSINESS_ID = process.env.WORKFORCE_PROOF_NEXUP_BUSINESS_ID;
+const REBOUND_BUSINESS_ID = process.env.WORKFORCE_PROOF_REBOUND_BUSINESS_ID;
+const PROOF_HUMAN_ACTOR_ID = process.env.WORKFORCE_PROOF_HUMAN_ACTOR_ID;
 
 const describeIfServer = BASE_URL && AUTH_SECRET ? describe : describe.skip;
+/** The cross-business proof additionally needs the seeded registry + actor. */
+const describeIfBusiness =
+  BASE_URL && AUTH_SECRET && NEXUP_BUSINESS_ID && REBOUND_BUSINESS_ID && PROOF_HUMAN_ACTOR_ID
+    ? describe
+    : describe.skip;
 
 /** The stack that may never appear in a response body. */
 const FORBIDDEN_IN_BODIES = [
@@ -323,6 +333,187 @@ describeIfServer("STEP 5 — the AI Workforce HTTP routes, against a running ser
     expect([404, 409]).toContain(twice.status);
     expect(psql(`select state from "ai_task_reviews" where id = '${pending!.id}'`)).toBe("APPROVED");
   }, 90_000);
+
+  /* ═══════════════════════════════════════════════════════
+     CROSS-BUSINESS — genuine business-scoped sessions
+     ═══════════════════════════════════════════════════════ */
+
+  describeIfBusiness("STEP 5 — business scope over real signed sessions", () => {
+    /**
+     * A NON-super-admin session whose only business reach is the one named.
+     *
+     * It still carries `canAccessOfficeFinanceFull`, because the route-prefix
+     * middleware deliberately limits `/api/ai-workforce` to office-finance or
+     * super-admin sessions — that is the legacy posture, and it is NOT the same
+     * axis as business scope: the session reaches the module, but only for the
+     * business(es) its flags grant.
+     */
+    const scoped = (sub: string, flags: { nexup?: boolean; rebound?: boolean }) =>
+      mintSession({
+        sub,
+        name: `Scoped ${sub}`,
+        role: "ADMIN",
+        businessId: "scoped",
+        canAccessNexup: flags.nexup === true,
+        canAccessRebound: flags.rebound === true,
+        canAccessAbomazen: false,
+        canAccessOfficeFinanceFull: true,
+      });
+
+    let cookieA = "";
+    let cookieB = "";
+    let missionA = "";
+    let missionB = "";
+    let reviewB = "";
+
+    const cross = { auth: () => ({ cookie: cookieA, label: "business-a" }) };
+
+    beforeAll(async () => {
+      // A reaches nexup only; B reaches rebound only. Their USER ids differ and B
+      // resolves to a NAMED human actor that is not the Founder.
+      cookieA = await scoped("proof-user-1", { nexup: true });
+      cookieB = await scoped("proof-user-2", { rebound: true });
+
+      const a = await call("/api/ai-workforce/missions", {
+        method: "POST",
+        body: commandBody("xbiz-a", { businessId: "nexup" }),
+        auth: { cookie: cookieA, label: "business-a" },
+      });
+      if (a.status !== 201) throw new Error(`mission A was not created (${a.status}): ${a.text}`);
+      missionA = (a.body as { mission: { id: string } }).mission.id;
+
+      const b = await call("/api/ai-workforce/missions", {
+        method: "POST",
+        body: commandBody("xbiz-b", { businessId: "rebound" }),
+        auth: { cookie: cookieB, label: "business-b" },
+      });
+      if (b.status !== 201) throw new Error(`mission B was not created (${b.status}): ${b.text}`);
+      missionB = (b.body as { mission: { id: string } }).mission.id;
+
+      // Continue mission B to a pending human decision the B session may take.
+      const advanced = await call(`/api/ai-workforce/missions/${missionB}`, {
+        method: "POST",
+        auth: { cookie: cookieB, label: "business-b" },
+      });
+      expect(advanced.status).toBe(200);
+      reviewB = (advanced.body as { reviews: Array<{ id: string; state: string }> }).reviews.find(
+        (row) => row.state === "PENDING",
+      )!.id;
+    }, 90_000);
+
+    it("persists the CANONICAL Business.id and keeps the user/actor vocabularies apart", () => {
+      // The request named the SLUG; the row must hold the registry ID.
+      expect(psql(`select "businessId" from "ai_missions" where id = '${missionA}'`)).toBe(NEXUP_BUSINESS_ID);
+      expect(psql(`select "businessId" from "ai_missions" where id = '${missionA}'`)).not.toBe("nexup");
+      // The mission's identity fields are the resolved ACTOR id…
+      expect(psql(`select "createdBy" from "ai_missions" where id = '${missionA}'`)).toBe("actor_founder");
+      expect(psql(`select "owner" from "ai_missions" where id = '${missionA}'`)).toBe("actor_founder");
+      // …while the USER id lives only on the command intent ledger.
+      expect(
+        psql(`select "requestedBy" from "ai_command_intents" where "missionId" = '${missionA}'`),
+      ).toBe("proof-user-1");
+    });
+
+    it("reads its own business's mission", async () => {
+      const read = await call(`/api/ai-workforce/missions/${missionA}`, { auth: { cookie: cookieA, label: "a" } });
+      expect(read.status).toBe(200);
+      expect((read.body as { mission: { id: string; businessId?: string } }).mission.id).toBe(missionA);
+      expect((read.body as { mission: { businessId?: string } }).mission.businessId).toBe(NEXUP_BUSINESS_ID);
+    });
+
+    it("hides a cross-business mission behind the SAME 404-alike as a missing one", async () => {
+      const denied = await call(`/api/ai-workforce/missions/${missionB}`, { auth: cross.auth() });
+      const absent = await call("/api/ai-workforce/missions/mission_absent_from_this_proof", {
+        auth: cross.auth(),
+      });
+
+      expect(denied.status).toBe(404);
+      expect(absent.status).toBe(404);
+      // Indistinguishable: the same error code for "not yours" and "not there".
+      expect((denied.body as { error: string }).error).toBe("MISSION_NOT_FOUND");
+      expect((denied.body as { error: string }).error).toBe((absent.body as { error: string }).error);
+    });
+
+    it("refuses to advance/drain another business's mission (404-alike)", async () => {
+      const denied = await call(`/api/ai-workforce/missions/${missionB}`, {
+        method: "POST",
+        auth: cross.auth(),
+      });
+      expect(denied.status).toBe(404);
+      expect((denied.body as { error: string }).error).toBe("MISSION_NOT_FOUND");
+      // B's mission is untouched by A's refused attempt: the setup advanced it
+      // to WAITING (its task parked in REVIEW) and the refusal changed nothing.
+      expect(psql(`select state from "ai_missions" where id = '${missionB}'`)).toBe("WAITING");
+    });
+
+    it("hides a cross-business review behind the same 404-alike as a missing one", async () => {
+      const denied = await call("/api/ai-workforce/decisions", {
+        method: "POST",
+        body: { reviewId: reviewB, decision: "APPROVED" },
+        auth: cross.auth(),
+      });
+      const absent = await call("/api/ai-workforce/decisions", {
+        method: "POST",
+        body: { reviewId: "review_absent_from_this_proof", decision: "APPROVED" },
+        auth: cross.auth(),
+      });
+      expect(denied.status).toBe(404);
+      expect(absent.status).toBe(404);
+      expect((denied.body as { error: string }).error).toBe("APPROVAL_NOT_FOUND");
+      expect((denied.body as { error: string }).error).toBe((absent.body as { error: string }).error);
+      // The review is still PENDING — the refused attempt decided nothing.
+      expect(psql(`select state from "ai_task_reviews" where id = '${reviewB}'`)).toBe("PENDING");
+    });
+
+    it("records a same-business decision as the RESOLVED human actor, not actor_founder", async () => {
+      const decided = await call("/api/ai-workforce/decisions", {
+        method: "POST",
+        body: { reviewId: reviewB, decision: "APPROVED", note: "decided inside the business" },
+        auth: { cookie: cookieB, label: "business-b" },
+      });
+      expect(decided.status).toBe(200);
+
+      const actor = psql(`select coalesce("decidedBy",'none') from "ai_task_reviews" where id = '${reviewB}'`);
+      expect(actor).toBe(PROOF_HUMAN_ACTOR_ID);
+      // The defect being designed away: this is NOT the old constant.
+      expect(actor).not.toBe("actor_founder");
+    });
+
+    it("refuses payload actor/owner/business widening", async () => {
+      // A names a business it does not reach → refused (404-alike).
+      const widenBusiness = await call("/api/ai-workforce/missions", {
+        method: "POST",
+        body: commandBody("xbiz-widen-biz", { businessId: "rebound" }),
+        auth: cross.auth(),
+      });
+      expect(widenBusiness.status).toBe(404);
+      expect((widenBusiness.body as { error: string }).error).toBe("BUSINESS_SCOPE_DENIED");
+
+      // B names a different owner → refused (403); identity is server-derived.
+      const widenOwner = await call("/api/ai-workforce/missions", {
+        method: "POST",
+        body: commandBody("xbiz-widen-owner", { businessId: "rebound", owner: "actor_founder" }),
+        auth: { cookie: cookieB, label: "business-b" },
+      });
+      expect(widenOwner.status).toBe(403);
+      expect((widenOwner.body as { error: string }).error).toBe("PERMISSION_DENIED");
+
+      // A payload userId/actorId is IGNORED; the row keeps the session's actor.
+      const ignored = await call("/api/ai-workforce/missions", {
+        method: "POST",
+        body: commandBody("xbiz-ignored-identity", {
+          businessId: "nexup",
+          userId: "someone_else",
+          actorId: "actor_root",
+        }),
+        auth: cross.auth(),
+      });
+      expect(ignored.status).toBe(201);
+      const id = (ignored.body as { mission: { id: string } }).mission.id;
+      expect(psql(`select "createdBy" from "ai_missions" where id = '${id}'`)).toBe("actor_founder");
+      expect(psql(`select "owner" from "ai_missions" where id = '${id}'`)).toBe("actor_founder");
+    });
+  });
 
   it("never leaks a database URL, a bridge endpoint or a secret in an error body", async () => {
     const bodies: string[] = [];

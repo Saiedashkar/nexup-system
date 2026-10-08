@@ -156,7 +156,12 @@ export * from "./actors/actor-contracts";
 export * from "./actors/actor-lifecycle";
 export { InMemoryActorRegistry } from "./actors/actor-registry";
 export type { ActorRegistry } from "./actors/actor-registry";
-export { execActorRegistration, founderActorRegistration, systemActorRegistration } from "./actors/exec-actor";
+export {
+  execActorRegistration,
+  founderActorRegistration,
+  humanActorRegistration,
+  systemActorRegistration,
+} from "./actors/exec-actor";
 
 export {
   internalStrategyAnalystRegistration,
@@ -215,6 +220,8 @@ export type {
    is wired into the mission path yet, and `AgentRuntime` provider neutrality is
    untouched (no provider field appears in any of these types). */
 export * from "./execution/execution-authority";
+export * from "./execution/authority-resolution";
+export * from "./execution/session-authority";
 export * from "./execution/capability-execution-contracts";
 export * from "./execution/execution-claim";
 

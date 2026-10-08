@@ -72,6 +72,43 @@ export function founderActorRegistration(): ActorRegistrationInput {
   };
 }
 
+/**
+ * An ADDITIONAL human authority — the Founder-shaped registration, for a named
+ * person.
+ *
+ * The deployment seeds only the Founder as a HUMAN actor. A proof (or a future
+ * operator) that needs to show a decision attributed to a SPECIFIC person rather
+ * than the Founder channel registers one of these. It is the same shape as the
+ * Founder seed on purpose: a human carries no runtime binding, and its approval
+ * policy is NEVER (a person is the authority, not a subject of it).
+ */
+export function humanActorRegistration(input: {
+  id: string;
+  slug: string;
+  displayName: string;
+  role?: string;
+}): ActorRegistrationInput {
+  return {
+    id: input.id,
+    slug: input.slug,
+    displayName: input.displayName,
+    type: "HUMAN",
+    role: input.role ?? "human-authority",
+    department: null,
+    reportsTo: null,
+    collaborators: [],
+    lifecycle: "APPROVED_AUTONOMY",
+    runtimeBinding: null,
+    modelPolicy: null,
+    autonomyLevel: "AUTONOMOUS",
+    memoryScope: { scope: "NONE", retention: "EPHEMERAL" },
+    permissions: [{ permission: "aiworkforce.access" }],
+    approvalPolicy: { mode: "NEVER" },
+    escalationTarget: null,
+    metadata: { tier: "human-authority" },
+  };
+}
+
 /** A deterministic/manual system or service identity (never a person). */
 export function systemActorRegistration(input: {
   slug: string;

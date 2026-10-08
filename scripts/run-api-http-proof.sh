@@ -39,6 +39,14 @@ DB_NAME="nexup_http_proof"
 PROOF_AUTH_SECRET="nexup-http-proof-not-a-real-secret-0123456789"
 SERVER_LOG=".tmp-http-proof-server.log"
 RESULTS_FILE=".tmp-http-proof-results.json"
+# Proof-scoped business ids: the cross-business proof seeds `nexup` and `rebound`
+# into the schema database and deletes ONLY these ids again, so a real row is
+# never touched.
+PROOF_BIZ_NEXUP_ID="proof_business_nexup"
+PROOF_BIZ_REBOUND_ID="proof_business_rebound"
+# The second HUMAN authority the proof attributes a decision to (never the
+# Founder channel). Read by the application ONLY in proof mode.
+PROOF_HUMAN_ACTOR_ID="actor_proof_reviewer"
 
 export MSYS_NO_PATHCONV=1
 export MSYS2_ARG_CONV_EXCL='*'
@@ -70,6 +78,16 @@ done
 echo "   database    : $DB_NAME (four proposed migrations applied)"
 echo "   migrations  : $(psql -t -A -c "select count(*) from information_schema.tables where table_schema='public' and table_name like 'ai\_%'" -d "$DB_NAME") ai_* tables"
 
+echo "── the business registry (schemas db) ─────────────────────────"
+# The session speaks business SLUGS; a mission stores the canonical Business.id.
+# The cross-business proof needs both slugs registered in the schema database
+# that `@/lib/prisma` reads (nexup_dev). Inserted with `ON CONFLICT DO NOTHING`
+# so an existing real row is left exactly as it was.
+psql -d nexup_dev -c "INSERT INTO \"Business\" (id, name, slug, \"createdAt\") VALUES ('$PROOF_BIZ_NEXUP_ID', 'Proof NEXUP', 'nexup', now()), ('$PROOF_BIZ_REBOUND_ID', 'Proof REBOUND', 'rebound', now()) ON CONFLICT DO NOTHING" >/dev/null
+PROOF_NEXUP_BUSINESS_ID="$(psql -d nexup_dev -t -A -c "select id from \"Business\" where slug = 'nexup'")"
+PROOF_REBOUND_BUSINESS_ID="$(psql -d nexup_dev -t -A -c "select id from \"Business\" where slug = 'rebound'")"
+echo "   business    : nexup=$PROOF_NEXUP_BUSINESS_ID  rebound=$PROOF_REBOUND_BUSINESS_ID"
+
 echo "── building the application ────────────────────────────────────"
 npx next build --webpack >/dev/null
 echo "   build       : ok"
@@ -77,9 +95,14 @@ echo "   build       : ok"
 echo "── starting the server ─────────────────────────────────────────"
 # The application's own pool is pointed at the DEVELOPMENT cluster too, so no
 # code path in this proof can reach the production host even by accident.
+# The authenticated-user -> HUMAN actor roster (Step 5A-3). Without it the
+# decision boundary fails CLOSED by design, so the proof seeds the one mapping
+# its signed-in cookie needs: the proof user to the seeded Founder actor.
 AI_WORKFORCE_PERSISTENCE=database \
 AI_WORKFORCE_DATABASE_URL="postgresql://postgres@127.0.0.1:$DEV_DB_PORT/$DB_NAME" \
 AI_WORKFORCE_TEST_TRANSPORT=deterministic \
+AI_WORKFORCE_USER_ACTOR_MAP="{\"proof-user-1\":\"actor_founder\",\"proof-user-2\":\"$PROOF_HUMAN_ACTOR_ID\"}" \
+AI_WORKFORCE_PROOF_HUMAN_ACTORS="[{\"id\":\"$PROOF_HUMAN_ACTOR_ID\",\"slug\":\"proof-reviewer\",\"displayName\":\"Proof Reviewer\"}]" \
 DATABASE_URL="postgresql://postgres@127.0.0.1:$DEV_DB_PORT/nexup_dev" \
 DATABASE_SSL_DISABLE=1 \
 AUTH_SECRET="$PROOF_AUTH_SECRET" \
@@ -111,6 +134,9 @@ stop_port_listener() {
 
 cleanup() {
   local status=$?
+  # Remove ONLY the proof-scoped business rows, and only if this proof inserted
+  # them (a pre-existing real row has a different id, so this is a no-op for it).
+  psql -d nexup_dev -c "DELETE FROM \"Business\" WHERE id IN ('$PROOF_BIZ_NEXUP_ID', '$PROOF_BIZ_REBOUND_ID')" >/dev/null 2>&1 || true
   if kill -0 "$SERVER_PID" 2>/dev/null; then
     if command -v taskkill >/dev/null 2>&1; then
       taskkill -F -T -PID "$SERVER_PID" >/dev/null 2>&1 || kill "$SERVER_PID" 2>/dev/null || true
@@ -153,6 +179,9 @@ WORKFORCE_API_BASE_URL="http://127.0.0.1:$PROOF_PORT" \
 WORKFORCE_API_DATABASE_URL="postgresql://postgres@127.0.0.1:$DEV_DB_PORT/$DB_NAME" \
 AUTH_SECRET="$PROOF_AUTH_SECRET" \
 PSQL_BIN="$PSQL_BIN" \
+WORKFORCE_PROOF_NEXUP_BUSINESS_ID="$PROOF_NEXUP_BUSINESS_ID" \
+WORKFORCE_PROOF_REBOUND_BUSINESS_ID="$PROOF_REBOUND_BUSINESS_ID" \
+WORKFORCE_PROOF_HUMAN_ACTOR_ID="$PROOF_HUMAN_ACTOR_ID" \
   npx vitest run tests/workforce-api-http.test.ts --reporter=default --reporter=json --outputFile="$RESULTS_FILE"
 STATUS=$?
 set -e

@@ -79,6 +79,19 @@ export const AI_WORKFORCE_ERROR_CODES = [
    * leave the stored claim untouched.
    */
   "ATTEMPT_IDEMPOTENCY_MISMATCH",
+  // ── Step 5A-3 — authenticated authority + business/object scope ──
+  /**
+   * An authenticated user could not be resolved to exactly one registered HUMAN
+   * workforce actor. Fail closed: no mapping, a non-HUMAN target, or an
+   * ambiguous mapping all refuse rather than impersonate.
+   */
+  "AUTHORITY_UNRESOLVED",
+  /**
+   * The caller's authenticated business scope does not cover the requested or
+   * addressed object. Externally this is a 404-alike (existence is not revealed);
+   * internally it keeps this typed reason.
+   */
+  "BUSINESS_SCOPE_DENIED",
 ] as const;
 
 export type AiWorkforceErrorCode = (typeof AI_WORKFORCE_ERROR_CODES)[number];

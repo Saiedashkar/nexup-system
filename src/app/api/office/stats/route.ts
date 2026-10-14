@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentSession, canAccessBusiness, isSuperAdmin } from "@/lib/auth";
 import { softDeleteRecord } from "@/lib/soft-delete";
+import { getOfficeTreasury } from "@/lib/capital-metrics";
 
 export const runtime = "nodejs";
 
@@ -111,36 +112,32 @@ export async function GET() {
     // Office treasury balance (only for super admin or office finance access)
     // Wrapped in its own try/catch so a missing DB column (e.g. fundFlow before migration)
     // never takes down the whole dashboard — businesses & stats still load.
+    // Office treasury — the SAME shared definition the admin top bar, the
+    // capital page and /api/office/admin-stats use (src/lib/capital-metrics.ts),
+    // so /office and /office/admin can never show two different balances.
+    // The capital term is now the cash that actually ENTERED the office and
+    // was not spent from it — not the gross of every "funded" row.
     let officeTreasury = null;
     if (superAdmin || session.canAccessOfficeFinanceFull) {
       try {
-        const [capital, profitTransfers, officeExpenses, partnerTx] = await Promise.all([
-          prisma.capitalContribution.findMany({ where: { type: "CASH" }, select: { amount: true, fundFlow: true } }),
-          prisma.profitTransfer.findMany({ select: { amount: true } }),
-          prisma.officeExpense.findMany({ select: { cost: true } }),
-          prisma.partnerTransaction.findMany({ select: { type: true, amount: true } }),
-        ]);
-
-        // Only STILL_IN_TREASURY contributions count as real cash in the treasury
-        const cashCapital = capital
-          .filter(c => c.fundFlow === "STILL_IN_TREASURY")
-          .reduce((s, c) => s + c.amount, 0);
-        const totalCashCapitalAll = capital.reduce((s, c) => s + c.amount, 0);
-        const totalProfitTransfers = profitTransfers.reduce((s, t) => s + t.amount, 0);
-        const totalOfficeExpenses = officeExpenses.reduce((s, e) => s + e.cost, 0);
-        const outflows = partnerTx
-          .filter(t => ["SALARY", "ADVANCE", "WITHDRAWAL", "PROFIT_SHARE"].includes(t.type))
-          .reduce((s, t) => s + t.amount, 0);
-        const inflows = partnerTx
-          .filter(t => t.type === "LOAN_SETTLEMENT")
-          .reduce((s, t) => s + t.amount, 0);
-
+        const t = await getOfficeTreasury();
         officeTreasury = {
-          balance: cashCapital + totalProfitTransfers - totalOfficeExpenses - outflows + inflows,
-          cashCapital,
-          totalCashCapitalAll,
-          profitTransfers: totalProfitTransfers,
-          officeExpenses: totalOfficeExpenses,
+          balance: t.balance,
+          cashCapital: t.capitalCash,
+          totalCashCapitalAll: t.capital.cashFundingReceived,
+          totalHistoricalCapital: t.capital.cashFundingReceived,
+          availableFund: t.capital.availableFund,
+          cashFundingInTreasury: t.capital.cashFundingInTreasury,
+          cashFundingSpentAlready: t.capital.cashFundingSpentAlready,
+          assetFunding: t.capital.assetFunding,
+          availableCashInTreasury: t.capital.availableCashInTreasury,
+          cashInTreasuryNet: t.capital.cashInTreasuryNet,
+          spentFromTreasury: t.capital.treasuryDrawSpend,
+          unfundedFromTreasury: t.capital.unfundedFromTreasury,
+          unmatchedAlreadySpentFunding: t.capital.unmatchedAlreadySpentFunding,
+          reconciliationWarnings: t.capital.reconciliationWarnings,
+          profitTransfers: t.profitTransfers,
+          officeExpenses: t.officeExpenses,
         };
       } catch (treasuryErr) {
         console.error("Failed to compute office treasury (migration pending?):", treasuryErr);

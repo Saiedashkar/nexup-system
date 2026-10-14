@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentSession, canAccessOfficeFinance } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getCapitalMetrics } from "@/lib/capital-metrics";
 
 export const runtime = "nodejs";
 
@@ -32,27 +33,19 @@ export async function GET() {
   const fixedExpenses = allExpenses.filter(e => e.category === "FIXED").reduce((s, e) => s + e.cost, 0);
   const variableExpenses = allExpenses.filter(e => e.category === "VARIABLE").reduce((s, e) => s + e.cost, 0);
 
-  // Capital contributions
-  let capital: any[] = [];
-  let totalCapital = 0;
-  let cashCapital = 0;
-  let assetCapital = 0;
-  try {
-    capital = await prisma.capitalContribution.findMany({ include: { partner: true } });
-    totalCapital = capital.reduce((s, c) => s + c.amount, 0);
-    // Only STILL_IN_TREASURY cash contributions count as real money in the treasury
-    cashCapital = capital.filter((c: any) => c.type === "CASH" && c.fundFlow === "STILL_IN_TREASURY").reduce((s: number, c: any) => s + c.amount, 0);
-    assetCapital = capital.filter((c: any) => c.type === "ASSET").reduce((s: number, c: any) => s + c.amount, 0);
-  } catch (e) {
-    console.error("Capital query failed (fundFlow column may not exist):", e);
-    // Fallback: treat all CASH contributions as historical (no fundFlow column)
-    try {
-      capital = await prisma.capitalContribution.findMany();
-      totalCapital = capital.reduce((s: number, c: any) => s + c.amount, 0);
-      cashCapital = capital.filter((c: any) => c.type === "CASH").reduce((s: number, c: any) => s + c.amount, 0);
-      assetCapital = capital.filter((c: any) => c.type === "ASSET").reduce((s: number, c: any) => s + c.amount, 0);
-    } catch { /* last resort */ }
-  }
+  /* Capital — ONE source of truth (src/lib/capital-metrics.ts).
+     Nothing on this endpoint recomputes a capital figure any more: the
+     capital page, the admin top bar and /api/office/stats all read the same
+     definitions, which is what stops a number from meaning two different
+     things in two places. A previously silent fallback here (used when the
+     fundFlow column was missing) reported a DIFFERENT definition of the same
+     metric; a real failure now surfaces instead of answering with a figure
+     nobody can reconcile. */
+  const capitalMetrics = await getCapitalMetrics();
+  const totalCapital = capitalMetrics.cashFundingReceived;
+  const assetCapital = capitalMetrics.assetFunding;
+  // تمويل نقدي دخل الخزينة فعلًا — لا يُخلط مع رأس المال الكلي ولا مع العيني
+  const cashCapital = capitalMetrics.availableCashInTreasury;
 
   // Profit transfers
   const profitTransfers = await prisma.profitTransfer.findMany();
@@ -73,11 +66,13 @@ export async function GET() {
     return acc;
   }, {} as Record<string, number>);
 
-  // Total historical capital (ALL contributions, regardless of fundFlow)
-  const totalHistoricalCapital = capital.reduce((s, c) => s + c.amount, 0);
+  // إجمالي التمويل النقدي التاريخي (لا ينقص بالصرف، ولا يشمل العيني)
+  const totalHistoricalCapital = capitalMetrics.cashFundingReceived;
 
-  // Office Treasury Balance
-  const officeTreasuryBalance = cashCapital + totalProfitTransfers - totalAllExpenses - partnerOutflows + partnerInflows;
+  // Office Treasury Balance — النقد الذي دخل المكتب فعلًا (بعد خصم ما صُرف
+  // منه) لا مجرد إجمالي ما سُجّل كتمويل.
+  const officeTreasuryBalance =
+    capitalMetrics.availableCashInTreasury + totalProfitTransfers - totalAllExpenses - partnerOutflows + partnerInflows;
 
   // Partner summary
   const partners = await prisma.partner.findMany({ include: { transactions: true, capitalContributions: true } });
@@ -160,12 +155,34 @@ export async function GET() {
     expenseTrend: Math.round(expenseTrend * 10) / 10,
     allTime: { totalExpenses: totalAllExpenses, totalCapital, expenseCount: allExpenses.length },
     expenseBreakdown: { fixed: fixedExpenses, variable: variableExpenses },
-    capitalBreakdown: { cash: cashCapital, asset: assetCapital, totalHistorical: totalCapital },
+    capitalBreakdown: {
+      cash: totalCapital,                        // إجمالي التمويل النقدي
+      asset: assetCapital,                       // عيني — سطر مستقل
+      totalHistorical: totalCapital,
+      inTreasury: capitalMetrics.cashFundingInTreasury,
+      spentAlready: capitalMetrics.cashFundingSpentAlready,
+      availableFund: capitalMetrics.availableFund,
+      spentFromTreasury: capitalMetrics.treasuryDrawSpend,
+      cashContributionCount: capitalMetrics.cashContributionCount,
+      assetContributionCount: capitalMetrics.assetContributionCount,
+    },
     officeTreasury: {
       balance: officeTreasuryBalance,
       cashCapital,
       totalHistoricalCapital,
+      totalCashCapitalAll: totalCapital,
+      availableFund: capitalMetrics.availableFund,
+      cashFundingInTreasury: capitalMetrics.cashFundingInTreasury,
+      cashFundingSpentAlready: capitalMetrics.cashFundingSpentAlready,
+      assetFunding: capitalMetrics.assetFunding,
+      availableCashInTreasury: capitalMetrics.availableCashInTreasury,
+      cashInTreasuryNet: capitalMetrics.cashInTreasuryNet,
+      spentFromTreasury: capitalMetrics.treasuryDrawSpend,
+      unfundedFromTreasury: capitalMetrics.unfundedFromTreasury,
+      unmatchedAlreadySpentFunding: capitalMetrics.unmatchedAlreadySpentFunding,
+      reconciliationWarnings: capitalMetrics.reconciliationWarnings,
       profitTransfers: totalProfitTransfers,
+      officeExpenses: totalAllExpenses,
       partnerOutflows,
       partnerInflows,
     },

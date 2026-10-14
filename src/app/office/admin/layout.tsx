@@ -7,7 +7,14 @@ type TreasuryData = {
   balance: number;
   totalRevenue: number;
   totalExpenses: number;
+  /** إجمالي التمويل النقدي — لا ينقص بالصرف ولا يضم العيني */
   historicalCapital: number;
+  /** المتاح من صندوق رأس المال */
+  availableFund: number;
+  /** مساهمات عينية — لا تزيد النقد */
+  assetFunding: number;
+  /** فروق تحتاج مراجعة (تُعرض بدل أن تُدفن في الرقم) */
+  warnings: string[];
   netProfit: number;
   // Monthly data
   monthlyRevenue: number;
@@ -32,7 +39,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           // Capital contributions are NOT revenue — they're separate
           const totalRevenue = d.officeTreasury.profitTransfers || 0;
           const totalExpenses = d.allTime?.totalExpenses || 0;
-          const historicalCapital = d.officeTreasury.totalHistoricalCapital || d.officeTreasury.cashCapital || 0;
+          /* رأس المال هنا = إجمالي التمويل النقدي من السجلات (لا العيني،
+             ولا ينقص عند الصرف). كان هذا السطر يقرأ totalHistoricalCapital
+             المحسوبًا من كل المساهمات — فيختلق رقمًا لا يطابق الصفحة. */
+          const historicalCapital =
+            d.officeTreasury.totalHistoricalCapital ?? d.officeTreasury.cashCapital ?? 0;
+          const availableFund = d.officeTreasury.availableFund ?? 0;
+          const assetFunding = d.officeTreasury.assetFunding ?? 0;
+          const warnings = Array.isArray(d.officeTreasury.reconciliationWarnings)
+            ? d.officeTreasury.reconciliationWarnings
+            : [];
           // Monthly data (current month)
           const now = new Date();
           const currentMonth = now.toLocaleDateString("ar-EG", { month: "long", year: "numeric" });
@@ -43,6 +59,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             totalRevenue,
             totalExpenses,
             historicalCapital,
+            availableFund,
+            assetFunding,
+            warnings,
             netProfit: totalRevenue - totalExpenses,
             monthlyRevenue,
             monthlyExpenses,
@@ -96,6 +115,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 }}>
                   {treasury ? `${treasury.balance >= 0 ? "+" : "-"}${fmt(treasury.balance)} EGP` : "—"}
                 </div>
+                {treasury && treasury.warnings.length > 0 && (
+                  /* شارة مختصرة: التفصيل الكامل في صفحة رأس المال — لا نكرّره هنا */
+                  <div
+                    title={treasury.warnings.join("\n")}
+                    style={{
+                      display: "inline-block", marginTop: 4, padding: "1px 8px", borderRadius: 999,
+                      background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)",
+                      fontSize: 9.5, fontWeight: 700, color: "#f59e0b", cursor: "help",
+                    }}
+                  >
+                    ⚠ {treasury.warnings.length}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -116,10 +148,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </svg>
               </div>
               <div>
-                <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>رأس المال</div>
+                <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>إجمالي التمويل النقدي</div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: "#3b82f6", direction: "ltr", lineHeight: 1.1 }}>
                   {treasury ? `${fmt(treasury.historicalCapital)} EGP` : "—"}
                 </div>
+                {treasury && (
+                  <div style={{ fontSize: 9.5, color: "var(--muted)", marginTop: 3 }}>
+                    المتاح من الصندوق {fmt(treasury.availableFund)} EGP
+                    {treasury.assetFunding > 0 ? ` · عيني ${fmt(treasury.assetFunding)} EGP` : ""}
+                  </div>
+                )}
               </div>
             </div>
 

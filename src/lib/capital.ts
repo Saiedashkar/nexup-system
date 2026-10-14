@@ -1,6 +1,7 @@
 import { CapitalSpendType } from "@prisma/client";
 import { prisma } from "./prisma";
 import { softDeleteRecord } from "./soft-delete";
+import { getCapitalMetrics } from "./capital-metrics";
 
 /* ═══════════════════════════════════════════════════════════════
    Capital Fund ledger — office-level funding pool.
@@ -89,34 +90,38 @@ export type CapitalSummary = {
   contributionCount: number;
   spendCount: number;
   funderCount: number;
+  /* Added here so the capital page, the admin top bar and both stats APIs
+     all read the SAME definition (see src/lib/capital-metrics.ts).
+     • contributionCount counts the CASH rows only — it labels the cash
+       total it sits next to, so the count can never contradict the amount.
+     • assetFunding / assetContributionCount are the in-kind line that is
+       now shown instead of being silently mixed into the cash total. */
+  cashFundingInTreasury: number;
+  cashFundingSpentAlready: number;
+  spentFromTreasury: number;
+  assetFunding: number;
+  assetContributionCount: number;
+  availableCashInTreasury: number;
+  reconciliationWarnings: string[];
 };
 
 export async function getCapitalSummary(): Promise<CapitalSummary> {
-  const [receivedAgg, spentAgg, contributionCount, spendCount, funderCount] = await Promise.all([
-    // Only CASH contributions are spendable money — ASSET stays on the ledger.
-    prisma.capitalContribution.aggregate({
-      where: { type: "CASH" },
-      _sum: { amount: true },
-    }),
-    prisma.capitalSpend.aggregate({ _sum: { amount: true } }),
-    prisma.capitalContribution.count(),
-    prisma.capitalSpend.count(),
-    // Distinct active funders: nested relation filters bypass the
-    // soft-delete client extension, so exclude deleted rows explicitly.
-    prisma.partner.count({ where: { capitalContributions: { some: { deletedAt: null } } } }),
-  ]);
-
-  // Stored amounts are already in EGP units (write paths convert
-  // piasters → EGP before persisting) — no further division here.
-  const totalReceived = receivedAgg._sum.amount ?? 0;
-  const totalSpent = spentAgg._sum.amount ?? 0;
+  // ONE source of truth: every figure below comes from capital-metrics.ts.
+  const m = await getCapitalMetrics();
   return {
-    totalReceived,
-    totalSpent,
-    available: Math.round((totalReceived - totalSpent) * 100) / 100,
-    contributionCount,
-    spendCount,
-    funderCount,
+    totalReceived: m.cashFundingReceived,
+    totalSpent: m.totalSpent,
+    available: m.availableFund,
+    contributionCount: m.cashContributionCount,
+    spendCount: m.spendCount,
+    funderCount: m.funderCount,
+    cashFundingInTreasury: m.cashFundingInTreasury,
+    cashFundingSpentAlready: m.cashFundingSpentAlready,
+    spentFromTreasury: m.treasuryDrawSpend,
+    assetFunding: m.assetFunding,
+    assetContributionCount: m.assetContributionCount,
+    availableCashInTreasury: m.availableCashInTreasury,
+    reconciliationWarnings: m.reconciliationWarnings,
   };
 }
 
@@ -474,8 +479,11 @@ export async function getCapitalLedger(): Promise<{
   summary: CapitalSummary;
 }> {
   const [contributions, spends] = await Promise.all([
+    // ALL contributions, CASH and ASSET: an in-kind contribution is part of
+    // the capital record and must be visible in the ledger (it simply never
+    // moves cash, so it never touches the running balance below). Filtering
+    // it out here is what made a saved in-kind row look like it vanished.
     prisma.capitalContribution.findMany({
-      where: { type: "CASH" },
       include: { partner: { select: { name: true } } },
     }),
     prisma.capitalSpend.findMany({
@@ -533,10 +541,16 @@ export async function getCapitalLedger(): Promise<{
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
   );
 
-  // Running balance: only CASH inflows and all spends participate.
+  // Running balance: only CASH inflows and all spends participate — an
+  // ASSET entry is listed for the record but moves no money, so the figure
+  // beside it has to stay untouched by it.
   let running = 0;
   for (const e of entries) {
-    running += e.type === "CAPITAL_IN" ? e.amount : -e.amount;
+    if (e.type === "CAPITAL_IN") {
+      if (e.contributionType === "CASH") running += e.amount;
+    } else {
+      running -= e.amount;
+    }
     e.balanceAfter = Math.round(running * 100) / 100;
   }
 

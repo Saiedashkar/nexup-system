@@ -1,120 +1,84 @@
 "use client";
 
-import { useCommand } from "../state/command-store";
-import {
-  DEPARTMENTS,
-  WORKSPACE_MODES,
-  systemsForDepartment,
-  type Department,
-  type DepartmentId,
-} from "../state/organization-model";
-import { departmentMissions } from "../state/department-workspace";
+import { useLocale } from "../i18n/command-locale";
+import { DEPARTMENTS, type Department, type DepartmentId } from "../state/organization-model";
 import type { Placement } from "../state/spatial-camera";
 import { cssVars } from "../ui/css-vars";
-import { DECK_ICONS, DEPARTMENT_ICONS } from "../ui/icons";
-import { ActorList } from "./actor-presence";
-import { STATUS_LABEL, workerLevel, type VisualNodeState } from "../state/visual-state";
+import { DEPARTMENT_ICONS } from "../ui/icons";
+import type { VisualNodeState } from "../state/visual-state";
 
 /**
- * DEPARTMENT POD — an operational bay, and then a workspace (Phase UI-02.1)
- * ────────────────────────────────────────────────────────────────────────
- * UI-01.1's department was a rounded rectangle with an icon tile and a progress
- * meter. UI-02.1's first pass chamfered it and added a lit floor — better, but
- * the reviewer still read five rectangles arranged around an orb, and that was
- * the correct reading, because the *content* was still "a card with information
- * inside it".
+ * DEPARTMENT PLATE — one space in the company overview (champagne orbit)
+ * ──────────────────────────────────────────────────────────────────────
+ * The approved overview states a department the same way six times: a wide
+ * smoked-glass lozenge, the identity disc on the INNER edge (facing EXEC), the
+ * readable name, and ONE status. That is exactly what this renders, and nothing else:
  *
- * The rest state is now built as a BAY. Four architectural layers, in order:
+ *     [ disc ]  name  D1
+ *               ● working
  *
- *   · FLOOR   — the lit platform it stands on, on the same plane as the core's deck;
- *   · BAY     — a rear slab, offset back and up, which is what stops the pod's
- *     silhouette from being one rectangle: the structure continues past the
- *     surface you read;
- *   · STRUT   — the leg that physically connects the surface to the floor, so
- *     the surface is *supported* rather than floating;
- *   · SURFACE — the readable console. Its top edge (the "ledge") runs wider than
- *     the surface itself and its material dissolves at the bottom, so it ends in
- *     architecture rather than in a border.
+ * WHAT THE PREVIOUS PASS HAD, AND WHY IT IS GONE
+ * A badge, an uppercase code, a name and a status — close, but assembled as a
+ * stacked card with the disc above the type, and with the identity disc carrying
+ * the department's own hue. Two changes and no more: the disc moved beside the
+ * type (the reference's plate is a lozenge, not a card) and the STATUS DOT now
+ * reads the runtime status rather than the identity accent, so six plates in one
+ * warm family still say what each space is actually doing. The horseshoe of
+ * `face` rotation is gone with it: the approved plates face the reader flat.
  *
- * Each bay also faces the centre of the room by a few degrees, derived from its
- * own position — one shared rule, no per-department styling — which is what
- * gives the ring its perspective.
+ * SELECTION, NOT NAVIGATION — unchanged. Clicking a plate SELECTS it: the store's
+ * focus moves, the panel on the right becomes that space's panel, and the reader
+ * stays in the composition. Opening the workspace is a deliberate second step
+ * from the panel. The plate is therefore a toggle (`aria-pressed`), not a link —
+ * a link would promise a navigation it does not perform.
  *
- * The ENTERED state is not a bigger card. It is a different object: a workspace
- * with an internal mode rail (Work · Map · Flow · Assets — three of them marked
- * as later phases, because the point of this phase is to make the scene
- * *capable* of hosting them), a live work surface, the space's signals, and the
- * systems this space reaches. It reads as walking into the department.
- *
- * Nothing in this file knows what "Growth" is. It renders whatever the
- * configuration describes, so a sixth department renders identically.
+ * DOM ORDER IS READING ORDER ON BOTH SIDES. Plates left of centre put their disc
+ * on their RIGHT and plates right of centre on their LEFT — but that is done in
+ * CSS with a direction-aware `flex-direction`, so the mark is always FIRST in
+ * the document and the accessible name always begins with the icon's meaning.
+ * The `data-side` attribute carries the geometry; it changes no reading.
  */
-
-export type PodSignals = {
-  missions: number;
-  activeActors: number;
-  attention: number;
-};
 
 type DepartmentPodProps = {
   department: Department;
   visual: VisualNodeState;
   /** Resolved position + depth, in percent of the stage and px. From the camera. */
   placement: Placement;
-  /** This space is entered: everything else recedes and dims. */
-  focused: boolean;
-  /** Another space is entered. */
+  /** This space is selected: the panel is reading it. */
+  selected: boolean;
+  /** Another space is selected. */
   receded: boolean;
   hovered: boolean;
-  /** Signals shown while hovered or entered. */
-  signals: PodSignals;
   onHover: (id: DepartmentId | null) => void;
-  onOpen: (id: DepartmentId) => void;
+  onSelect: (id: DepartmentId) => void;
 };
 
 export function DepartmentPod({
   department,
   visual,
   placement,
-  focused,
+  selected,
   receded,
   hovered,
-  signals,
   onHover,
-  onOpen,
+  onSelect,
 }: DepartmentPodProps) {
-  const { status, activityLevel, activeJob } = visual;
+  const { status } = visual;
+  const { t } = useLocale();
+  const Icon = DEPARTMENT_ICONS[department.id];
 
-  /* One insight only. Live work always wins over the configured headline,
-     because "what is happening now" is the more useful truth. */
-  const insight = activeJob ?? department.insight;
-  const insightIsLive = Boolean(activeJob);
+  /* The side of the plate the disc sits on, and the side the network docks to:
+     both are "away from the centre", and both are derived from the same
+     configuration coordinate the router uses. Nothing else about a node is
+     position-aware. */
+  const side = department.x < 50 ? "left" : "right";
 
-  /* Needs-attention is NOT recomputed here: it comes from the department's own
-     workspace data (via the scene's signals), so the node can never show
-     "Clear" for a space whose workspace is holding items for a human. */
-  const attention = signals.attention;
-  const reveal = hovered || focused;
-
-  /* "On track" summarises the missions this space owns — the same missions its
-     workspace lists, so the figure cannot describe work the space does not have.
-     When it owns none, fall back to how loaded the space is right now. */
-  const owned = departmentMissions(department.id);
-  const onTrack = owned.length
-    ? Math.round(owned.reduce((sum, mission) => sum + mission.progress, 0) / owned.length)
-    : Math.round(activityLevel * 100);
-
-  /* Bays face the centre of the room. Derived from configuration, applied as one
-     rule: a space left of centre turns right, a space right of centre turns
-     left. Nothing else about a pod is position-aware. */
-  const face = (50 - department.x) * 0.22;
-
-  /* The side of the node the network connects to: the edge facing the core.
-     Purely positional, derived from the same coordinates the routes use. */
-  const side = department.x < 50 ? "right" : "left";
   /* The node's index in the organization — a stable identity code (D1…Dn) for
      the hierarchy, derived from configuration order, never invented content. */
   const code = `D${DEPARTMENTS.findIndex((entry) => entry.id === department.id) + 1}`;
+
+  const name = t(`dept.${department.id}.name`);
+  const statusLabel = t(`status.node.${status}`);
 
   return (
     <div
@@ -124,242 +88,58 @@ export function DepartmentPod({
       data-side={side}
       data-depth={placement.depth > 0 ? "near" : "far"}
       data-dim={receded}
-      data-focused={focused}
+      data-selected={selected}
       data-hovered={hovered}
       style={cssVars({
         "--nc-pod-x": `${placement.x.toFixed(3)}%`,
         "--nc-pod-y": `${placement.y.toFixed(3)}%`,
         "--nc-pod-z": `${placement.depth}px`,
-        "--nc-pod-face": `${face.toFixed(2)}deg`,
         "--nc-accent": `var(${department.accentVar})`,
       })}
-      /* Hover is scene state, not per-pod: moving the pointer across the room
-         must light exactly one space and dim exactly the rest. */
+      /* Hover is scene state, not per-node: moving the pointer across the
+         composition must light exactly one space and quiet exactly the rest. */
       onPointerEnter={() => onHover(department.id)}
       onPointerLeave={() => onHover(null)}
     >
-      <span className="nc-pod__floor" aria-hidden="true" />
-      <span className="nc-pod__bay" aria-hidden="true" />
-      <span className="nc-pod__strut" aria-hidden="true" />
-      {/* The network port: the physical place the routing field docks. One
-          element, one side, both derived — it is what stops the node reading
-          as a card that merely sits near some lines. */}
+      {/* The network port: the physical place the routing field docks, on the
+          edge facing the centre. One element, one side, both derived — it is what
+          stops a plate reading as a card that merely sits near some lines. */}
       <span className="nc-pod__port" data-side={side} aria-hidden="true" />
 
-      {focused ? (
-        <Workspace department={department} visual={visual} signals={signals} attention={attention} insight={insight} />
-      ) : (
-        <>
-          <button
-            type="button"
-            className="nc-pod__plate"
-            onClick={() => onOpen(department.id)}
-            aria-label={`${department.name} — ${STATUS_LABEL[status]}${
-              insight ? `. ${insight}` : ""
-            }${attention ? ". Needs you." : ""}. Enter this space.`}
-          >
-            {/* The identity disc. Deliberately a dedicated element with a
-                single initial slot, so the coming Agent Identity System can
-                swap in an avatar/character here without touching structure. */}
-            <span className="nc-pod__top">
-              <span className="nc-pod__badge" aria-hidden="true">
-                {department.short.slice(0, 2)}
-              </span>
-              <span className="nc-pod__head">
-                <span className="nc-pod__name">
-                  <span className="nc-pod__code">{code}</span>
-                  {department.name}
-                </span>
-                <span className="nc-pod__cap">{department.capability}</span>
-              </span>
-              <span className="nc-pod__state">
-                <span className="nc-pod__led" aria-hidden="true" />
-                {STATUS_LABEL[status]}
-              </span>
+      <button
+        type="button"
+        className="nc-pod__plate"
+        onClick={() => onSelect(department.id)}
+        aria-pressed={selected}
+        aria-label={`${name} — ${statusLabel}. ${
+          selected ? t("cc.selectedAria") : t("cc.selectAria")
+        }`}
+      >
+        {/* The identity disc. Deliberately a dedicated element with a single
+            icon slot, so the Agent Identity System can swap in an avatar here
+            without touching structure or this file's geometry. */}
+        <span className="nc-pod__badge" aria-hidden="true">
+          <Icon size={19} />
+        </span>
+
+        <span className="nc-pod__head">
+          <span className="nc-pod__namerow">
+            {/* The full readable name — never an abbreviation, never clamped by
+                a neighbouring figure, because there is no neighbouring figure. */}
+            <span className="nc-pod__name">{name}</span>
+            <span className="nc-pod__code" aria-hidden="true">
+              {code}
             </span>
-
-            <span className="nc-pod__insight" data-live={insightIsLive}>
-              {insight}
-            </span>
-
-            <span className="nc-pod__stats">
-              <span className="nc-pod__stat">
-                <b>{signals.missions}</b>
-                <span>Missions</span>
-              </span>
-              <span className="nc-pod__stat">
-                <b>{onTrack}%</b>
-                <span>On Track</span>
-              </span>
-              <span className="nc-pod__stat" data-attention={attention > 0}>
-                <b>{attention}</b>
-                <span>Attention</span>
-              </span>
-            </span>
-
-            <span className="nc-pod__meter" aria-hidden="true">
-              <i style={{ width: `${Math.round(activityLevel * 100)}%` }} />
-            </span>
-          </button>
-        </>
-      )}
-
-      {/* Exactly three signals — never four. */}
-      <div className="nc-pod__signals" data-reveal={reveal} aria-hidden={!reveal}>
-        <span className="nc-pod__signal">
-          <span className="nc-pod__signal-key">Missions</span>
-          <span className="nc-pod__signal-val">{signals.missions}</span>
-        </span>
-        <span className="nc-pod__signal">
-          <span className="nc-pod__signal-key">Active actors</span>
-          <span className="nc-pod__signal-val">{signals.activeActors}</span>
-        </span>
-        <span className="nc-pod__signal" data-attention={attention > 0}>
-          <span className="nc-pod__signal-key">Attention</span>
-          <span className="nc-pod__signal-val">{attention > 0 ? "Needs you" : "Clear"}</span>
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/**
- * The entered state. Not a panel: a workspace with rooms in it, one of which is
- * live now and three of which are reserved for later phases. The live surface is
- * assembled entirely from state the environment already has — the visual
- * contract, the worker list, the mission count and the systems this space
- * reaches — so nothing here needs a business layer to exist.
- */
-function Workspace({
-  department,
-  visual,
-  signals,
-  attention,
-  insight,
-}: {
-  department: Department;
-  visual: VisualNodeState;
-  signals: PodSignals;
-  attention: number;
-  insight: string;
-}) {
-  const { notify } = useCommand();
-  const SpaceIcon = DEPARTMENT_ICONS[department.id];
-  const linked = systemsForDepartment(department.id);
-
-  return (
-    <div className="nc-ws">
-      <header className="nc-ws__head">
-        <span className="nc-ws__mark" aria-hidden="true">
-          <SpaceIcon size={16} />
-        </span>
-        <span className="nc-ws__titles">
-          <span className="nc-ws__kicker">{department.space}</span>
-          <span className="nc-ws__name">{department.name}</span>
-        </span>
-        <span className="nc-ws__state">
-          <span className="nc-ws__led" aria-hidden="true" />
-          {STATUS_LABEL[visual.status]}
-        </span>
-        <span className="nc-ws__meter" aria-hidden="true">
-          <i style={{ width: `${Math.round(visual.activityLevel * 100)}%` }} />
-        </span>
-      </header>
-
-      {/* The internal mode rail. Work is live; the rest are the slots this
-          workspace is built to host. */}
-      <nav className="nc-ws__modes" aria-label={`${department.name} internal surfaces`}>
-        {WORKSPACE_MODES.map((mode) => {
-          const ModeIcon = DECK_ICONS[mode.icon];
-          const current = mode.id === "work";
-          return (
-            <button
-              key={mode.id}
-              type="button"
-              className="nc-ws__mode"
-              data-current={current}
-              onClick={() => (current ? notify(`${mode.hint}.`) : notify(`${mode.label} inside ${department.name}: ${mode.hint}`))}
-            >
-              <ModeIcon size={14} />
-              {mode.label}
-            </button>
-          );
-        })}
-      </nav>
-
-      <div className="nc-ws__surface">
-        <section className="nc-ws__panel" data-panel="work">
-          <span className="nc-ws__panel-kicker">Current work</span>
-          <span className="nc-ws__job" data-live={Boolean(visual.activeJob)}>
-            {insight}
           </span>
-          <span className="nc-ws__workers">
-            {department.workers.map((worker) => {
-              const level = visual.workerActivity?.[worker.id] ?? 0;
-              return (
-                <span key={worker.id} className="nc-ws__worker" data-level={workerLevel(level)}>
-                  <span className="nc-ws__worker-name">{worker.name}</span>
-                  <span className="nc-ws__worker-meter" aria-hidden="true">
-                    <i style={{ width: `${Math.round(level * 100)}%` }} />
-                  </span>
-                </span>
-              );
-            })}
-          </span>
-        </section>
 
-        <section className="nc-ws__panel" data-panel="signals">
-          <span className="nc-ws__panel-kicker">Signals</span>
-          <span className="nc-ws__figure">
-            <b>{signals.missions}</b>
-            <span>Missions</span>
+          {/* ONE meaningful status. The dot carries the colour, the word carries
+              the meaning, so the colour is never the only channel. */}
+          <span className="nc-pod__state">
+            <span className="nc-pod__led" aria-hidden="true" />
+            <span className="nc-pod__state-label">{statusLabel}</span>
           </span>
-          <span className="nc-ws__figure">
-            <b>{signals.activeActors}</b>
-            <span>Active actors</span>
-          </span>
-          <span className="nc-ws__figure" data-attention={attention > 0}>
-            <b>{attention > 0 ? "Needs you" : "Clear"}</b>
-            <span>Attention</span>
-          </span>
-        </section>
-
-        <section className="nc-ws__panel" data-panel="reaches">
-          <span className="nc-ws__panel-kicker">Reaches</span>
-          {linked.length === 0 ? (
-            <span className="nc-ws__none">No system is wired to this space yet.</span>
-          ) : (
-            linked.map((system) => (
-              <button
-                key={system.id}
-                type="button"
-                className="nc-ws__system"
-                style={cssVars({ "--nc-accent": `var(${system.accentVar})` })}
-                onClick={() =>
-                  notify(`${system.name} — ${system.kind}. Visual only in this phase; nothing is connected.`)
-                }
-                title={`${system.name} — ${system.capabilities.join(" · ")}`}
-              >
-                <span className="nc-ws__system-mark">{system.mark}</span>
-                <span className="nc-ws__system-name">{system.name}</span>
-                <span className="nc-ws__system-status">
-                  <i aria-hidden="true" />
-                  {system.status}
-                </span>
-              </button>
-            ))
-          )}
-          <span className="nc-ws__bottleneck">
-            <span className="nc-ws__bottleneck-mark" aria-hidden="true" />
-            {department.bottleneck}
-          </span>
-        </section>
-      </div>
-
-      <footer className="nc-ws__foot">
-        <ActorList ids={department.presence} max={2} />
-        <span className="nc-ws__capability">{department.capability}</span>
-      </footer>
+        </span>
+      </button>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import type { IdFactory } from "@/modules/ai-workforce/core/types";
 
 import type { TaskId } from "../core/refs";
 import {
+  ALREADY_UNVERIFIED_DETAIL,
   attemptIdempotencyMismatch,
   DEFAULT_CLAIM_LEASE_TTL_MS,
   isExecutionClaimState,
@@ -14,8 +15,14 @@ import {
   type ExecutionClaimRecovery,
   type ExecutionClaimRepository,
   type ExecutionClaimRequest,
+  type ExecutionClaimReservation,
+  type ExecutionClaimReservationRequest,
   type ExecutionClaimState,
+  type ExecutionClaimSweepLane,
+  type ExecutionClaimSweepQuery,
 } from "../execution/execution-claim";
+import { DISPATCHING_DOUBT_DETAIL } from "../execution/execution-claim";
+import { assertReceiptDetail, detailWithDoubt } from "../execution/execution-claim-receipt";
 
 /**
  * The DURABLE execution-claim ledger — `ai_execution_claims`.
@@ -104,7 +111,7 @@ export type ExecutionClaimPrismaClient = Pick<PrismaClient, "aiExecutionClaim" |
  * The row shape this adapter reads. Structural on purpose: Prisma's generated
  * `AiExecutionClaim` type and the raw-SQL result both satisfy it.
  */
-type ClaimRow = {
+export type ClaimRow = {
   id: string;
   missionId: string;
   taskId: string;
@@ -121,10 +128,12 @@ type ClaimRow = {
   detail: string | null;
   claimedAt: Date;
   updatedAt: Date;
+  /** The rotation key (`markRecoverySwept`); NULL = a sweep has never looked. */
+  recoverySweptAt: Date | null;
 };
 
 /** A row plus the DATABASE's own answers: is the lease live, and what time is it. */
-type ClaimRowWithClock = ClaimRow & { leaseLive: boolean; dbNow: Date };
+export type ClaimRowWithClock = ClaimRow & { leaseLive: boolean; dbNow: Date };
 
 /** Fails closed when the connected database has no claim ledger. */
 export function assertExecutionClaimSchema(client: unknown): void {
@@ -143,11 +152,38 @@ export function assertExecutionClaimSchema(client: unknown): void {
  * text reported on every later read. Written down so the doubt is durable rather
  * than re-inferred — a reviewer should see WHY, not just that.
  */
-const UNVERIFIED_DETAIL =
-  "dispatch was entered and no durable handle exists; the external run may have started, so this attempt must not be re-dispatched automatically";
+/**
+ * The recorded reason a `DISPATCHING` attempt became `UNVERIFIED`.
+ *
+ * It is the SAME sentence the in-memory reference writes (imported, not
+ * re-typed), so the two ledgers cannot drift into two different audits.
+ */
+const UNVERIFIED_DETAIL = DISPATCHING_DOUBT_DETAIL;
 
 /** How many times a losing CAS may re-read before the ledger is declared unusable. */
 const MAX_CLASSIFY_ATTEMPTS = 5;
+
+/**
+ * Is this a Postgres UNIQUE-VIOLATION (SQLSTATE 23505) reaching us through
+ * Prisma's raw-query wrapper?
+ *
+ * It exists for exactly one caller: the cancellation reservation names a single
+ * conflict target, and a clash on the table's OTHER unique index is a legitimate
+ * "nothing landed" signal rather than an outage. Prisma surfaces the SQLSTATE
+ * inside the message and, when present, `meta.code`; both spellings are checked so
+ * a Prisma upgrade that fills in `meta` cannot silently turn the signal into a
+ * thrown PERSISTENCE_UNAVAILABLE.
+ */
+function isUniqueViolation(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const meta = (error as { meta?: unknown }).meta;
+  if (typeof meta === "object" && meta !== null) {
+    const code = (meta as { code?: unknown }).code;
+    if (code === "23505" || code === 23505) return true;
+  }
+  const message = (error as { message?: unknown }).message;
+  return typeof message === "string" && /Code: `23505`|"code":\s*"23505"/.test(message);
+}
 
 function unknownStateError(row: ClaimRow): AiWorkforceError {
   return new AiWorkforceError(
@@ -157,7 +193,7 @@ function unknownStateError(row: ClaimRow): AiWorkforceError {
   );
 }
 
-function toClaim(row: ClaimRow): ExecutionClaim {
+export function toClaim(row: ClaimRow): ExecutionClaim {
   if (!isExecutionClaimState(row.state)) throw unknownStateError(row);
   const claim: ExecutionClaim = {
     id: row.id,
@@ -179,11 +215,48 @@ function toClaim(row: ClaimRow): ExecutionClaim {
   if (row.leaseOwner) claim.leaseOwner = row.leaseOwner;
   if (row.leaseExpiresAt) claim.leaseExpiresAt = row.leaseExpiresAt.toISOString();
   if (row.detail) claim.detail = row.detail;
+  // Absent means NULL, which is a real state (never swept), so it is mapped as an
+  // absence rather than an empty string.
+  if (row.recoverySweptAt) claim.recoverySweptAt = row.recoverySweptAt.toISOString();
   return claim;
 }
 
 function leaseTtl(ttlMs: number | undefined): number {
   return typeof ttlMs === "number" && Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : DEFAULT_CLAIM_LEASE_TTL_MS;
+}
+
+/**
+ * `DISPATCHING → DISPATCHED`, executable against ANY client — including the
+ * transaction client the atomic execution finalizer supplies.
+ *
+ * It lives HERE, in the ONE approved writer for `ai_execution_claims`, on
+ * purpose: a repository-suite architecture guard fails if any other file in
+ * `src/` names the table, precisely so a second, subtly different copy of the
+ * database-clock and lease predicates cannot appear. The finalizer therefore
+ * supplies a TRANSACTION and calls this, instead of carrying its own SQL.
+ *
+ * The CAS conditions are the whole point: the state must still be `DISPATCHING`
+ * and the lease must still be owned by THIS invocation, or the write does not
+ * land and the caller's transaction rolls back.
+ */
+export async function updateClaimDispatched(
+  client: ExecutionClaimPrismaClient,
+  claimId: string,
+  input: { invocationToken: string; executionRecordId: string; handleId: string; runtimeId?: string },
+): Promise<ExecutionClaim | null> {
+  const rows = await client.$queryRaw<ClaimRow[]>`
+    UPDATE ai_execution_claims
+    SET "state" = 'DISPATCHED',
+        "executionRecordId" = ${input.executionRecordId},
+        "handleId" = ${input.handleId},
+        "runtimeId" = COALESCE(${input.runtimeId ?? null}, "runtimeId"),
+        "updatedAt" = (now() AT TIME ZONE 'UTC')
+    WHERE "id" = ${claimId}
+      AND "state" = 'DISPATCHING'
+      AND "leaseOwner" = ${input.invocationToken}
+    RETURNING *
+  `;
+  return rows[0] ? toClaim(rows[0]) : null;
 }
 
 export type PrismaExecutionClaimRepositoryOptions = {
@@ -264,25 +337,37 @@ export class PrismaExecutionClaimRepository implements ExecutionClaimRepository 
     // ── 3. Classify. An execution that exists is adopted; an entered attempt
     //       with no handle is a doubt; only an un-entered attempt is free.
     if (state === "DISPATCHED") return { kind: "REPLAYED", claim: toClaim(row) };
+    if (state === "CANCELLED") return { kind: "CANCELLED", claim: toClaim(row) };
     if (state === "UNVERIFIED") {
       return { kind: "UNVERIFIED", claim: toClaim(row), detail: row.detail ?? UNVERIFIED_DETAIL };
     }
 
-    const mine = row.leaseOwner !== null && row.leaseOwner === request.leaseOwner;
     const live = row.leaseLive === true;
 
     if (state === "DISPATCHING") {
-      if (live && !mine) return { kind: "IN_PROGRESS", claim: toClaim(row) };
+      // LIVE IS LIVE FOR EVERYONE, including the token that wrote it. The old
+      // `&& !mine` half let an owner's own re-read demote its healthy attempt to
+      // UNVERIFIED, after which it could no longer record the handle it was
+      // about to receive.
+      if (live) return { kind: "IN_PROGRESS", claim: toClaim(row) };
       // The corrected branch. There is NO path from here to a re-dispatch: a
       // `DISPATCHING` attempt is promoted to UNVERIFIED so the doubt is durable.
+      // The promotion is CAS-guarded (`state = 'DISPATCHING'`), so if another
+      // process simultaneously recorded the handle, this call loses instead of
+      // overwriting a real execution identity with a doubt.
       const promoted = await this.markUnverified(row.id, UNVERIFIED_DETAIL);
       if (!promoted) return null;
       return { kind: "UNVERIFIED", claim: promoted, detail: promoted.detail ?? UNVERIFIED_DETAIL };
     }
 
-    // CLAIMED / RELEASED — dispatch was never entered.
-    if (state === "CLAIMED" && live && !mine) return { kind: "IN_PROGRESS", claim: toClaim(row) };
+    // CLAIMED / RELEASED — dispatch was never entered. A live claim parks every
+    // caller, whatever token it presents: "same owner" is NOT a second authority.
+    if (state === "CLAIMED" && live) return { kind: "IN_PROGRESS", claim: toClaim(row) };
     const reclaimedFrom: ExecutionClaimState = state;
+    // ATOMIC, in ONE statement: DATABASE time plus an EXPIRED-LEASE predicate.
+    // The previous version read the row and then updated it unconditionally on
+    // state, which could steal a lease that had just been RENEWED by its owner
+    // between the read and the write.
     const reclaimed = await this.reclaim(row.id, reclaimedFrom, request.leaseOwner, ttlMs);
     if (!reclaimed) return null;
     return { kind: "RECLAIMED", claim: reclaimed, reclaimedFrom };
@@ -306,65 +391,494 @@ export class PrismaExecutionClaimRepository implements ExecutionClaimRepository 
     return rows.map(toClaim);
   }
 
+  async listDispatching(limit = 50): Promise<ExecutionClaim[]> {
+    const rows = await this.options.client.aiExecutionClaim.findMany({
+      where: { state: "DISPATCHING" },
+      orderBy: [{ claimedAt: "asc" }, { id: "asc" }],
+      take: limit,
+    });
+    return rows.map(toClaim);
+  }
+
+  /**
+   * The unresolved sweep — MISSION-SCOPED, LANE-SCOPED and PAGE-BOUNDED, all
+   * decided by SQL.
+   *
+   * The mission filter is inside the WHERE clause, so it applies BEFORE `LIMIT`.
+   * That ordering is the whole correction: filtering in the caller (which is what
+   * this used to do) reads a global first page and then discards most of it, so a
+   * mission's own incident is invisible whenever enough other missions'
+   * incidents sort ahead of it.
+   *
+   * There is NO cursor parameter, and that absence is the fifth-review correction.
+   * A keyset cursor has to be STORED somewhere to give a sweep progress, and the
+   * only place it was stored was process memory: every restart (and every mission
+   * beyond the 64-scope LRU) began again at the oldest end. The traversal here is a
+   * queue position that lives in the ROWS THEMSELVES — `recoverySweptAt` — so the
+   * progress is durable, shared by every instance, and free of any wrap/generation
+   * bookkeeping that a stale sweep could clear.
+   *
+   * A `lane`, when given, is the SIXTH-review correction and it is deliberately a
+   * separate STATEMENT per lane rather than an interpolated `ORDER BY`: the lane
+   * decides membership with a WHERE predicate (`"recoverySweptAt" IS NULL` versus
+   * `IS NOT NULL`) as well as direction, which is what gives the revisit window an
+   * allocation that arriving (never-observed) rows cannot consume. Membership by
+   * predicate is the property; a page size alone could never provide it.
+   *
+   * The direction is a closed choice, not a value: rather than interpolate SQL
+   * text, each lane and each order gets its own fully static statement.
+   */
+  async listUnresolved(query: ExecutionClaimSweepQuery = {}): Promise<ExecutionClaim[]> {
+    const { limit = 50, missionId = null, order = "OLDEST_FIRST", lane } = query;
+
+    // ── THE LANES (Step 5A-4, sixth review; corrected by the seventh and ninth) ──
+    //
+    // Three windows, but NOT three disjoint sets. Membership is decided by the
+    // PREDICATE — not the order — and TWO of the three read the SAME rows from
+    // opposite ends: `NEVER_OBSERVED` and `NEVER_OBSERVED_NEWEST` are the same
+    // unseen SET, and the sweep's `seen` guard deduplicates the overlap (see the
+    // claim type and the reconciler). Only `PREVIOUSLY_OBSERVED` is disjoint from
+    // the other two.
+    //
+    // A sweep reads one bounded window of each, so a steady arrival of
+    // never-observed rows can delay the unseen queue (a bound that grows with the
+    // backlog, and `NEVER_OBSERVED_NEWEST` keeps the newest of them visible) but
+    // can never take a single row of the revisit window's allocation.
+    if (lane) return this.listLane(lane, limit, missionId);
+
+    // LEAST RECENTLY SWEPT FIRST — the DURABLE ROTATION the recovery sweep reads.
+    //
+    // `NULLS FIRST` is what makes a NEVER-SWEPT row the most urgent thing in the
+    // queue whatever its age, and `recoverySweptAt ASC` after it is what makes the
+    // queue ADVANCE: a sweep stamps every row it looks at with the database's own
+    // clock, so a stamped row necessarily sorts behind everything not yet stamped.
+    // Both spellings match `compareByRecoveryRotation` in the claim module, which
+    // is the rule the in-memory reference sorts by and the one the paging tests
+    // assert the two agree on.
+    if (order === "LEAST_RECENTLY_SWEPT_FIRST") {
+      const rows = await this.options.client.$queryRaw<ClaimRow[]>`
+        SELECT c.*,
+               (c."leaseExpiresAt" IS NOT NULL AND c."leaseExpiresAt" > (now() AT TIME ZONE 'UTC')) AS "leaseLive",
+               (now() AT TIME ZONE 'UTC') AS "dbNow"
+        FROM ai_execution_claims c
+        WHERE (
+                c."state" = 'DISPATCHING'
+                OR c."state" = 'UNVERIFIED'
+                OR (c."state" = 'DISPATCHED' AND c."executionRecordId" IS NULL)
+              )
+          AND (${missionId}::text IS NULL OR c."missionId" = ${missionId})
+        ORDER BY c."recoverySweptAt" ASC NULLS FIRST, c."claimedAt" ASC, c."id" ASC
+        LIMIT ${limit}
+      `;
+      return rows.map(toClaim);
+    }
+
+    // OLDEST FIRST — the operator-facing read: the work that has waited longest.
+    if (order === "OLDEST_FIRST") {
+      const rows = await this.options.client.$queryRaw<ClaimRow[]>`
+        SELECT c.*,
+               (c."leaseExpiresAt" IS NOT NULL AND c."leaseExpiresAt" > (now() AT TIME ZONE 'UTC')) AS "leaseLive",
+               (now() AT TIME ZONE 'UTC') AS "dbNow"
+        FROM ai_execution_claims c
+        WHERE (
+                c."state" = 'DISPATCHING'
+                OR c."state" = 'UNVERIFIED'
+                OR (c."state" = 'DISPATCHED' AND c."executionRecordId" IS NULL)
+              )
+          AND (${missionId}::text IS NULL OR c."missionId" = ${missionId})
+        ORDER BY c."claimedAt" ASC, c."id" ASC
+        LIMIT ${limit}
+      `;
+      return rows.map(toClaim);
+    }
+
+    // NEWEST FIRST — the bounded fairness probe: a backlog of permanent incidents
+    // must never hide a fresh one. Same statement, mirrored.
+    const rows = await this.options.client.$queryRaw<ClaimRow[]>`
+      SELECT c.*,
+             (c."leaseExpiresAt" IS NOT NULL AND c."leaseExpiresAt" > (now() AT TIME ZONE 'UTC')) AS "leaseLive",
+             (now() AT TIME ZONE 'UTC') AS "dbNow"
+      FROM ai_execution_claims c
+      WHERE (
+              c."state" = 'DISPATCHING'
+              OR c."state" = 'UNVERIFIED'
+              OR (c."state" = 'DISPATCHED' AND c."executionRecordId" IS NULL)
+            )
+        AND (${missionId}::text IS NULL OR c."missionId" = ${missionId})
+      ORDER BY c."claimedAt" DESC, c."id" DESC
+      LIMIT ${limit}
+    `;
+    return rows.map(toClaim);
+  }
+
+  /**
+   * ONE LANE, as its own fully static statement.
+   *
+   * Every lane shares the SAME eligibility predicate and the SAME optional mission
+   * filter as the merged read above — a lane is an ADDITIONAL constraint, never a
+   * different definition of "unresolved". What each one adds is the stamp predicate
+   * that decides whether a row has been observed, plus the direction in which that
+   * window is read:
+   *
+   *   NEVER_OBSERVED        IS NULL,     `claimedAt ASC, id ASC`   — FIFO service.
+   *   NEVER_OBSERVED_NEWEST IS NULL,     `claimedAt DESC, id DESC` — freshness.
+   *   PREVIOUSLY_OBSERVED   IS NOT NULL, `recoverySweptAt ASC, claimedAt ASC, id ASC`
+   *                                                        — the REVISIT rotation.
+   *
+   * The `PREVIOUSLY_OBSERVED` order has no `NULLS FIRST` clause because a NULL
+   * stamp cannot satisfy its WHERE clause: the round-robin is over rows every one
+   * of which already carries a stamp, and each sweep's stamps send what it looked
+   * at to the back of that lane (the `recoverySweptAt ASC` clause, read with the
+   * database's own clock).
+   */
+  private async listLane(
+    lane: ExecutionClaimSweepLane,
+    limit: number,
+    missionId: string | null,
+  ): Promise<ExecutionClaim[]> {
+    if (lane === "PREVIOUSLY_OBSERVED") {
+      const rows = await this.options.client.$queryRaw<ClaimRow[]>`
+        SELECT c.*,
+               (c."leaseExpiresAt" IS NOT NULL AND c."leaseExpiresAt" > (now() AT TIME ZONE 'UTC')) AS "leaseLive",
+               (now() AT TIME ZONE 'UTC') AS "dbNow"
+        FROM ai_execution_claims c
+        WHERE (
+                c."state" = 'DISPATCHING'
+                OR c."state" = 'UNVERIFIED'
+                OR (c."state" = 'DISPATCHED' AND c."executionRecordId" IS NULL)
+              )
+          AND c."recoverySweptAt" IS NOT NULL
+          AND (${missionId}::text IS NULL OR c."missionId" = ${missionId})
+        ORDER BY c."recoverySweptAt" ASC, c."claimedAt" ASC, c."id" ASC
+        LIMIT ${limit}
+      `;
+      return rows.map(toClaim);
+    }
+
+    if (lane === "NEVER_OBSERVED") {
+      const rows = await this.options.client.$queryRaw<ClaimRow[]>`
+        SELECT c.*,
+               (c."leaseExpiresAt" IS NOT NULL AND c."leaseExpiresAt" > (now() AT TIME ZONE 'UTC')) AS "leaseLive",
+               (now() AT TIME ZONE 'UTC') AS "dbNow"
+        FROM ai_execution_claims c
+        WHERE (
+                c."state" = 'DISPATCHING'
+                OR c."state" = 'UNVERIFIED'
+                OR (c."state" = 'DISPATCHED' AND c."executionRecordId" IS NULL)
+              )
+          AND c."recoverySweptAt" IS NULL
+          AND (${missionId}::text IS NULL OR c."missionId" = ${missionId})
+        ORDER BY c."claimedAt" ASC, c."id" ASC
+        LIMIT ${limit}
+      `;
+      return rows.map(toClaim);
+    }
+
+    // NEVER_OBSERVED_NEWEST — the bounded freshness window: the same unseen SET as
+    // the lane above, read from the other end, so a brand-new incident is visible on
+    // the next sweep instead of after the whole unseen backlog has drained.
+    const rows = await this.options.client.$queryRaw<ClaimRow[]>`
+      SELECT c.*,
+             (c."leaseExpiresAt" IS NOT NULL AND c."leaseExpiresAt" > (now() AT TIME ZONE 'UTC')) AS "leaseLive",
+             (now() AT TIME ZONE 'UTC') AS "dbNow"
+      FROM ai_execution_claims c
+      WHERE (
+              c."state" = 'DISPATCHING'
+              OR c."state" = 'UNVERIFIED'
+              OR (c."state" = 'DISPATCHED' AND c."executionRecordId" IS NULL)
+            )
+        AND c."recoverySweptAt" IS NULL
+        AND (${missionId}::text IS NULL OR c."missionId" = ${missionId})
+      ORDER BY c."claimedAt" DESC, c."id" DESC
+      LIMIT ${limit}
+    `;
+    return rows.map(toClaim);
+  }
+
+  /**
+   * `CLAIMED → DISPATCHING`, in ONE statement, with all three conditions the
+   * port documents: expected state, the EXACT invocation token, and a lease that
+   * is STILL LIVE according to the database's own clock.
+   *
+   * The `leaseExpiresAt > (now() AT TIME ZONE 'UTC')` predicate is the fix for
+   * the verified defect where `markDispatching` accepted an already-expired
+   * lease: an invocation that stalled past its window could enter dispatch on an
+   * attempt another caller was entitled to reclaim, so TWO dispatches could be
+   * authorised for one attempt. The database decides liveness here too — no
+   * application clock participates.
+   */
   async markDispatching(
     claimId: string,
-    input: { leaseOwner: string; leaseTtlMs?: number },
+    input: { invocationToken: string; leaseTtlMs?: number; receiptDetail?: string },
   ): Promise<ExecutionClaim | null> {
     const ttlMs = leaseTtl(input.leaseTtlMs);
+    // Fail closed on a detail that cannot carry the receipt through a later
+    // transition, rather than writing audit evidence that will be dropped.
+    if (input.receiptDetail !== undefined) assertReceiptDetail(input.receiptDetail);
+    const receipt = input.receiptDetail ?? null;
     const rows = await this.options.client.$queryRaw<ClaimRow[]>`
       UPDATE ai_execution_claims
       SET "state" = 'DISPATCHING',
-          "leaseOwner" = ${input.leaseOwner},
+          "leaseOwner" = ${input.invocationToken},
           "leaseExpiresAt" = ((now() AT TIME ZONE 'UTC') + (${ttlMs}::double precision * interval '1 millisecond')),
+          "detail" = COALESCE(${receipt}, "detail"),
           "updatedAt" = (now() AT TIME ZONE 'UTC')
       WHERE "id" = ${claimId}
         AND "state" = 'CLAIMED'
-        AND ("leaseOwner" IS NULL OR "leaseOwner" = ${input.leaseOwner})
+        AND "leaseOwner" = ${input.invocationToken}
+        AND "leaseExpiresAt" IS NOT NULL
+        AND "leaseExpiresAt" > (now() AT TIME ZONE 'UTC')
       RETURNING *
     `;
     return rows[0] ? toClaim(rows[0]) : null;
   }
 
+  /**
+   * `DISPATCHING → DISPATCHED` — the owning invocation token, and nothing else.
+   *
+   * The `detail` is deliberately NOT touched: the preflight receipt committed at
+   * the `DISPATCHING` boundary must survive this transition byte-for-byte.
+   */
   async markDispatched(
     claimId: string,
-    input: { executionRecordId: string; handleId: string; runtimeId?: string },
+    input: { invocationToken: string; executionRecordId: string; handleId: string; runtimeId?: string },
   ): Promise<ExecutionClaim | null> {
-    const rows = await this.options.client.$queryRaw<ClaimRow[]>`
-      UPDATE ai_execution_claims
-      SET "state" = 'DISPATCHED',
-          "executionRecordId" = ${input.executionRecordId},
-          "handleId" = ${input.handleId},
-          "runtimeId" = COALESCE(${input.runtimeId ?? null}, "runtimeId"),
-          "updatedAt" = (now() AT TIME ZONE 'UTC')
-      WHERE "id" = ${claimId} AND "state" = 'DISPATCHING'
-      RETURNING *
-    `;
-    return rows[0] ? toClaim(rows[0]) : null;
+    return updateClaimDispatched(this.options.client, claimId, input);
   }
 
-  async release(claimId: string, detail: string): Promise<ExecutionClaim | null> {
+  /** `CLAIMED → RELEASED`, by the owning invocation token only. */
+  async release(claimId: string, input: { invocationToken: string; detail: string }): Promise<ExecutionClaim | null> {
     const rows = await this.options.client.$queryRaw<ClaimRow[]>`
       UPDATE ai_execution_claims
       SET "state" = 'RELEASED',
-          "detail" = ${detail},
+          "detail" = ${input.detail},
           "leaseOwner" = NULL,
           "leaseExpiresAt" = NULL,
           "updatedAt" = (now() AT TIME ZONE 'UTC')
-      WHERE "id" = ${claimId} AND "state" = 'CLAIMED'
+      WHERE "id" = ${claimId}
+        AND "state" = 'CLAIMED'
+        AND "leaseOwner" = ${input.invocationToken}
       RETURNING *
     `;
     return rows[0] ? toClaim(rows[0]) : null;
   }
 
+  /** `CLAIMED → CANCELLED`, by the owning invocation token only. Terminal. */
+  async markCancelled(claimId: string, input: { invocationToken: string; detail: string }): Promise<ExecutionClaim | null> {
+    const rows = await this.options.client.$queryRaw<ClaimRow[]>`
+      UPDATE ai_execution_claims
+      SET "state" = 'CANCELLED',
+          "detail" = ${input.detail},
+          "leaseOwner" = NULL,
+          "leaseExpiresAt" = NULL,
+          "updatedAt" = (now() AT TIME ZONE 'UTC')
+      WHERE "id" = ${claimId}
+        AND "state" = 'CLAIMED'
+        AND "leaseOwner" = ${input.invocationToken}
+      RETURNING *
+    `;
+    return rows[0] ? toClaim(rows[0]) : null;
+  }
+
+  /**
+   * `DISPATCHING → UNVERIFIED`. The doubt is ADDED to any preflight receipt
+   * already on the row, never written over it.
+   *
+   * The read is only there to fetch the existing detail so the receipt can be
+   * carried through; the WRITE is still a CAS on `state = 'DISPATCHING'`, so if
+   * another process recorded the handle in between, this call loses rather than
+   * demoting a real execution identity to a doubt.
+   */
   async markUnverified(claimId: string, detail: string): Promise<ExecutionClaim | null> {
+    const existing = await this.options.client.aiExecutionClaim.findUnique({ where: { id: claimId } });
+    const nextDetail = detailWithDoubt(existing?.detail ?? null, detail);
     const rows = await this.options.client.$queryRaw<ClaimRow[]>`
       UPDATE ai_execution_claims
       SET "state" = 'UNVERIFIED',
-          "detail" = ${detail},
+          "detail" = ${nextDetail},
           "leaseOwner" = NULL,
           "leaseExpiresAt" = NULL,
           "updatedAt" = (now() AT TIME ZONE 'UTC')
       WHERE "id" = ${claimId} AND "state" = 'DISPATCHING'
+      RETURNING *
+    `;
+    return rows[0] ? toClaim(rows[0]) : null;
+  }
+
+  /**
+   * Stamps the ROTATION KEY, and nothing else.
+   *
+   * One statement, one column: no conditional `WHERE` beyond the id, because this
+   * is not a state transition and must succeed for EVERY state (a sweep has to be
+   * able to move the queue past a row it is forbidden to change), and because two
+   * sweeps racing on the same row may both stamp it — the later stamp simply wins,
+   * which is the same answer either order would produce.
+   *
+   * The timestamp is the DATABASE's clock, like every other write in this ledger,
+   * so two instances cannot disagree about the order of the queue. `updatedAt` and
+   * every semantic field are left untouched: a sweep is an observation, not an
+   * activity.
+   */
+  async markRecoverySwept(claimId: string): Promise<ExecutionClaim | null> {
+    const rows = await this.options.client.$queryRaw<ClaimRow[]>`
+      UPDATE ai_execution_claims
+      SET "recoverySweptAt" = (now() AT TIME ZONE 'UTC')
+      WHERE "id" = ${claimId}
+      RETURNING *
+    `;
+    return rows[0] ? toClaim(rows[0]) : null;
+  }
+
+  /**
+   * ATOMICALLY reserves the exact attempt as `CANCELLED` — ONE statement.
+   *
+   * A fresh INSERT lands `CANCELLED` directly, and the `ON CONFLICT DO UPDATE`
+   * with its state predicate flips a reclaimable (`CLAIMED` with a lapsed lease,
+   * or `RELEASED`) row in the same write. There is therefore NO intermediate
+   * `CLAIMED` row for a crash to strand — which is the whole defect the old
+   * two-write `claim()` + `markCancelled()` sequence had, because a stranded
+   * `CLAIMED` row becomes reclaimable once its lease lapses, letting a racing
+   * `execute()` dispatch the attempt that was just cancelled.
+   *
+   * The `WHERE` on the conflicting row also requires the SAME attempt identity
+   * and the SAME key, so a row held under a different key is never overwritten: it
+   * is reported as `CONFLICT` after the classify pass, exactly like `claim()`.
+   */
+  async reserveCancellation(request: ExecutionClaimReservationRequest): Promise<ExecutionClaimReservation> {
+    for (let pass = 0; pass < MAX_CLASSIFY_ATTEMPTS; pass += 1) {
+      const reserved = await this.insertCancelled(request);
+      if (reserved) return { kind: "RESERVED", claim: reserved, priorState: null };
+      const classified = await this.classifyReservation(request);
+      if (classified) return classified;
+      // `null` means a CAS lost or the row moved under us. Re-read and retry; the
+      // state only moves forward, so this terminates in practice.
+    }
+    throw new AiWorkforceError(
+      "PERSISTENCE_UNAVAILABLE",
+      `The execution claim reservation for "${request.idempotencyKey}" could not be resolved after ${MAX_CLASSIFY_ATTEMPTS} attempts`,
+      { idempotencyKey: request.idempotencyKey },
+    );
+  }
+
+  /** The single-statement reservation. `null` = "nothing landed; classify". */
+  private async insertCancelled(request: ExecutionClaimReservationRequest): Promise<ExecutionClaim | null> {
+    const id = this.options.ids.next("claim");
+    let rows: ClaimRow[];
+    try {
+      rows = await this.options.client.$queryRaw<ClaimRow[]>`
+        INSERT INTO ai_execution_claims
+          ("id", "missionId", "taskId", "attempt", "actorId", "capabilityId", "runtimeId",
+           "idempotencyKey", "state", "leaseOwner", "leaseExpiresAt", "detail", "claimedAt", "updatedAt")
+        VALUES
+          (${id}, ${request.missionId}, ${request.taskId}, ${request.attempt},
+           ${request.actorId}, ${request.capabilityId}, ${request.runtimeId ?? null},
+           ${request.idempotencyKey}, 'CANCELLED', ${request.leaseOwner}, NULL, ${request.detail},
+           (now() AT TIME ZONE 'UTC'), (now() AT TIME ZONE 'UTC'))
+        ON CONFLICT ("taskId", "attempt") DO UPDATE
+          SET "state" = 'CANCELLED',
+              "detail" = EXCLUDED."detail",
+              "leaseOwner" = EXCLUDED."leaseOwner",
+              "leaseExpiresAt" = NULL,
+              "updatedAt" = (now() AT TIME ZONE 'UTC')
+          WHERE ai_execution_claims."idempotencyKey" = EXCLUDED."idempotencyKey"
+            AND ai_execution_claims."state" IN ('CLAIMED', 'RELEASED')
+            AND (ai_execution_claims."leaseExpiresAt" IS NULL
+                 OR ai_execution_claims."leaseExpiresAt" <= (now() AT TIME ZONE 'UTC'))
+        RETURNING *
+      `;
+    } catch (error) {
+      // `ON CONFLICT ("taskId", "attempt")` names ONE unique index, because
+      // Postgres allows exactly one conflict target per statement. If the row
+      // instead collides on the OTHER unique index (`idempotencyKey`) — a
+      // different attempt held under this key, or this attempt held under a
+      // different key — the insert raises a 23505 unique violation. That is not a
+      // fault: it is a second way of saying "nothing landed; classify". Returning
+      // `null` hands it to `classifyReservation`, which reports the conflict
+      // honestly (and never overwrites the row).
+      if (isUniqueViolation(error)) return null;
+      throw new AiWorkforceError(
+        "PERSISTENCE_UNAVAILABLE",
+        `Could not reserve the execution claim for "${request.idempotencyKey}" as cancelled`,
+        {
+          idempotencyKey: request.idempotencyKey,
+          cause: error instanceof Error ? error.message : String(error),
+        },
+      );
+    }
+    return rows[0] ? toClaim(rows[0]) : null;
+  }
+
+  /**
+   * Why the reservation did NOT land. Never returns `RESERVED` — if a
+   * reclaimable row is seen here the caller re-runs the single-statement
+   * reservation instead of mutating through a second write.
+   */
+  private async classifyReservation(
+    request: ExecutionClaimReservationRequest,
+  ): Promise<ExecutionClaimReservation | null> {
+    const byKey = await this.readByKeyWithClock(request.idempotencyKey);
+    const row = byKey ?? (await this.readByAttemptWithClock(request.taskId, request.attempt));
+    if (!row) {
+      // A bare `ON CONFLICT` absorbs every unique constraint, so nothing found by
+      // key OR by attempt can only mean the PRIMARY KEY collided: an id-factory
+      // fault, reported rather than hidden.
+      throw new AiWorkforceError(
+        "PERSISTENCE_UNAVAILABLE",
+        `The execution claim ledger attracted no row for "${request.idempotencyKey}" and holds none for task ${request.taskId} attempt ${request.attempt}`,
+        { idempotencyKey: request.idempotencyKey, taskId: request.taskId, attempt: request.attempt },
+      );
+    }
+    if (byKey === null && row.idempotencyKey !== request.idempotencyKey) {
+      return { kind: "CONFLICT", claimId: row.id, taskId: row.taskId, attempt: row.attempt };
+    }
+    if (row.taskId !== request.taskId || row.attempt !== request.attempt) {
+      return { kind: "CONFLICT", claimId: row.id, taskId: row.taskId, attempt: row.attempt };
+    }
+    if (!isExecutionClaimState(row.state)) throw unknownStateError(row);
+
+    switch (row.state) {
+      case "CANCELLED":
+        return { kind: "ALREADY_CANCELLED", claim: toClaim(row) };
+      case "DISPATCHED":
+        return { kind: "EXECUTION_EXISTS", claim: toClaim(row) };
+      case "UNVERIFIED":
+        return { kind: "UNVERIFIED", claim: toClaim(row), detail: row.detail ?? ALREADY_UNVERIFIED_DETAIL };
+      case "DISPATCHING": {
+        if (row.leaseLive === true) return { kind: "IN_PROGRESS", claim: toClaim(row) };
+        const promoted = await this.markUnverified(row.id, UNVERIFIED_DETAIL);
+        if (!promoted) return null;
+        return { kind: "UNVERIFIED", claim: promoted, detail: promoted.detail ?? UNVERIFIED_DETAIL };
+      }
+      case "CLAIMED":
+        // A LIVE lease means an invocation may be mid-flight: report it rather
+        // than forcing a cancellation over the top of it. (The one-statement write
+        // above refused for the same reason — it will not touch a live lease.)
+        if (row.leaseLive === true) return { kind: "IN_PROGRESS", claim: toClaim(row) };
+        // The lease has LAPSED: the reservation CAN land, so re-run the
+        // one-statement write rather than mutating through a second.
+        return null;
+      default:
+        // RELEASED — a control refused before dispatch, so no run exists. The
+        // reservation CAN land: re-run the one-statement write.
+        return null;
+    }
+  }
+
+  /** `CANCELLED → RELEASED`, by the reservation's own token: the compensation. */
+  async rollbackCancellation(
+    claimId: string,
+    input: { invocationToken: string; detail: string },
+  ): Promise<ExecutionClaim | null> {
+    const rows = await this.options.client.$queryRaw<ClaimRow[]>`
+      UPDATE ai_execution_claims
+      SET "state" = 'RELEASED',
+          "detail" = ${input.detail},
+          "leaseOwner" = NULL,
+          "leaseExpiresAt" = NULL,
+          "updatedAt" = (now() AT TIME ZONE 'UTC')
+      WHERE "id" = ${claimId}
+        AND "state" = 'CANCELLED'
+        AND "leaseOwner" = ${input.invocationToken}
       RETURNING *
     `;
     return rows[0] ? toClaim(rows[0]) : null;
@@ -430,7 +944,21 @@ export class PrismaExecutionClaimRepository implements ExecutionClaimRepository 
     return rows[0] ? toClaim(rows[0]) : null;
   }
 
-  /** CAS: `CLAIMED`/`RELEASED` → a fresh `CLAIMED` lease. Only if the state still matches. */
+  /**
+   * `CLAIMED`/`RELEASED` → a fresh `CLAIMED` lease: ONE atomic statement, using
+   * DATABASE TIME and an EXPIRED-LEASE predicate.
+   *
+   * This is the other verified defect. The earlier version read the row (which
+   * said "expired"), then updated it unconditionally on the state it had read.
+   * Between the read and the write the owner can RENEW its lease — so the write
+   * stole an attempt that was, at the moment of the write, legitimately held. The
+   * predicate below makes that impossible: the UPDATE only lands when the lease
+   * is genuinely NOT live any more, judged by the database in the same statement
+   * that renews it.
+   *
+   * `expectedState` is still part of the predicate, so the CAS cannot move a row
+   * that has advanced (to `DISPATCHING`, say) while this caller was deciding.
+   */
   private async reclaim(
     claimId: string,
     expectedState: ExecutionClaimState,
@@ -444,13 +972,18 @@ export class PrismaExecutionClaimRepository implements ExecutionClaimRepository 
           "leaseExpiresAt" = ((now() AT TIME ZONE 'UTC') + (${ttlMs}::double precision * interval '1 millisecond')),
           "detail" = NULL,
           "updatedAt" = (now() AT TIME ZONE 'UTC')
-      WHERE "id" = ${claimId} AND "state" = ${expectedState}
+      WHERE "id" = ${claimId}
+        AND "state" = ${expectedState}
+        AND ("leaseExpiresAt" IS NULL OR "leaseExpiresAt" <= (now() AT TIME ZONE 'UTC'))
       RETURNING *
     `;
     return rows[0] ? toClaim(rows[0]) : null;
   }
 
   private async readByKeyWithClock(idempotencyKey: string): Promise<ClaimRowWithClock | null> {
+    // A named method so the transaction-aware sibling above and this read share
+    // one place to change if the claim read ever gains a column.
+
     const rows = await this.options.client.$queryRaw<ClaimRowWithClock[]>`
       SELECT c.*,
              (c."leaseExpiresAt" IS NOT NULL AND c."leaseExpiresAt" > (now() AT TIME ZONE 'UTC')) AS "leaseLive",

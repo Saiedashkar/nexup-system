@@ -59,6 +59,23 @@ export type {
   PrismaExecutionClaimRepositoryOptions,
 } from "./prisma-execution-claim-repository";
 
+/* ── Step 5A-4 — the ATOMIC execution-attempt finalizer ──
+   Inserts the execution record and moves the claim to DISPATCHED in ONE
+   transaction, so neither side can commit alone. The application composes it;
+   the in-memory composition does not need it (there is no transaction to open
+   against Maps) and says so. */
+export {
+  PrismaExecutionAttemptCommitter,
+  assertExecutionAttemptCommitterSchema,
+} from "./prisma-execution-attempt-committer";
+export type {
+  ExecutionAttemptCommitter,
+  ExecutionAttemptCommitInput,
+  ExecutionAttemptCommitResult,
+  ExecutionAttemptCommitterPrismaClient,
+  PrismaExecutionAttemptCommitterOptions,
+} from "./prisma-execution-attempt-committer";
+
 /* ── Step 5A-3 — the AUTHORITATIVE business-scope resolver ──
    Resolves an opaque business reference (slug OR database id) to the existing
    `Business` registry row. No second registry is introduced. */

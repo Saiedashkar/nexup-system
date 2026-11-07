@@ -1,7 +1,7 @@
 import { AiWorkforceError } from "@/modules/ai-workforce/core/errors";
 import type { Clock, IdFactory } from "@/modules/ai-workforce/core/types";
-import type { WorkforceDomain } from "../index";
-import { AgentRuntimeDispatcher } from "../runtimes/agent-runtime-dispatcher";
+import type { CapabilityExecutionService, ExecutionOutcome } from "../execution/capability-execution-contracts";
+import type { ExecutionAuthority } from "../execution/execution-authority";
 import type { Actor } from "../actors/actor-contracts";
 import type { ActorRegistry } from "../actors/actor-registry";
 import type { ActorAssignmentService } from "../assignments/actor-assignment-service";
@@ -19,7 +19,6 @@ import {
   type TaskState,
 } from "../missions/task-contracts";
 
-import type { RuntimeRegistry } from "../runtimes/runtime-registry";
 import type { ReviewDecision, ReviewService, TaskReview } from "../review/task-review";
 import { isTerminalExecutionStatus, type AgentExecutionError } from "../runtimes/agent-runtime";
 import type {
@@ -39,14 +38,20 @@ import type { MissionId, ReviewId, TaskId } from "../core/refs";
  * API routes may READ a snapshot (`snapshot()`), but they never walk the state
  * machine themselves — that is what keeps one truth instead of one per caller.
  *
- * Two deliberate boundaries:
+ * Three deliberate boundaries:
  *
- *   1. It does not authorise anything. The dispatcher still enforces the
- *      capability assignment and the runtime binding; a refusal is surfaced as
- *      a typed outcome, and the task is NOT silently completed.
+ *   1. It does not authorise an EXECUTION. Since Step 5A-4 it holds no runtime,
+ *      no dispatcher and no provider adapter: EVERY attempt goes through
+ *      `CapabilityExecutionService`, which owns the durable claim, the final
+ *      policy preflight and the `DISPATCHING` authorization point. A refusal is
+ *      surfaced as a typed outcome, and the task is NOT silently completed.
  *   2. It does not decide the outcome of an agent's work. With the default
  *      review policy a successful execution parks the task in REVIEW and stops
  *      there until a HUMAN decides.
+ *   3. It never performs external I/O. After the cutover the orchestrator's only
+ *      reachable execution surfaces are `execute`, `observe` and `cancel` on the
+ *      execution service, so "the orchestrator called a runtime directly" is no
+ *      longer expressible in this file.
  */
 
 export const REVIEW_POLICY = ["ALWAYS", "NEVER"] as const;
@@ -55,8 +60,19 @@ export type ReviewPolicy = (typeof REVIEW_POLICY)[number];
 export type MissionOrchestratorDeps = {
   missions: MissionService;
   tasks: TaskRepository;
-  dispatcher: AgentRuntimeDispatcher;
-  runtime: RuntimeRegistry;
+  /**
+   * The ONLY way this orchestrator can reach an execution. It replaced the
+   * direct `AgentRuntimeDispatcher` dependency in Step 5A-4, which is what makes
+   * the claim, the final preflight and the `DISPATCHING` boundary unavoidable
+   * rather than merely conventional.
+   */
+  execution: CapabilityExecutionService;
+  /**
+   * NOT PRESENT, deliberately: there is no runtime registry, no dispatcher and no
+   * provider adapter on this dependency list. Runtime resolution happens inside
+   * the execution service at its own final preflight, so the orchestrator has no
+   * way to observe a runtime even if it wanted to.
+   */
   executions: ExecutionRecorder;
   executionRecords: ExecutionRecordRepository;
   reviews: ReviewService;
@@ -115,6 +131,17 @@ export type TaskAdvanceOutcome = {
   executionRecordId?: string;
 };
 
+/** The authority-carrying options every foreground operation accepts. */
+export type ForegroundOptions = {
+  /**
+   * The server-created authority for this request. REQUIRED for anything that
+   * can start a new attempt or reach a runtime (see `assertForegroundAuthority`
+   * inside the execution service): a missing authority is a REFUSAL, never an
+   * implicit system identity.
+   */
+  authority?: ExecutionAuthority;
+};
+
 export type MissionAdvanceResult = {
   mission: Mission;
   tasks: MissionTask[];
@@ -154,7 +181,11 @@ export class MissionOrchestrator {
    * PLANNING. Dependencies are honoured: a task whose dependencies are unmet
    * stays PENDING rather than being dispatched early.
    */
-  async plan(missionId: MissionId, inputs: readonly MissionTaskCreateInput[]): Promise<MissionAdvanceResult> {
+  async plan(
+    missionId: MissionId,
+    inputs: readonly MissionTaskCreateInput[],
+    options: ForegroundOptions = {},
+  ): Promise<MissionAdvanceResult> {
     const mission = await this.deps.missions.require(missionId);
     if (inputs.length === 0) {
       throw new AiWorkforceError("INVALID_MISSION", "A plan needs at least one task", { missionId });
@@ -199,7 +230,7 @@ export class MissionOrchestrator {
       await this.deps.missions.attachTask(missionId, stored.id);
     }
 
-    return this.advance(missionId);
+    return this.advance(missionId, options);
   }
 
   /* ═══════════════════════════════════════════════════
@@ -216,7 +247,10 @@ export class MissionOrchestrator {
    * task the caller chooses to act on rather than an automatic second run —
    * with a real provider, an automatic retry costs a real turn.
    */
-  async advance(missionId: MissionId, options: { startNext?: boolean } = {}): Promise<MissionAdvanceResult> {
+  async advance(
+    missionId: MissionId,
+    options: { startNext?: boolean; authority?: ExecutionAuthority } = {},
+  ): Promise<MissionAdvanceResult> {
     const changes: string[] = [];
     let mission = await this.deps.missions.require(missionId);
     if (isTerminalMissionState(mission.state)) {
@@ -249,7 +283,9 @@ export class MissionOrchestrator {
     if (!running && options.startNext !== false) {
       const next = tasks.find((task) => task.state === "READY" && dependenciesMet(task, tasks));
       if (next) {
-        const outcome = await this.startTask(missionId, next.id);
+        const outcome = await this.startTask(missionId, next.id, {
+          ...(options.authority ? { authority: options.authority } : {}),
+        });
         // A refusal is REPORTED, never swallowed: an operator staring at a
         // mission that will not progress must be able to read WHY from the same
         // result that told them it did not progress. The task state alone cannot
@@ -276,11 +312,31 @@ export class MissionOrchestrator {
      ═══════════════════════════════════════════════════ */
 
   /**
-   * Hands one READY task to its actor's runtime and opens its execution record.
+   * Hands one READY task to the Capability Execution Service and, only after the
+   * attempt is durably DISPATCHED, moves the task to RUNNING.
+   *
+   * WHAT CHANGED IN 5A-4, and why the order matters:
+   *
+   *   BEFORE: read task → assert READY → `dispatcher.startJob` (a REAL external
+   *           call) → open the execution record → CAS the task.
+   *   AFTER:  read task → assert READY → `execution.execute` (claim → final
+   *           preflight → committed DISPATCHING → external call → atomic record
+   *           + DISPATCHED) → CAS the task.
+   *
+   * The task CAS is deliberately the LAST step and deliberately NOT inside the
+   * execution transaction: a mission's task state is the orchestrator's, and the
+   * attempt's durability is the execution service's. If the CAS loses, the
+   * durable claim and execution record remain authoritative and adoptable — a
+   * retry REPLAYS them (`REPLAYED`) and never starts a second run.
+   *
    * Refusals are reported as a BLOCKED outcome: the task is not completed, not
    * failed, and not silently retried.
    */
-  async startTask(missionId: MissionId, taskId: TaskId): Promise<TaskAdvanceOutcome> {
+  async startTask(
+    missionId: MissionId,
+    taskId: TaskId,
+    options: ForegroundOptions = {},
+  ): Promise<TaskAdvanceOutcome> {
     await this.deps.missions.require(missionId);
     const task = await requireTask(this.deps.tasks, taskId);
     if (task.missionId !== missionId) {
@@ -298,73 +354,58 @@ export class MissionOrchestrator {
     if (!task.assignedActorId || !task.requiredCapabilityId) {
       throw new AiWorkforceError("INVALID_MISSION", `Task "${taskId}" has no assigned actor or capability`, { taskId });
     }
-
-    const actor = this.deps.actors ? await this.deps.actors.require(task.assignedActorId) : null;
-    if (this.deps.actors && !actor) {
-      return { taskId, state: task.state, blocked: `actor "${task.assignedActorId}" is not registered` };
-    }
-    const runtime = actor ? this.deps.runtime.runtimeForActor(actor) : null;
-    if (!runtime) {
-      return { taskId, state: task.state, blocked: `actor "${task.assignedActorId}" has no usable runtime` };
-    }
-    if (this.deps.assignments && !this.deps.assignments.hasCapability(task.assignedActorId, task.requiredCapabilityId, task.requiredCapabilityVersion)) {
+    // ── Foreground authority is REQUIRED to start work. ──
+    // Reported as a BLOCKED outcome rather than thrown, so an operator reading an
+    // advance result learns WHY a mission did not move instead of receiving a 500.
+    if (!options.authority) {
       return {
         taskId,
         state: task.state,
-        blocked: `actor "${task.assignedActorId}" is not assigned capability "${task.requiredCapabilityId}"`,
+        blocked: "AUTHORITY_UNRESOLVED: starting an execution attempt requires an authenticated request authority",
       };
     }
 
     const attempt = task.attempt + 1;
     const idempotencyKey = `task:${task.id}:attempt:${attempt}`;
 
-    const started = await this.deps.dispatcher.startJob({
-      actorId: task.assignedActorId,
-      runtimeId: runtime.identity.id,
-      capabilityId: task.requiredCapabilityId,
-      capabilityVersion: task.requiredCapabilityVersion,
-      missionId,
-      jobId: task.id,
-      idempotencyKey,
-      traceId: `mission:${missionId}:task:${task.id}:attempt:${attempt}`,
-      input: task.input,
-    });
-
-    if (!started.dispatched || !started.handle) {
-      return {
-        taskId,
-        state: task.state,
-        blocked: started.error?.message ?? started.reason ?? "runtime refused the dispatch",
-      };
-    }
-
-    const execution = await this.deps.executions.open({
-      handleId: started.handle.handleId,
-      runtimeId: runtime.identity.id,
-      actorId: task.assignedActorId,
-      capabilityId: task.requiredCapabilityId,
-      attempt,
-      idempotencyKey,
+    const outcome = await this.deps.execution.execute({
       missionId,
       taskId: task.id,
-      status: started.status ?? started.handle.status,
-      replayed: started.execution?.replayed ?? false,
-      ...(task.requiredCapabilityVersion ? { capabilityVersion: task.requiredCapabilityVersion } : {}),
+      attempt,
+      idempotencyKey,
+      authority: options.authority,
+      assignedActorId: task.assignedActorId,
+      requiredCapabilityId: task.requiredCapabilityId,
+      ...(task.requiredCapabilityVersion ? { requiredCapabilityVersion: task.requiredCapabilityVersion } : {}),
+      input: task.input,
+      traceId: `mission:${missionId}:task:${task.id}:attempt:${attempt}`,
+      businessScope: null,
+      source: "MANUAL",
     });
+
+    if (outcome.kind !== "DISPATCHED" && outcome.kind !== "REPLAYED") {
+      return { taskId, state: task.state, blocked: describeExecutionOutcome(outcome) };
+    }
 
     const running: MissionTask = {
       ...applyTaskTransition(task, "RUNNING", `dispatch attempt ${attempt}`, this.deps.now().toISOString()),
       attempt,
-      executionRecordId: execution.id,
-      executionHandleId: started.handle.handleId,
+      executionRecordId: outcome.executionRecordId,
+      executionHandleId: outcome.handleId,
     };
     // A NEW attempt clears the previous attempt's failure.
     delete running.error;
     const stored = await this.deps.tasks.update(running, [task.state]);
     if (!stored) {
-      throw new AiWorkforceError("MISSION_CONFLICT", `Task "${taskId}" changed while it was being started`, { taskId });
+      // The attempt IS durably dispatched; only the task row moved under us. That
+      // is not a reason to dispatch again — and the caller must not try.
+      throw new AiWorkforceError(
+        "MISSION_CONFLICT",
+        `Task "${taskId}" changed while its attempt was being dispatched; the durable execution record remains authoritative and a retry will re-adopt it`,
+        { taskId, executionRecordId: outcome.executionRecordId },
+      );
     }
-    return { taskId, state: stored.state, executionRecordId: execution.id };
+    return { taskId, state: stored.state, executionRecordId: outcome.executionRecordId };
   }
 
   /* ═══════════════════════════════════════════════════
@@ -382,7 +423,7 @@ export class MissionOrchestrator {
   async settleTask(
     missionId: MissionId,
     taskId: TaskId,
-    options: { waitTimeoutMs?: number } = {},
+    options: { waitTimeoutMs?: number; authority?: ExecutionAuthority } = {},
   ): Promise<TaskAdvanceOutcome> {
     const task = await requireTask(this.deps.tasks, taskId);
     if (task.state !== "RUNNING" || !task.executionHandleId || !task.executionRecordId) {
@@ -405,24 +446,63 @@ export class MissionOrchestrator {
     // success.
     const alreadyDecided = isTerminalExecutionStatus(record.status);
     let execution = record;
-    const outcome = await this.deps.dispatcher.waitForExecution(
-      { runtimeId: record.runtimeId, handleId: task.executionHandleId },
-      options.waitTimeoutMs ? { timeoutMs: options.waitTimeoutMs } : undefined,
+
+    // Observation goes through the GOVERNED abstraction, never to a runtime
+    // directly. It never dispatches and never resubmits: `observe` re-adopts the
+    // execution from the runtime that knows the handle, or reports honestly that
+    // it could not be asked.
+    const observation = await this.deps.execution.observe(
+      {
+        runtimeId: record.runtimeId,
+        handleId: task.executionHandleId,
+        executionRecordId: record.id,
+        missionId,
+        taskId,
+      },
+      // "Settle" means WAIT for the end state, exactly as it did before the
+      // cutover: bounded by the runtime's own timeout, or by the caller's
+      // `waitTimeoutMs`. Without this, a run that is simply still working would
+      // be escalated to a human for the crime of not being finished yet.
+      {
+        waitForTerminal: true,
+        ...(options.waitTimeoutMs ? { waitTimeoutMs: options.waitTimeoutMs } : {}),
+      },
     );
-    if (!outcome.dispatched && outcome.error) {
+
+    if (observation.kind === "UNAVAILABLE" || observation.kind === "NO_RUNTIME") {
       if (!alreadyDecided) {
-        throw new AiWorkforceError("RUNTIME_UNAVAILABLE", outcome.error.message, { taskId, code: outcome.error.code });
+        throw new AiWorkforceError("RUNTIME_UNAVAILABLE", observation.detail, { taskId, code: observation.kind });
       }
       // The runtime cannot answer, but the attempt is already decided durably.
+    } else if (observation.kind === "UNVERIFIED") {
+      // The runtime answered and no longer knows this execution: the run may have
+      // succeeded before we lost track of it. That is a HUMAN decision — never a
+      // fabricated FAILED and never an automatic retry.
+      return this.escalateUnverifiedExecution(missionId, taskId, { detail: observation.detail });
+    } else if (observation.kind === "TIMEOUT" && !alreadyDecided) {
+      // A BOUNDED WAIT EXPIRING IS NOT AN OUTAGE (Step 5A-4 correction, P1-2).
+      //
+      // The execution is simply still in flight. Nothing is settled and nothing is
+      // parked for review — presenting an unfinished run as a result a human must
+      // adjudicate is exactly what the still-running branch below refuses to do.
+      // Flattening `RUNTIME_TIMEOUT` into `UNAVAILABLE` used to route this into the
+      // throw above, turning "still working" into "the provider is unreachable".
+      return {
+        taskId,
+        state: task.state,
+        blocked: `RUNTIME_TIMEOUT: the execution did not reach an end state within the wait; it is still ${observation.status} and nothing was settled`,
+      };
     } else {
       execution = await this.deps.executions.apply(record.id, {
-        status: outcome.status ?? "UNKNOWN",
-        ...(outcome.execution?.providerExecutionId ? { providerExecutionId: outcome.execution.providerExecutionId } : {}),
-        ...(outcome.execution?.completedAt ? { completedAt: outcome.execution.completedAt } : {}),
-        ...(outcome.execution?.durationMs !== undefined ? { durationMs: outcome.execution.durationMs } : {}),
-        ...(outcome.output !== undefined ? { output: outcome.output } : {}),
-        ...(outcome.execution?.outputText !== undefined ? { outputText: outcome.execution.outputText } : {}),
-        ...(outcome.execution?.error ? { error: outcome.execution.error } : {}),
+        status: observation.status,
+        ...(observation.providerExecutionId ? { providerExecutionId: observation.providerExecutionId } : {}),
+        // The observation carries the provider's RESULT, and persisting it is
+        // what keeps a settled mission reviewable: the review below points at
+        // this record, so an output dropped here would hand a human an empty
+        // brief. It is written onto the SAME record, in the same patch.
+        ...(observation.output !== undefined ? { output: observation.output } : {}),
+        ...(observation.outputText !== undefined ? { outputText: observation.outputText } : {}),
+        ...(observation.error ? { error: observation.error } : {}),
       });
     }
 
@@ -450,9 +530,19 @@ export class MissionOrchestrator {
       } else {
         await this.moveTask(task, "FAILED", "execution failed", toTaskError(execution.error));
       }
+    } else if (execution.status !== "UNKNOWN") {
+      // STILL RUNNING (Step 5A-4 correction). The caller asked to WAIT and the
+      // bounded wait elapsed without an end state. A still-running execution is
+      // NOT a review item: moving it to REVIEW would present an unfinished run
+      // as a result a human must adjudicate. Report honestly, settle nothing.
+      return {
+        taskId,
+        state: task.state,
+        blocked: `RUNTIME_TIMEOUT: the execution is still ${execution.status}; nothing was settled`,
+      };
     } else {
-      // UNKNOWN / non-terminal: a state the provider did not explain is a HUMAN
-      // decision, not one this service may guess.
+      // UNKNOWN / other non-terminal: a state the provider did not explain is a
+      // HUMAN decision, not one this service may guess.
       await this.moveTask(
         task,
         "REVIEW",
@@ -516,7 +606,7 @@ export class MissionOrchestrator {
    */
   async decide(
     reviewId: ReviewId,
-    input: { decision: ReviewDecision; decidedBy: string; note?: string },
+    input: { decision: ReviewDecision; decidedBy: string; note?: string; authority?: ExecutionAuthority },
   ): Promise<MissionAdvanceResult> {
     const review = await this.deps.reviews.get(reviewId);
     if (!review) {
@@ -549,7 +639,11 @@ export class MissionOrchestrator {
       await this.moveTask(revised, "READY", "ready for another attempt");
     }
 
-    return this.advance(review.missionId);
+    // A decision can immediately re-open work (NEEDS_REVISION → READY), so the
+    // authority travels with it: the advance that follows may start an attempt.
+    return this.advance(review.missionId, {
+      ...(input.authority ? { authority: input.authority } : {}),
+    });
   }
 
   /* ═══════════════════════════════════════════════════
@@ -558,26 +652,68 @@ export class MissionOrchestrator {
 
   /**
    * Cancels a mission: every in-flight execution is cancelled THROUGH the
-   * runtime port, remaining tasks are cancelled, then the mission is.
+   * governed execution service, remaining tasks are cancelled, then the mission
+   * is.
+   *
+   * CANCELLATION REQUIRES AN AUTHORITY. It is an external side effect, and the
+   * execution service persists a `CANCEL_REQUESTED` audit event BEFORE it asks
+   * the runtime, so there is no unauthenticated and no unaudited way to reach a
+   * provider.
+   *
+   * @throws AUTHORITY_UNRESOLVED when no authority is supplied.
    */
-  async cancelMission(missionId: MissionId, reason = "cancelled by request"): Promise<MissionAdvanceResult> {
+  async cancelMission(
+    missionId: MissionId,
+    reason = "cancelled by request",
+    options: ForegroundOptions = {},
+  ): Promise<MissionAdvanceResult> {
     const mission = await this.deps.missions.require(missionId);
     const tasks = await this.deps.tasks.listForMission(missionId);
+    const outstanding = tasks.filter((task) => !isTerminalTaskState(task.state));
 
-    for (const task of tasks) {
-      if (task.state === "RUNNING" && task.executionHandleId && task.executionRecordId) {
-        const record = await this.deps.executionRecords.get(task.executionRecordId);
-        if (record) {
-          const cancelled = await this.deps.dispatcher.cancelJob(
-            { runtimeId: record.runtimeId, handleId: task.executionHandleId },
+    // CANCELLING A MISSION WITH OUTSTANDING WORK REQUIRES AN AUTHORITY — for
+    // EVERY non-terminal task, not only a RUNNING one. A READY task may hold a
+    // dispatch reservation the task row does not show.
+    if (outstanding.length > 0 && !options.authority) {
+      throw new AiWorkforceError(
+        "AUTHORITY_UNRESOLVED",
+        "Cancelling a mission with outstanding work requires an authenticated authority",
+        { missionId, tasks: outstanding.map((task) => task.id) },
+      );
+    }
+
+    // Ask the DELIVERY LEDGER, through the governed service, what is in flight —
+    // and let it RESERVE the next attempt of every dispatchable task as
+    // CANCELLED so a racing `execute()` cannot enter dispatch. Anything it cannot
+    // confirm is reported `unresolved`.
+    const cancellations =
+      outstanding.length > 0 && options.authority
+        ? await this.deps.execution.cancelMissionAttempts({
+            missionId,
+            tasks: outstanding.map((task) => ({ taskId: task.id, state: task.state })),
             reason,
-          );
-          if (cancelled.dispatched) await this.deps.executions.markCancelled(record.id, reason);
-        }
-      }
-      if (!isTerminalTaskState(task.state)) {
-        await this.moveTask(task, "CANCELLED", reason);
-      }
+            authority: options.authority,
+          })
+        : [];
+
+    const unresolved = cancellations.filter((cancellation) => cancellation.unresolved);
+    if (unresolved.length > 0) {
+      // DO NOT TERMINALISE THE MISSION. An external run may exist; cancelling
+      // now would orphan it under a CANCELLED mission with nothing to adopt it.
+      // The operator can cancel again once the attempt finalises or is parked.
+      const latest = await this.deps.missions.require(missionId);
+      return {
+        mission: latest,
+        tasks: await this.deps.tasks.listForMission(missionId),
+        changes: unresolved.map((c) => `task:${c.taskId}:CANCEL_BLOCKED:${c.detail}`),
+        pendingReviews: await this.deps.reviews.listPending(),
+      };
+    }
+
+    for (const task of outstanding) {
+      const current = await this.deps.tasks.get(task.id);
+      if (!current || isTerminalTaskState(current.state)) continue;
+      await this.moveTask(current, "CANCELLED", reason);
     }
 
     if (!isTerminalMissionState(mission.state)) {
@@ -727,42 +863,36 @@ export class MissionOrchestrator {
   }
 }
 
-/**
- * The orchestrator wired from a workforce domain.
- *
- * The dispatcher it uses is the SAME one the rest of the platform uses, so the
- * assignment and runtime-binding rules are not re-implemented here.
- */
-export function createMissionOrchestrator(
-  domain: WorkforceDomain,
-  options: {
-    reviewPolicy?: ReviewPolicy;
-    defaultReviewerActorId?: string;
-    dispatcher?: AgentRuntimeDispatcher;
-  } = {},
-): MissionOrchestrator {
-  const dispatcher =
-    options.dispatcher ??
-    new AgentRuntimeDispatcher({
-      runtimes: domain.runtimes,
-      actors: domain.actors,
-      assignments: domain.assignments,
-    });
-  return new MissionOrchestrator({
-    missions: domain.missions,
-    tasks: domain.tasks,
-    dispatcher,
-    runtime: domain.runtimes,
-    executions: domain.executions,
-    executionRecords: domain.executionRecords,
-    reviews: domain.reviews,
-    ids: domain.ids,
-    now: domain.now,
-    actors: domain.actors,
-    assignments: domain.assignments,
-    ...(options.reviewPolicy ? { reviewPolicy: options.reviewPolicy } : {}),
-    ...(options.defaultReviewerActorId ? { defaultReviewerActorId: options.defaultReviewerActorId } : {}),
-  });
+/*
+   THE COMPOSITION FACTORY LIVES ELSEWHERE. `createMissionOrchestrator` moved to
+   `./create-mission-orchestrator` in Step 5A-4, because assembling the DEFAULT
+   execution boundary requires naming the internal runtime dispatcher — and this
+   module must not be able to name a runtime, a dispatcher or a provider adapter
+   at all. The dispatcher is constructed there, handed to
+   `CapabilityExecutionService`, and from then on it lives BELOW the execution
+   boundary; this file only ever sees `CapabilityExecutionService`.
+*/
+
+/** A bounded, operator-readable reason for an attempt that did not start. */
+export function describeExecutionOutcome(outcome: ExecutionOutcome): string {
+  switch (outcome.kind) {
+    case "IN_PROGRESS":
+      return `IN_PROGRESS: another invocation owns attempt ${outcome.claimId}; nothing was started here`;
+    case "WAIT_APPROVAL":
+      return `APPROVAL_REQUIRED: an approval bound to this attempt is still outstanding`;
+    case "WAIT_HUMAN":
+      return `WAIT_HUMAN: ${outcome.detail}`;
+    case "BLOCKED":
+      return `BLOCKED ${outcome.code}: ${outcome.message}`;
+    case "DENIED":
+      return `DENIED ${outcome.code}: ${outcome.message}`;
+    case "UNVERIFIED":
+      return `UNVERIFIED: ${outcome.detail}`;
+    case "FAILED":
+      return `FAILED ${outcome.error.category}: ${outcome.error.message}`;
+    default:
+      return "the execution service returned an outcome this version does not understand";
+  }
 }
 
 /** Maps a runtime error into the task's own error shape. */

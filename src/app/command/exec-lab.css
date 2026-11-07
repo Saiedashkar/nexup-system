@@ -1,0 +1,3485 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEXUP COMMAND — EXEC EXPERIENCE
+   ───────────────────────────────────────────────────────────────────────────
+   ONE additive layer, imported by the EXEC routes only. It:
+
+     · redefines NO shared token (it reads `--nc-*` and derives from them);
+     · touches NO other page's shell. Every rule that reaches a `.nc-*` element
+       is guarded twice: by `:has(.nce[data-mode])` — which is only ever true
+       while the CONVERSATION is mounted — and by the fact that this stylesheet
+       is loaded on `/command/exec` and `/command/exec/lab` alone. The review
+       tools carry `.nce--lab` and no `data-mode`, so opening them leaves the
+       shell exactly as every other page sees it. That is checkable on screen;
+     · namespaces every class `.nce-*`, so it cannot collide with `.nc-ex*`
+       (the foundation console) or any other workspace;
+     · uses LOGICAL properties (inline-start/end) throughout, so Arabic RTL
+       needs no second rule set — direction is one attribute.
+
+   The visual position, this pass: graphite, not glass — and now a COMPOSITION
+   rather than a column of controls. Four decisions carry it:
+
+     1. THE COMPOSER NEVER MOVES. It is mounted once, at the foot of the room,
+        for the start screen and the conversation alike. Starting the work swaps
+        what is above it and nothing else, which is why there is no jump to
+        soften — the fix is structural, not an animation over a re-layout.
+     2. DEPTH COMES FROM LIGHT AND FROM SURFACES, not from borders. One soft
+        blue-black ground, three surface steps, ONE blue that marks action, and
+        the state again — always — as a glyph and a word.
+     3. THE HEAD IS THE BRAND. Silver, unclipped, with a soft aperture that
+        carries the state colour and never animates on its own.
+     4. TEXT IS THE PRODUCT. A reading column of ~68 characters, generous
+        leading, and no card wall: only what must be ACTED on gets a surface.
+
+   Colour animates on state change only. Motion is three short, purposeful
+   transitions (§13) and it stops entirely under `prefers-reduced-motion`.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════ 1 · Type: IBM Plex Sans Arabic ═══════════════════
+   WHY A SECOND FAMILY AT ALL. The project's Inter is self-hosted and excellent
+   at Latin, and it has NO Arabic glyphs: every Arabic word on this surface was
+   falling through to `system-ui` and rendering in whatever the operating system
+   happened to supply (Segoe UI on Windows, and a different face on every other
+   machine). That is why the Arabic looked like a system dialog rather than like
+   this product — the family was never chosen, it was inherited.
+
+   WHAT IS HOSTED HERE. Four arabic-subset woff2 files, taken from Google Fonts'
+   IBM Plex Sans Arabic v15 (SIL Open Font License 1.1 — the licence ships beside
+   them) and served from our own origin, exactly like Inter. One file per weight
+   we use, no network request at runtime, no third-party font host.
+
+   WHY `unicode-range` IS SET. It is what keeps the two families from competing:
+   these files declare ONLY the Arabic blocks, so Latin letters, Latin digits and
+   punctuation keep resolving to Inter, and mixed Arabic/Latin lines — which is
+   most of them — read as one designed surface rather than two. */
+
+@font-face {
+  font-family: "EXEC Arabic";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/exec-lab/fonts/ibm-plex-sans-arabic-400.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: "EXEC Arabic";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/exec-lab/fonts/ibm-plex-sans-arabic-500.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: "EXEC Arabic";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/exec-lab/fonts/ibm-plex-sans-arabic-600.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: "EXEC Arabic";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/exec-lab/fonts/ibm-plex-sans-arabic-700.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+
+/* ═══════════════════ 1 · Tokens ═══════════════════ */
+
+.nce,
+.nce--lab {
+  /* Tone family, derived from the shared palette so this layer never forks it. */
+  --nce-blue: var(--nc-blue, #4b8dff);
+  --nce-blue-low: #7b93c4;
+  --nce-amber: var(--nc-approval, #f0b429);
+  --nce-green: var(--nc-completed, #4ade80);
+  --nce-red: var(--nc-error, #f87171);
+  --nce-off: var(--nc-idle, #6e7c96);
+  --nce-tone: var(--nce-blue);
+
+  /* Ground: WARM BLACK — the "Champagne Orbit" baseline. Three surface steps and
+     two hairlines are still the whole depth system; what changed is the
+     temperature. The earlier palette was blue-black graphite (`#090c11`, a
+     blue-tinted hairline, cool grey ink), and the approved reference is warm:
+     champagne light on a near-black that leans brown, with warm-neutral greys.
+
+     PROVENANCE OF THESE NUMBERS. They are TUNABLE values, not copied design
+     tokens: the reference's own surfaces were sampled per-pixel (`#2d2f2a` app,
+     `#1e1e1b` sidebar, `#29231c` field, `#f6dfc5` orbit, `#add6bf` action) in
+     `docs/EXEC_VISUAL_BASELINE.md`, and those samples are LIT — a warm field with
+     glass and glow over it. This surface is a dark room, so the ground keeps the
+     project's darkness and takes the reference's TEMPERATURE, which is what makes
+     the champagne edge and the mint action read as the same product. Adjust here
+     and nowhere else.
+
+     STATUS COLOURS ARE NOT PART OF THIS. Tone stays a separate vocabulary (the
+     words and glyphs are the primary signal, colour is additive). */
+  --nce-ground: #101111;
+  --nce-ground-2: #141515;
+  --nce-surface: #181a19;
+  --nce-surface-2: #1e201f;
+  --nce-surface-3: #262827;
+  --nce-line: rgba(255, 255, 255, 0.055);
+  --nce-line-2: rgba(255, 255, 255, 0.09);
+  --nce-line-3: rgba(255, 255, 255, 0.16);
+
+  /* Champagne: the reference's orbit light, the colour the glass is edged with. */
+  --nce-champagne: #f3e4cb;
+  --nce-champagne-2: #c9ab84;
+  --nce-champagne-hot: #fff7e6;
+  --nce-champagne-line: rgba(243, 228, 203, 0.18);
+  --nce-champagne-soft: rgba(243, 228, 203, 0.07);
+
+  /* Mint: THE ACTION COLOUR. One family, three steps — the fill of a primary
+     button, its hover, and the ink that sits ON it (dark, because the fill is
+     light: the reference's own “Edit” is mint with dark text). */
+  --nce-mint: #add9c0;
+  --nce-mint-soft: #9dcfb4;
+  --nce-mint-bright: #d8f2e3;
+  --nce-mint-deep: #82bd9e;
+  --nce-action: #add9c0;
+  --nce-action-2: #c9edd9;
+  --nce-action-ink: #0b1a12;
+
+  /* Ink: warm-neutral, and slightly LIGHTER than the cool greys it replaces at
+     the low end — the tertiary step moves from `#565f6b` to `#7c7364`, which
+     reads at roughly 4.5:1 on the ground instead of 2.8:1. Warming the surface
+     must not cost contrast; this is the direction that gains it. */
+  --nce-ink: #f5f6f3;
+  --nce-ink-2: #d3d5d1;
+  --nce-ink-3: #a7aaa5;
+  --nce-ink-4: #7d807a;
+
+  /* Two elevations and one focus ring, named so no rule invents its own. */
+  --nce-hairline: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --nce-lift: 0 30px 70px -40px rgba(0, 0, 0, 0.98);
+  --nce-pop: 0 26px 60px -24px rgba(0, 0, 0, 0.9);
+  /* The focus ring is the action colour, because on this surface focus and action
+     are the same kind of thing: what you are about to do. */
+  --nce-focus: 0 0 0 3px rgba(173, 214, 191, 0.24);
+
+  --nce-r-1: 10px;
+  --nce-r-2: 14px;
+  --nce-r-3: 18px;
+  --nce-r-4: 26px;
+
+  /* Team identity accents, from the approved team sheet. Never a status. */
+  --nce-accent-blue: #4b8dff;
+  --nce-accent-violet: #a78bfa;
+  --nce-accent-orange: #fb923c;
+  --nce-accent-mint: #5eead4;
+  --nce-accent-capso: #e0b978;
+  --nce-accent: var(--nce-accent-blue);
+
+  /* The reference's column is marginally wider than the earlier 780px (measured
+     across the mockup, §5 of the baseline). 820 keeps the measure comfortable in
+     both scripts and leaves the reading line where it was. */
+  --nce-col-w: 780px;
+  --nce-read: 16px;
+  --nce-track: -0.005em;
+
+  /* The type stack. ORDER MATTERS, AND IT IS NOT THE OBVIOUS ONE:
+     “EXEC Arabic” comes FIRST, ahead of Inter. The two never compete, because the
+     Arabic files declare only the Arabic unicode ranges — so Latin still resolves
+     to Inter — but putting Inter first is what made the Arabic invisible: the
+     project's `font-inter` variable expands to `Inter, "Inter Fallback"`, and
+     that generated fallback resolves to a LOCAL system font which does cover
+     Arabic. Measured, not assumed: with Inter first, all four Arabic faces stayed
+     `unloaded` and the words were still drawn by the operating system. */
+  --nce-font: "EXEC Arabic", var(--font-inter, "Inter"), system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+
+  /* The glass, gathered in ONE place: the composer and its menus are the only
+     two surfaces allowed to use it, and §14 turns all of it off together. These
+     are modest values on purpose — transparency, blur, a top hairline and one
+     shadow, no more. */
+  --nce-glass-blur: 18px;
+  /* The glass is warmed by tinting light rather than by thinning the panel: the
+     base stays at 0.66 alpha of a dark warm brown, so the ink over it keeps the
+     contrast it had. The champagne shows up in the TOP LIGHT and the EDGE, which
+     is what the reference actually does with it. */
+  --nce-glass-bg:
+    radial-gradient(86% 72% at 6% -18%, rgba(255, 246, 225, 0.26), transparent 50%),
+    linear-gradient(148deg, rgba(255, 247, 231, 0.105), rgba(226, 199, 162, 0.038) 42%, rgba(5, 6, 5, 0.46) 100%),
+    rgba(17, 18, 17, 0.9);
+  --nce-glass-line: rgba(247, 236, 216, 0.38);
+  --nce-glass-line-hot: color-mix(in srgb, var(--nce-mint) 46%, rgba(247, 236, 216, 0.3));
+  --nce-glass-top: inset 0 1px 0 rgba(255, 246, 230, 0.28), inset 0 -1px 0 rgba(0, 0, 0, 0.56);
+  --nce-glass-top-hot: inset 0 1px 0 rgba(255, 246, 230, 0.24), inset 0 -1px 0 rgba(0, 0, 0, 0.44);
+  /* The rim: a champagne bloom around the panel's own edge — the light the
+     reference puts on the composer, drawn as shadow rather than as a border so it
+     can be wider at the lit corner than anywhere else. */
+  --nce-glass-rim: 0 0 34px -22px rgba(240, 214, 175, 0.72), 0 30px 66px -34px rgba(0, 0, 0, 0.98);
+
+  /* Reserved for a reviewed, interface-free space plate. `none` is deliberate:
+     the supplied references contain UI, so they are not valid backgrounds. */
+  --nce-orbit-image: none;
+
+  /* The orbital field. Four thin arcs, one warm glow and a sparse star field,
+     all drawn with gradients in CSS — no image, no canvas, no animation. Kept
+     faint on purpose: it sits BEHIND the conversation, and a background that
+     competes with text is a defect, not an effect. */
+  --nce-orbit-arm: rgba(243, 228, 203, 0.07);
+  --nce-orbit-glow: rgba(224, 185, 138, 0.3);
+  --nce-orbit-star: rgba(255, 250, 240, 0.72);
+  --nce-orbit-body: #0c0d0c;
+
+  /* The height of a rail control's HIT BOX. 44px on every device: the visual face
+     inside it is smaller, and the face is what moves. */
+  --nce-hit: 52px;
+}
+
+/* Mixed Arabic/Latin/numbers: let each run decide its own direction. */
+.nce [dir="auto"] { unicode-bidi: plaintext; }
+
+/* Arabic needs more leading and a slightly larger size than Latin at the same
+   optical weight. One rule, both languages, no separate sheet. */
+.nce:lang(ar) {
+  --nce-read: 16.5px;
+  --nce-track: 0;
+}
+
+/* ARABIC IS A JOINED SCRIPT. Tracking pulls the letters apart and a word stops
+   being one word, so every label below that carries tracking resets it in
+   Arabic. Listed explicitly rather than with a blanket `*`, because one Latin
+   wordmark (EXEC) must keep its own spacing in both languages. */
+.nce:lang(ar) .nce-tag,
+.nce:lang(ar) .nce-state,
+.nce:lang(ar) .nce-msg__who,
+.nce:lang(ar) .nce-group__title,
+.nce:lang(ar) .nce-summary__caption,
+.nce:lang(ar) .nce-approval__lead,
+.nce:lang(ar) .nce-team__code,
+.nce:lang(ar) .nce-hero__line { letter-spacing: 0; }
+
+.nce[data-status="waiting"] { --nce-tone: var(--nce-blue-low); }
+.nce[data-status="needs_approval"],
+.nce[data-status="blocked"] { --nce-tone: var(--nce-amber); }
+.nce[data-status="completed"] { --nce-tone: var(--nce-green); }
+.nce[data-status="failed"] { --nce-tone: var(--nce-red); }
+.nce[data-status="offline"] { --nce-tone: var(--nce-off); }
+
+/* A closed disclosure must actually close.
+
+   Several panels below set a layout `display` on their OWN content (the summary
+   body, the review list, the nested roster). An author rule beats the browser's
+   built-in `details:not([open]) > *` hiding rule, so without this guard every
+   collapsed panel would still be drawn — which is the crowding this surface
+   exists to remove, and it looks exactly like a working disclosure right up to
+   the moment someone counts the boxes. One rule, every `<details>` in the
+   surface, higher specificity than any of the layout rules it protects. */
+.nce details:not([open]) > *:not(summary) { display: none; }
+
+/* ═══════════════════ 2 · The shell stands down — here only ═══════════════════
+   Guarded by `.nce[data-mode]`: the conversation, and nothing else, ever sets it.
+   The EXEC page is its own room: no right rail, no command bar, no bottom deck,
+   and a navigation that is a spine of icons until someone asks for more.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root:has(.nce[data-mode]) {
+  --nc-context-w: 0px;
+}
+
+/* The room's ambient window and bokeh: the one thing that made the surface feel
+   lit like a space rather than a conversation. Still there on every other page. */
+.nc-root:has(.nce[data-mode]) .nc-ambient { display: none; }
+
+.nc-root:has(.nce[data-mode]) .nc-topbar,
+.nc-root:has(.nce[data-mode]) .nc-rail-bottom,
+.nc-root:has(.nce[data-mode]) .nc-context { display: none; }
+
+/* The floating "open EXEC" tab is redundant while EXEC is the whole screen, and
+   on a phone it lands exactly on the composer and swallowed the taps meant for
+   the controls under it. Only the conversation hides it: the review tools page
+   keeps it, because from there it is a real way back. */
+.nc-root:has(.nce[data-mode]) .nc-exectab { display: none; }
+
+/* The conversation owns its own scroll region, so the stage must not scroll. */
+.nc-root:has(.nce[data-mode]) .nc-main__scroll { overflow: hidden; }
+
+/* The window, not a document. The shell sizes itself to the viewport and then
+   floors that height to keep its desktop composition from collapsing — but the
+   floor is a DOCUMENT height: at 390×520 (a phone with the keyboard open, or any
+   window under 640px) the shell drew 640px tall inside a 520px window and the
+   page scrolled under the conversation. Here the room IS the window, so the
+   floor is lifted; the thread scrolls inside the page and nothing else moves.
+   Measured: 640 → 520, page scroll eliminated (see `measured-state.json`). */
+.nc-root:has(.nce[data-mode]) {
+  height: 100dvh;
+  min-height: 0;
+}
+
+/* On a phone the rail comes back as a fixed bottom bar, which on this page means
+   sitting directly on the composer's send button — and the shell reserves 76px
+   of padding for it, which becomes a dead band under a composer that already
+   sits at the foot of the room. The conversation keeps its own way back to
+   Command in the header, so the bar stands down here as it does on desktop. */
+.nc-root:has(.nce[data-mode]) .nc-mobilebar { display: none; }
+
+@media (max-width: 760px) {
+  .nc-root:has(.nce[data-mode]) .nc-main__scroll { padding-bottom: 0; }
+}
+
+/* ── The shell's rail stands down, and the room brings its own ────────────
+
+   The shared rail (`global-nav.tsx`) lists the six Command areas. This room needs
+   different contents — EXEC, Sessions, Tools, the recent sessions, New session and
+   Settings — which the approved reference lays out its own way, so the shared rail
+   is STOOD DOWN while the conversation is mounted and `exec-nav.tsx` draws the
+   room's navigation in the space it reserved.
+
+   NOTHING SHARED IS TOUCHED. `global-nav.tsx` is unmodified, the scope is the same
+   route-only one this sheet already used for the command bar and the mobile deck
+   (`.nce[data-mode]` is set by the conversation and by nothing else), and the
+   reserved width goes to zero rather than to a guessed rail size. On `/command`
+   and every other route the shell is exactly as it was — including the moment the
+   reviewer navigates away from here, because the selector stops matching as soon
+   as this page unmounts. */
+.nc-root:has(.nce[data-mode]) { --nc-rail-w: 0px; }
+
+/* THE RAIL IS EMPTIED, NOT REMOVED — and that distinction is the whole rule.
+
+   The shell places its three areas with a grid whose columns are declared in DOM
+   order (`rail · main · context`). A `display: none` takes the rail out of the
+   grid entirely, so the CONVERSATION is handed the rail's 0px track and the main
+   column is left empty: measured, the room laid out 0px wide inside a 1440px
+   window, with its own sidebar hanging off the left edge. Emptying the rail keeps
+   it in its column, where it takes the 0px the track gives it and draws nothing. */
+.nc-root:has(.nce[data-mode]) .nc-rail {
+  visibility: hidden;
+  overflow: hidden;
+  inline-size: 0;
+  min-inline-size: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* The shell's floating “Motion lab · dev only” badge belongs to the review tools,
+   and on this route it lands ON the room's own footer — measured, directly over
+   the New session button. Stands down with the rest of the shell chrome. */
+.nc-root:has(.nce[data-mode]) .nc-lab { display: none; }
+
+/* ═══════════════════ 3 · The room ═══════════════════ */
+
+/* The conversation is a fixed-height column: the thread scrolls, the composer
+   does not move. `height: 100%` is safe because the stage sizes it absolutely. */
+/* One family for the whole surface, Arabic and Latin. Applied to the room and to
+   the review tools, so a reviewer switching between them sees one product. */
+.nce[data-mode],
+.nce--lab {
+  font-family: var(--nce-font);
+}
+
+.nce[data-mode] {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  /* THE GROUND IS A NEUTRAL NEAR-BLACK, and it stays neutral. Every degree of
+     warmth on this screen comes from the orbital field behind it or from the
+     glass in front of it — never from a brown wash over the whole page, which is
+     what made the earlier pass read as a tinted surface instead of a lit one.
+     What is left here is one cool falloff from the top, so the room is not flat. */
+  background:
+    radial-gradient(86% 62% at 64% 4%, rgba(255, 247, 231, 0.065), transparent 66%),
+    radial-gradient(44% 70% at 0% 58%, rgba(202, 158, 108, 0.05), transparent 76%),
+    linear-gradient(180deg, #121313 0%, var(--nce-ground) 48%, #0b0c0c 100%);
+  color: var(--nce-ink);
+  font-size: var(--nce-read);
+  line-height: 1.8;
+  font-feature-settings: "kern" 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Both modes share ONE ground. The earlier pass lit the start screen from the
+   foot of the room and the thread from the top, which made the two screens look
+   like two different products and put a warm halo behind the composer. The light
+   now has a single source — the limb in the orbital field — and it is the same
+   light before and after the first message. */
+
+.nce-col {
+  width: 100%;
+  max-width: var(--nce-col-w);
+  margin-inline: auto;
+  min-width: 0;
+}
+
+/* ── The app bar ─────────────────────────────────────────────────────────────
+   A real bar with a real baseline: 62px, six controls, and a hairline that says
+   where the page begins. Everything else the surface used to carry in a row of
+   labels now lives in ONE menu at the end.                                  */
+
+.nce-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  overflow: visible;
+  height: 88px;
+  padding-inline: clamp(22px, 2.4vw, 36px);
+  border-block-end: 1px solid var(--nce-line);
+  background: linear-gradient(180deg, rgba(20, 21, 20, 0.96), rgba(14, 15, 14, 0.9));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.nce-top__back {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  height: 34px;
+  padding-inline: 10px;
+  border-radius: var(--nce-r-1);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--nce-ink-3);
+  text-decoration: none;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.nce-top__back:hover { color: var(--nce-ink); background: rgba(255, 255, 255, 0.055); }
+.nce-top__arrow { font-size: 13px; }
+
+.nce-top__identity {
+  display: inline-flex;
+  flex: 1 1 180px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding-inline: 2px 12px;
+  white-space: nowrap;
+}
+.nce-top__identity .nce-face {
+  width: 34px;
+  height: 34px;
+}
+.nce-top__identity img {
+  width: 34px;
+  height: 34px;
+}
+.nce-top__name {
+  max-width: 24ch;
+  overflow: hidden;
+  color: var(--nce-ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nce-top__brand { display: none; }
+.nce-top__right { flex: none; display: flex; align-items: center; gap: 10px; margin-inline-start: auto; }
+
+.nce-top > .nce-scope {
+  flex: 0 1 180px;
+  min-width: 0;
+  max-width: 180px;
+}
+.nce-top > .nce-scope .nce-scope__trigger { max-width: 100%; }
+.nce-top > .nce-scope .nce-scope__value { overflow: hidden; text-overflow: ellipsis; }
+
+.nce-top__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  height: 34px;
+  padding-inline: 11px;
+  border: 0;
+  border-radius: var(--nce-r-1);
+  background: transparent;
+  color: var(--nce-ink-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.nce-top__btn:hover { color: var(--nce-ink); background: rgba(255, 255, 255, 0.055); }
+.nce-top__btn:focus-visible { outline: 2px solid var(--nce-blue); outline-offset: 1px; }
+
+/* ── The head ────────────────────────────────────────────────────────────────
+   The approved character, cropped to the head alone and masked soft, with ONE
+   aperture that carries the state colour. The head never animates: the art bakes
+   the blue eye into the same pixels as the face, so there is no layer to drive
+   and a second eye would be a different character. Colour only ever ANIMATES on
+   a state change — never a loop, never a pulse, and it stops entirely under
+   `prefers-reduced-motion`.                                              */
+
+.nce-face {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  --nce-tone: var(--nce-blue);
+}
+.nce-face[data-tone="blue-low"] { --nce-tone: var(--nce-blue-low); }
+.nce-face[data-tone="amber"] { --nce-tone: var(--nce-amber); }
+.nce-face[data-tone="green"] { --nce-tone: var(--nce-green); }
+.nce-face[data-tone="red"] { --nce-tone: var(--nce-red); }
+.nce-face[data-tone="off"] { --nce-tone: var(--nce-off); }
+
+.nce-face::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--nce-tone) 38%, transparent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--nce-tone) 0%, transparent);
+  transition: border-color 420ms ease, box-shadow 420ms ease;
+  pointer-events: none;
+}
+/* A critical failure is the one state allowed a stronger ring — still static. */
+.nce-face[data-tone="red"]::after { border-color: var(--nce-red); }
+
+/* The asset is a square cut-out, not a round stamp, and `border-radius:50%` used
+   to sit here. It was removed after measuring it rather than eyeballing it: the
+   head cleared the inscribed circle by only 3 px of 212 at the closest point —
+   1.5px at the 104px size and 0.5px at 36px. It clipped nothing today, but the
+   asset's frame and the aperture's circle are different shapes: any tighter crop
+   would shave the crown's outer wing, and nothing here would say why. The circle
+   is drawn by ::after; the image stays unclipped. Guarded by the clearance check
+   in docs/exec-head-review/annotate.py. */
+.nce-face__img {
+  display: block;
+  user-select: none;
+  /* The frame is square and the head shares its ratio, so `contain` changes
+     nothing today — it is the guard for the asset's own margin. `object-fit`
+     only applies once both dimensions are set, which the size rules below always
+     do, so a re-cut crop of any aspect letterboxes inside the aperture instead of
+     being stretched, and the head can never be re-framed by CSS. */
+  object-fit: contain;
+}
+
+/* The seam for the animated head — see `ExactHead` in exec-experience.tsx. A
+   layer is drawn INSIDE the aperture, at its size, over the still: it can repaint
+   the face screen or an eye, but it cannot move, resize or re-frame the head, and
+   it never takes a click. Nothing uses this today, because the layered art does
+   not exist yet; the rule is here so the day it arrives nothing about the still
+   has to change. */
+.nce-face__layer {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* The head on the start screen: larger, and with NO ring around it. The aperture
+   circle stays a STATE signal for the small marks, but around the big still it
+   read as decoration — a drawn circle framing a character that already carries
+   its own frame. The asset is placed, not decorated, and it is never cropped: the
+   box keeps the whole head exactly as the approved board supplies it. */
+.nce-face[data-size="hero"] { width: 116px; height: 116px; }
+.nce-face[data-size="hero"] .nce-face__img { width: 116px; height: 116px; }
+.nce-face[data-size="hero"]::after { display: none; }
+
+/* The mark inside the composer's EXEC chip. No ring: it is an identity mark
+   inside a control, and a ring at 22px is noise. */
+.nce-face[data-size="micro"] { width: 22px; height: 22px; }
+.nce-face[data-size="micro"] .nce-face__img { width: 22px; height: 22px; }
+.nce-face[data-size="micro"]::after { display: none; }
+
+.nce-face[data-size="bar"] { width: 32px; height: 32px; }
+.nce-face[data-size="bar"] .nce-face__img { width: 32px; height: 32px; }
+
+.nce-face[data-size="small"] { width: 36px; height: 36px; }
+.nce-face[data-size="small"] .nce-face__img { width: 36px; height: 36px; }
+
+/* The identity mark on a message, and in the agent picker. No ring: an avatar is
+   not a state, and a ring around forty of them would be a row of traffic lights. */
+.nce-face[data-size="tiny"] { width: 28px; height: 28px; }
+.nce-face[data-size="tiny"] .nce-face__img { width: 28px; height: 28px; }
+.nce-face[data-size="tiny"]::after { inset: 1px; }
+
+.nce-msg__face::after { display: none; }
+
+/* ═══════════════════ 4 · Before the conversation ═══════════════════ */
+
+/* The start screen is a COMPOSITION, not a form: the head, the question and the
+   three suggestions sit together, and the composer waits for them at the foot of
+   the room where it will stay for the rest of the session.
+
+   PLACED LOW, ON PURPOSE. The cluster is pushed down against the composer rather
+   than floated in the middle of the room. Centred, it left a void above AND a
+   void below, which is what made the head, the greeting and the writing area read
+   as three separate things. Here the open field is the ROOM above the cluster —
+   one calm expanse with the ground's light in it — and identity → question →
+   suggestions → writing sit as one group at the foot, with no dead band between
+   them. */
+.nce-hero {
+  min-height: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(22px, 2.6vw, 34px);
+  padding: clamp(28px, 5vh, 48px) 24px clamp(20px, 3vh, 32px);
+  text-align: start;
+  transform: translateY(-5%);
+}
+
+/* The head is placed, not decorated. A halo behind it was drawn and then
+   removed: the asset carries its own dark plate, so an extra glow only smeared
+   the empty part of the frame above the crown — and a persistent glow is
+   exactly what this surface is not. The light behind the head is the GROUND's
+   (one static radial, §3), which is centred on the room rather than on a box. */
+.nce-hero__head { position: relative; display: inline-flex; transform: translateY(-3%); }
+
+.nce-hero__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+  min-width: 0;
+  max-width: min(620px, 68vw);
+}
+
+.nce-hero__line {
+  margin: 0;
+  max-width: 24ch;
+  font-size: clamp(25px, 1.15vw + 17px, 32px);
+  font-weight: 520;
+  line-height: 1.5;
+  letter-spacing: var(--nce-track);
+  color: var(--nce-ink);
+  text-wrap: balance;
+}
+
+/* The three ways in. They live in the DOCK, right above the composer, so the
+   start screen reads identity → question → writing, with no dead band between
+   the question and the field. */
+.nce-hero__suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-start;
+  padding-block-end: 2px;
+  margin: 0;
+}
+
+.nce-hero__composer { width: 100%; max-width: 660px; }
+.nce-hero__foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+/* ═══════════════════ 5 · The task bar ═══════════════════ */
+
+/* One line, only while a task exists: the state, the task, where it stands, and
+   the way into the plan. Pinned above the thread so the plan is one click away
+   from wherever the reader has scrolled to. */
+.nce-taskbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: var(--nce-col-w);
+  margin-inline: auto;
+  padding: 12px 24px 0;
+}
+
+.nce-taskbar__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--nce-ink);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nce-taskbar__progress { font-size: 11.5px; color: var(--nce-ink-4); font-variant-numeric: tabular-nums; }
+.nce-taskbar__plan { margin-inline-start: auto; }
+
+/* ═══════════════════ 6 · The conversation ═══════════════════ */
+
+.nce-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+.nce-scroll::-webkit-scrollbar { width: 10px; }
+.nce-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+.nce-scroll .nce-col {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 26px 24px 30px;
+}
+
+/* ── A message ───────────────────────────────────────────────────────────────
+   Readable text with no box, and one quiet surface for the person's own words —
+   the shape a modern conversation already taught everyone to read. Nothing here
+   turns a paragraph into a card. EXEC carries a head, a name and its role; the
+   founder carries a bubble and nothing else.                            */
+
+.nce-msg {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+}
+.nce-msg__avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(243, 228, 203, 0.18);
+  border-radius: 50%;
+  background: rgba(20, 21, 20, 0.78);
+  color: var(--nce-ink-2);
+  box-shadow: inset 0 1px 0 rgba(255, 247, 232, 0.12), 0 14px 28px -24px rgba(240, 214, 175, 0.34);
+}
+
+.nce-msg__head { display: flex; align-items: center; gap: 9px; min-height: 28px; }
+.nce-msg__face { flex: none; }
+.nce-msg__who {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--nce-ink-2);
+}
+.nce-msg[data-from="founder"] .nce-msg__who { color: var(--nce-ink-3); }
+.nce-msg__at { font-size: 11px; color: var(--nce-ink-4); font-variant-numeric: tabular-nums; }
+
+/* Secondary actions: quiet until the line is hovered or focused, and drawn
+   always where there is no hover to reveal them, so touch is never a second
+   class of reader. */
+.nce-msg__acts { display: flex; gap: 2px; margin-inline-start: auto; opacity: 0; transition: opacity 140ms ease; }
+.nce-msg:hover .nce-msg__acts,
+.nce-msg:focus-within .nce-msg__acts { opacity: 1; }
+
+.nce-msg__act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nce-ink-4);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.nce-msg__act:hover { background: rgba(255, 255, 255, 0.06); color: var(--nce-ink); }
+.nce-msg__act:focus-visible { outline: 2px solid var(--nce-blue); outline-offset: 1px; }
+
+.nce-msg__body {
+  margin: 0;
+  padding: 13px 15px;
+  border: 1px solid rgba(243, 228, 203, 0.15);
+  border-radius: 6px var(--nce-r-3) var(--nce-r-3) var(--nce-r-3);
+  background:
+    radial-gradient(78% 86% at 4% -24%, rgba(255, 246, 226, 0.11), transparent 58%),
+    linear-gradient(150deg, rgba(255, 248, 235, 0.045), transparent 52%),
+    rgba(18, 20, 19, 0.74);
+  box-shadow: inset 0 1px 0 rgba(255, 247, 232, 0.1), 0 20px 42px -34px rgba(0, 0, 0, 0.96);
+  font-size: var(--nce-read);
+  line-height: 1.85;
+  color: var(--nce-ink);
+  max-width: 68ch;
+}
+.nce-msg__body > p:first-child { margin: 0; }
+/* The bubble's tail is the corner nearest its author — stated logically, so RTL
+   gets the mirrored corner for free. */
+.nce-msg[data-from="founder"] .nce-msg__body {
+  padding: 11px 15px;
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  border-radius: var(--nce-r-3);
+  border-start-start-radius: 6px;
+  background:
+    linear-gradient(135deg, rgba(255, 248, 235, 0.055), transparent 62%),
+    rgba(34, 36, 34, 0.82);
+  max-width: 62ch;
+}
+
+/* Structured output lives inside the EXEC turn, not as a second wall of prose. */
+.nce-card:not([data-kind="result"]) {
+  margin-block-start: 12px;
+  padding: 13px 14px;
+  border: 1px solid rgba(243, 228, 203, 0.12);
+  border-radius: var(--nce-r-2);
+  background:
+    linear-gradient(145deg, rgba(255, 247, 231, 0.055), transparent 52%),
+    rgba(10, 11, 10, 0.36);
+  box-shadow: inset 0 1px 0 rgba(255, 247, 232, 0.08);
+}
+.nce-card:not([data-kind="result"]) > p:first-child { margin-block-start: 0; font-weight: 600; }
+.nce-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-block-start: 13px;
+}
+.nce-card__actions > button {
+  min-height: 44px;
+  padding: 9px 16px;
+  border: 1px solid rgba(243, 228, 203, 0.2);
+  border-radius: 12px;
+  background:
+    linear-gradient(145deg, rgba(255, 248, 235, 0.07), transparent 60%),
+    rgba(31, 33, 31, 0.9);
+  color: var(--nce-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 247, 232, 0.1);
+}
+.nce-card__actions > button:hover { border-color: rgba(243, 228, 203, 0.34); background-color: rgba(43, 45, 42, 0.94); }
+.nce-card__actions > button:focus-visible { outline: none; box-shadow: var(--nce-focus); }
+
+/* ── Quiet key/value rows: the brief, and what an approval authorises ───── */
+
+.nce-brief { margin: 0; display: flex; flex-direction: column; gap: 6px; max-width: 68ch; }
+.nce-brief__row { display: flex; gap: 14px; align-items: baseline; }
+.nce-brief__row dt {
+  flex: 0 0 30%;
+  min-width: 96px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--nce-ink-4);
+}
+.nce-brief__row dd { margin: 0; flex: 1; font-size: 14.5px; line-height: 1.75; color: var(--nce-ink); }
+.nce-brief__row dd[data-mono="true"] { font-variant-numeric: tabular-nums; }
+
+/* ── Approval: the one block that gets a surface and buttons ──────────── */
+
+.nce-approval {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 68ch;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in srgb, var(--nce-amber) 32%, var(--nce-line));
+  border-radius: var(--nce-r-3);
+  background: color-mix(in srgb, var(--nce-amber) 6%, var(--nce-surface));
+}
+.nce-approval__lead {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--nce-amber);
+}
+.nce-approval__title { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.6; }
+.nce-approval__body { margin: 0; font-size: 14.5px; line-height: 1.8; color: var(--nce-ink-2); }
+.nce-approval__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-block-start: 4px; }
+
+/* ── A missing input blocks the work, so it is stated where it stopped ── */
+
+.nce-need { display: flex; gap: 12px; max-width: 68ch; }
+.nce-need__glyph { color: var(--nce-amber); line-height: 1.9; }
+.nce-need__text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.nce-need__lead { margin: 0; font-size: 14.5px; font-weight: 600; }
+.nce-need__why { margin: 0; font-size: 13.5px; line-height: 1.8; color: var(--nce-ink-3); }
+
+/* ── Correction: before → after, no frame ────────────────────────────── */
+
+.nce-swap { display: flex; flex-direction: column; gap: 8px; max-width: 68ch; }
+.nce-swap__side { display: flex; flex-direction: column; gap: 2px; }
+.nce-swap__label { font-size: 11px; letter-spacing: 0.05em; color: var(--nce-ink-4); }
+.nce-swap__text { font-size: 14.5px; line-height: 1.75; }
+.nce-swap__side[data-side="before"] .nce-swap__text { color: var(--nce-ink-3); }
+.nce-swap__side[data-side="after"] .nce-swap__text { color: var(--nce-ink); }
+.nce-swap__arrow { color: var(--nce-ink-4); font-size: 13px; }
+
+/* ── The result: the output first, the proof one level down ───────────── */
+
+.nce-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 16px;
+  max-width: 68ch;
+  padding: 14px 15px;
+  border: 1px solid rgba(243, 228, 203, 0.28);
+  border-radius: var(--nce-r-3);
+  background:
+    radial-gradient(85% 120% at 2% -30%, rgba(255, 246, 226, 0.18), transparent 52%),
+    linear-gradient(145deg, rgba(255, 248, 235, 0.085), transparent 44%),
+    rgba(25, 27, 25, 0.92);
+  box-shadow: inset 0 1px 0 rgba(255, 247, 232, 0.22), 0 26px 58px -40px rgba(0, 0, 0, 0.98);
+}
+.nce-result__summary { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.nce-result__copy { min-width: 0; }
+.nce-result__title { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; color: var(--nce-ink); }
+.nce-result__description { margin: 3px 0 0; font-size: 13px; line-height: 1.6; color: var(--nce-ink-3); }
+.nce-result__glyph {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(173, 217, 192, 0.28);
+  border-radius: 12px;
+  background: rgba(173, 217, 192, 0.08);
+  color: var(--nce-mint-bright);
+}
+.nce-result__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  padding: 4px 8px;
+  border: 1px solid rgba(173, 217, 192, 0.22);
+  border-radius: 999px;
+  color: var(--nce-mint-bright);
+  font-size: 11px;
+  font-weight: 600;
+  margin-inline-start: auto;
+  flex: none;
+}
+.nce-result__status > span { font-size: 7px; }
+
+/* The output is READ in the workspace, so the card offers the way there and
+   says plainly what "there" is: a text preview inside the demo. */
+.nce-result__actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 0; }
+.nce-result__actions button {
+  min-height: 44px;
+  padding-inline: 16px;
+  border: 1px solid var(--nce-line-2);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--nce-ink);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.nce-result__actions button[data-variant="primary"] { border-color: transparent; background: var(--nce-action); color: var(--nce-action-ink); }
+.nce-result__actions button:hover { border-color: var(--nce-line-3); background: rgba(255, 255, 255, 0.065); }
+.nce-result__actions button[data-variant="primary"]:hover { background: var(--nce-action-2); }
+.nce-result__actions button:focus-visible { outline: none; box-shadow: var(--nce-focus); }
+.nce-result__details { grid-column: 1 / -1; border-block-start: 1px solid var(--nce-line); padding-block-start: 8px; }
+.nce-result__details > summary { display: inline-flex; align-items: center; gap: 7px; list-style: none; color: var(--nce-ink-2); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.nce-result__details > summary::-webkit-details-marker { display: none; }
+.nce-result__marker { display: inline-block; color: var(--nce-ink-4); transition: transform 160ms ease; }
+.nce-result__details[open] .nce-result__marker { transform: rotate(90deg); }
+.nce[dir="rtl"] .nce-result__marker { transform: scaleX(-1); }
+.nce[dir="rtl"] .nce-result__details[open] .nce-result__marker { transform: scaleX(-1) rotate(90deg); }
+.nce-result__proof { display: flex; flex-direction: column; gap: 10px; padding-block-start: 12px; }
+.nce-result__hint { margin: 0; font-size: 11.5px; line-height: 1.65; color: var(--nce-ink-4); }
+
+.nce-verify {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.nce-verify li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: start;
+  gap: 12px;
+}
+.nce-verify li > span:first-child { min-width: 0; }
+.nce-verify li > .nce-note { white-space: nowrap; }
+
+.nce-review { max-width: 68ch; }
+.nce-review__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--nce-ink-2);
+  cursor: pointer;
+  list-style: none;
+}
+.nce-review__toggle::-webkit-details-marker { display: none; }
+.nce-review__toggle:hover { color: var(--nce-ink); }
+.nce-review[open] .nce-review__marker { transform: rotate(90deg); }
+.nce-review__marker { display: inline-block; transition: transform 160ms ease; color: var(--nce-ink-4); }
+
+.nce-review__list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.nce-review__claim { display: block; font-size: 13.5px; line-height: 1.7; }
+.nce-review__source { display: block; font-size: 12px; line-height: 1.7; color: var(--nce-ink-4); }
+
+/* Chevrons point the way the text runs. One transform each, because the mark is
+   a glyph and the correct closed state in Arabic points the other way. */
+.nce[dir="rtl"] .nce-summary__marker,
+.nce[dir="rtl"] .nce-review__marker,
+.nce[dir="rtl"] .nce-deeper__marker,
+.nce[dir="rtl"] .nce-refs__marker { transform: scaleX(-1); }
+.nce[dir="rtl"] .nce-summary[open] .nce-summary__marker,
+.nce[dir="rtl"] .nce-review[open] .nce-review__marker,
+.nce[dir="rtl"] .nce-deeper[open] .nce-deeper__marker,
+.nce[dir="rtl"] .nce-refs[open] .nce-refs__marker { transform: scaleX(-1) rotate(90deg); }
+.nce[dir="rtl"] .nce-sub__bar::before { content: "◂ "; }
+.nce[dir="rtl"] .nce-sub[open] > .nce-sub__bar::before { content: "▾ "; }
+
+/* ── List, attachment, tag, glyph ─────────────────────────────────────── */
+
+.nce-list { margin: 0; padding-inline-start: 18px; font-size: 14.5px; line-height: 1.8; }
+
+.nce-attach-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 46ch;
+  padding: 9px 12px;
+  border: 1px solid var(--nce-line);
+  border-radius: var(--nce-r-2);
+  background: var(--nce-surface);
+}
+.nce-attach-card__icon { color: var(--nce-ink-3); }
+.nce-attach-card__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.nce-attach-card__name { font-size: 13px; }
+.nce-attach-card__note { font-size: 11px; color: var(--nce-ink-4); }
+
+.nce-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding-inline: 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid var(--nce-line-2);
+  color: var(--nce-ink-3);
+}
+.nce-tag[data-tone="off"] { color: var(--nce-off); border-color: color-mix(in srgb, var(--nce-off) 35%, transparent); }
+
+.nce-glyph { font-style: normal; }
+.nce-glyph[data-tone="blue"] { color: var(--nce-blue); }
+.nce-glyph[data-tone="blue-low"] { color: var(--nce-blue-low); }
+.nce-glyph[data-tone="green"] { color: var(--nce-green); }
+.nce-glyph[data-tone="amber"] { color: var(--nce-amber); }
+.nce-glyph[data-tone="red"] { color: var(--nce-red); }
+.nce-glyph[data-tone="off"] { color: var(--nce-off); }
+
+/* ── The state chip: glyph, then word. Colour is the third signal ─────── */
+
+.nce-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  padding-inline: 11px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--nce-tone) 32%, var(--nce-line-2));
+  background: color-mix(in srgb, var(--nce-tone) 9%, transparent);
+  color: var(--nce-ink-2);
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  --nce-tone: var(--nce-blue);
+}
+.nce-state[data-tone="blue"] { --nce-tone: var(--nce-blue); }
+.nce-state[data-tone="blue-low"] { --nce-tone: var(--nce-blue-low); }
+.nce-state[data-tone="amber"] { --nce-tone: var(--nce-amber); }
+.nce-state[data-tone="green"] { --nce-tone: var(--nce-green); }
+.nce-state[data-tone="red"] { --nce-tone: var(--nce-red); }
+.nce-state[data-tone="off"] { --nce-tone: var(--nce-off); }
+.nce-state i { font-style: normal; color: var(--nce-tone); }
+
+/* ── Whether there are two conversations to be in ─────────────────────── */
+
+.nce-switch {
+  display: inline-flex;
+  flex: 0 1 260px;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  /* Shrinkable: a long task title must never push the header wider than the
+     column, which is what overflowed the surface on a phone. */
+  min-width: 0;
+  max-width: min(260px, 24vw);
+}
+.nce-switch__item {
+  min-width: 0;
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  height: 26px;
+  padding-inline: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nce-ink-3);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.nce-switch__item[data-active="true"] { background: var(--nce-surface-3); color: var(--nce-ink); }
+
+/* ── The one execution summary ────────────────────────────────────────── */
+
+.nce-summary {
+  border: 1px solid var(--nce-line);
+  border-radius: var(--nce-r-2);
+  background: color-mix(in srgb, var(--nce-surface) 70%, transparent);
+  overflow: hidden;
+}
+
+.nce-summary__bar {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12.5px;
+}
+.nce-summary__bar::-webkit-details-marker { display: none; }
+.nce-summary__bar:hover { background: rgba(255, 255, 255, 0.025); }
+.nce-summary[open] .nce-summary__marker { transform: rotate(90deg); }
+.nce-summary__marker { display: inline-block; color: var(--nce-ink-4); transition: transform 160ms ease; }
+.nce-summary__title { font-size: 13.5px; font-weight: 600; color: var(--nce-ink); }
+.nce-summary__sep { color: var(--nce-ink-4); }
+.nce-summary__progress { color: var(--nce-ink-3); font-variant-numeric: tabular-nums; }
+
+.nce-summary__body { display: flex; flex-direction: column; gap: 14px; padding: 14px; border-block-start: 1px solid var(--nce-line); }
+.nce-summary__caption {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nce-ink-4);
+}
+.nce-summary__states { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.nce-summary__state { display: inline-flex; align-items: center; gap: 8px; }
+.nce-summary__state-label { font-size: 11.5px; color: var(--nce-ink-4); }
+.nce-summary__code { font-size: 11.5px; color: var(--nce-ink-4); font-variant-numeric: tabular-nums; margin-inline-start: auto; }
+
+/* ── Plan steps ───────────────────────────────────────────────────────── */
+
+.nce-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.nce-steps__row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 0;
+  border-block-start: 1px solid var(--nce-line);
+}
+.nce-steps__row:first-child { border-block-start: 0; }
+.nce-steps__index {
+  flex: none;
+  width: 18px;
+  font-size: 11.5px;
+  color: var(--nce-ink-4);
+  font-variant-numeric: tabular-nums;
+}
+.nce-steps__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.nce-steps__title { font-size: 13.5px; line-height: 1.65; }
+.nce-steps__dep { font-size: 11px; color: var(--nce-ink-4); }
+.nce-steps__owner { font-size: 11.5px; color: var(--nce-ink-3); white-space: nowrap; }
+.nce-steps__owner[data-accent="blue"] { color: var(--nce-accent-blue); }
+.nce-steps__owner[data-accent="violet"] { color: var(--nce-accent-violet); }
+.nce-steps__owner[data-accent="orange"] { color: var(--nce-accent-orange); }
+.nce-steps__owner[data-accent="mint"] { color: var(--nce-accent-mint); }
+.nce-steps__owner[data-accent="capso"] { color: var(--nce-accent-capso); }
+
+/* ── Delegations ──────────────────────────────────────────────────────── */
+
+.nce-delegations { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.nce-delegations__row { display: flex; flex-direction: column; gap: 2px; padding-inline-start: 10px; border-inline-start: 2px solid var(--nce-line-2); }
+.nce-delegations__row[data-accent="blue"] { border-inline-start-color: var(--nce-accent-blue); }
+.nce-delegations__row[data-accent="violet"] { border-inline-start-color: var(--nce-accent-violet); }
+.nce-delegations__row[data-accent="orange"] { border-inline-start-color: var(--nce-accent-orange); }
+.nce-delegations__row[data-accent="mint"] { border-inline-start-color: var(--nce-accent-mint); }
+.nce-delegations__row[data-accent="capso"] { border-inline-start-color: var(--nce-accent-capso); }
+.nce-delegations__owner { font-size: 11.5px; color: var(--nce-ink-3); }
+.nce-delegations__deliverable { font-size: 13.5px; line-height: 1.7; }
+.nce-delegations__authority { font-size: 11.5px; color: var(--nce-ink-4); }
+
+/* ── One level further down: the roster and the dependency edges ──────── */
+
+.nce-deeper { border-block-start: 1px solid var(--nce-line); padding-block-start: 4px; }
+.nce-deeper__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12.5px;
+  color: var(--nce-ink-3);
+}
+.nce-deeper__bar::-webkit-details-marker { display: none; }
+.nce-deeper__bar:hover { color: var(--nce-ink); }
+.nce-deeper__marker { display: inline-block; color: var(--nce-ink-4); transition: transform 160ms ease; }
+.nce-deeper[open] .nce-deeper__marker { transform: rotate(90deg); }
+.nce-deeper__body { display: flex; flex-direction: column; gap: 12px; padding-block-start: 10px; }
+
+/* ── Where the run stands, under the thread ───────────────────────────── */
+
+.nce-runline {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--nce-ink-3);
+  padding-inline: 4px;
+}
+.nce-runline__state { display: inline-flex; align-items: center; gap: 6px; }
+.nce-runline__reason { color: var(--nce-amber); }
+.nce-runline__ended { margin-inline-start: auto; color: var(--nce-ink-4); }
+
+/* ═══════════════════ 7 · The composer ═══════════════════
+   The one surface on the page that is deliberately a shade lighter than the
+   ground: where writing happens should be unmistakable. It is mounted ONCE, at
+   the foot of the room, and it is the same element on the start screen and in
+   the conversation — which is why starting the work moves nothing.           */
+
+.nce-dock {
+  position: relative;
+  flex: none;
+  border-block-start: 1px solid rgba(255, 255, 255, 0.035);
+  background:
+    radial-gradient(70% 120% at 18% 0%, rgba(246, 223, 197, 0.055), transparent 58%),
+    linear-gradient(180deg, rgba(15, 16, 15, 0.08), rgba(10, 11, 10, 0.9) 34%);
+}
+.nce-dock .nce-col { display: flex; flex-direction: column; gap: 10px; padding: 14px 24px 16px; }
+
+/* ONE MODULE, ONE SURFACE. The writing area, the rail and the primary action share
+   a single glass panel — that is what stops this from reading as a text field with
+   a toolbar bolted underneath it. The material is a quiet one: transparency, blur,
+   a hairline edge, a top light and one shadow, all gathered in `--nce-glass-*`.
+   A liquid-glass imitation this is NOT, and it is never described as one: it is
+   the project's own graphite surface made slightly see-through. */
+.nce-write {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  padding: 13px 14px 12px;
+  border: 1px solid var(--nce-glass-line);
+  border-radius: var(--nce-r-4);
+  background: var(--nce-glass-bg);
+  backdrop-filter: blur(var(--nce-glass-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--nce-glass-blur)) saturate(140%);
+  box-shadow: var(--nce-glass-top), 0 0 0 1px rgba(255, 248, 235, 0.035), var(--nce-glass-rim);
+  transition: border-color 200ms ease, box-shadow 220ms ease, background-color 220ms ease;
+}
+.nce-write::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border: 1px solid transparent;
+  border-radius: inherit;
+  background: linear-gradient(112deg, rgba(255, 249, 237, 0.78), rgba(201, 171, 132, 0.14) 32%, rgba(255, 255, 255, 0.025) 68%, rgba(201, 171, 132, 0.36)) border-box;
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+/* Focus is a LIGHT, not a glow: the edge warms and the top hairline brightens.
+   There is no ring around the whole module and nothing pulses. */
+.nce-write:focus-within {
+  border-color: var(--nce-glass-line-hot);
+  box-shadow: var(--nce-glass-top-hot), var(--nce-lift), var(--nce-focus);
+}
+.nce-write[data-variant="hero"] { padding: 15px 16px 13px; }
+
+.nce-write__attachments { display: flex; gap: 7px; flex-wrap: wrap; padding-block-end: 6px; }
+.nce-write__field { display: block; }
+
+.nce-write__input {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 62px;
+}
+.nce-write__input textarea {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  max-height: 190px;
+  border: 0;
+  background: transparent;
+  color: var(--nce-ink);
+  font: inherit;
+  font-size: var(--nce-read);
+  line-height: 1.7;
+  resize: none;
+  outline: none;
+  padding: 8px 8px 6px;
+}
+.nce-write__input textarea::placeholder { color: color-mix(in srgb, var(--nce-ink-3) 84%, transparent); }
+
+/* ── The rail ──────────────────────────────────────────────────────────────
+   ONE inner row, no per-tool boxes. A framed box around every button is exactly
+   what made the old composer read as a form. Here each control is a FIXED hit box
+   (`--nce-hit`, 44px, thumb-sized on every device) and the VISUAL face inside it
+   is what moves — the split that lets the face magnify under the pointer while
+   the clickable area never shifts (see `useRailPointer`). */
+
+.nce-write__rail {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--nce-hit);
+  padding-block-start: 3px;
+  --nce-pop-s: 1;
+  --nce-spec-x: 50%;
+  --nce-spec-y: 50%;
+}
+
+/* The sheen. Drawn on the RAIL, so the writing area above stays matte and the
+   light reads as one control group rather than as the whole panel moving. It is
+   decoration: it takes no pointer event, and it fades in only while the pointer
+   is actually inside the rail. */
+.nce-write__rail::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--nce-r-2);
+  background: radial-gradient(
+    92px 36px at var(--nce-spec-x) var(--nce-spec-y),
+    rgba(255, 255, 255, 0.08),
+    transparent 72%
+  );
+  opacity: 0;
+  transition: opacity 260ms ease;
+  pointer-events: none;
+  z-index: 0;
+}
+.nce-write__rail[data-pointer="on"]::after { opacity: 1; }
+
+.nce-tool {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--nce-hit);
+  height: var(--nce-hit);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--nce-ink-2);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.nce-tool__face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 40px;
+  height: 40px;
+  padding-inline: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--nce-r-1);
+  background: transparent;
+  /* ONE transition, on the visual layer only. The curve overshoots slightly, so a
+     press reads as a press rather than as a fade. */
+  transform: scale(var(--nce-pop-s, 1));
+  transition: transform 190ms cubic-bezier(0.2, 0.9, 0.2, 1.08), background-color 150ms ease,
+    border-color 150ms ease, color 150ms ease;
+}
+.nce-tool__glyph { font-size: 17px; line-height: 1; }
+.nce-tool__text { font-size: 13px; font-weight: 600; }
+
+.nce-tool:hover .nce-tool__face {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--nce-line-2);
+  color: var(--nce-ink);
+}
+/* The focus ring is drawn on the FACE and the outer button keeps no outline, so
+   the indicator lands on the thing being scaled instead of on the invisible box. */
+.nce-tool:focus-visible { outline: none; }
+.nce-tool:focus-visible .nce-tool__face {
+  outline: 2px solid var(--nce-blue);
+  outline-offset: 2px;
+  color: var(--nce-ink);
+}
+/* Pressed: a short, definite dip, then the spring back is the transition above. */
+.nce-tool:active .nce-tool__face { transform: scale(0.93); transition-duration: 90ms; }
+
+/* The one primary action. A solid, unmistakable button. */
+/* SEND — the one primary action, in the ACTION colour. The reference's send is
+   mint on dark with dark ink, and the brief names mint as the action colour, so
+   the button is mint rather than blue: blue stays in the state vocabulary, where
+   it means “EXEC is working”, and a control that means “this is what you are
+   about to do” must not read as a status. */
+.nce-tool[data-tone="primary"] .nce-tool__face {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding-inline: 0;
+  border-color: transparent;
+  border-radius: 15px;
+  background: var(--nce-action);
+  color: var(--nce-action-ink);
+  box-shadow: 0 14px 28px -18px color-mix(in srgb, var(--nce-action) 90%, transparent);
+}
+.nce-tool[data-tone="primary"]:hover .nce-tool__face {
+  background: var(--nce-action-2);
+  border-color: transparent;
+  color: var(--nce-action-ink);
+}
+.nce-tool[data-tone="primary"]:disabled { cursor: not-allowed; }
+.nce-tool[data-tone="primary"]:disabled .nce-tool__face,
+.nce-tool[data-tone="primary"]:disabled:hover .nce-tool__face {
+  background: var(--nce-surface-3);
+  color: var(--nce-ink-4);
+  box-shadow: none;
+}
+
+/* STOP. A different action, so it gets a different SHAPE and a different colour:
+   the swap from send to stop is visible at a glance instead of only in the
+   tooltip. It is never shown unless the open run actually offers a cancel. */
+.nce-tool[data-tone="stop"] .nce-tool__face {
+  padding-inline: 13px;
+  border-radius: 999px;
+  border-color: color-mix(in srgb, var(--nce-red) 40%, transparent);
+  background: color-mix(in srgb, var(--nce-red) 15%, transparent);
+  color: color-mix(in srgb, var(--nce-red) 88%, white);
+}
+.nce-tool[data-tone="stop"]:hover .nce-tool__face {
+  background: color-mix(in srgb, var(--nce-red) 24%, transparent);
+  border-color: color-mix(in srgb, var(--nce-red) 55%, transparent);
+  color: #fff;
+}
+
+/* Not built. Legibly inert: dimmed, no hover response at all, and the reason is in
+   the tooltip and in the accessible name. */
+.nce-tool[data-tone="off"] { color: var(--nce-ink-4); cursor: not-allowed; }
+.nce-tool[data-tone="off"] .nce-tool__face { opacity: 0.62; }
+.nce-tool[data-tone="off"]:hover .nce-tool__face,
+.nce-tool[data-tone="off"]:active .nce-tool__face {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nce-ink-4);
+  transform: scale(var(--nce-pop-s, 1));
+}
+
+.nce-write__gap,
+.nce-write__spacer { flex: 1 1 auto; min-width: 18px; }
+
+/* The tooltips. Shown on hover AND on keyboard focus, because a pointer-only
+   explanation is missing for exactly the people who need the label most. The
+   accessible NAME is the button's own `aria-label`; this only ever adds detail. */
+.nce-tool[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% - 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(3px);
+  width: max-content;
+  max-width: 30ch;
+  padding: 6px 9px;
+  border: 1px solid var(--nce-line-2);
+  border-radius: 8px;
+  background: rgba(8, 11, 16, 0.97);
+  color: var(--nce-ink);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 6;
+  transition: opacity 130ms ease 320ms, transform 130ms ease 320ms, visibility 0s linear 450ms;
+}
+.nce-tool[data-tip]:hover::after,
+.nce-tool[data-tip]:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+  transition-delay: 90ms, 90ms, 0s;
+}
+
+/* ── The EXEC chip: who answers, stated in words ────────────────────────────
+   A chip rather than an icon, so the agent's name is always legible — identity is
+   not something to decode from a glyph. Its hit area is padded out to 44px with a
+   transparent pseudo-element, so the visual stays small while the tap target does
+   not. */
+.nce-chip {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  padding-inline: 9px 12px;
+  border: 1px solid var(--nce-line-2);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nce-surface-2) 70%, transparent);
+  color: var(--nce-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+.nce-chip::before { content: ""; position: absolute; inset: -5px; border-radius: 999px; }
+.nce-chip__face { display: inline-flex; }
+.nce-chip__text { letter-spacing: 0.02em; }
+.nce-chip__caret { font-size: 10px; color: var(--nce-ink-4); }
+.nce-chip:hover { background: var(--nce-surface-3); border-color: var(--nce-line-3); }
+.nce-chip:focus-visible { outline: 2px solid var(--nce-blue); outline-offset: 2px; }
+
+.nce-write__note { margin: 0; padding: 2px 4px 0; font-size: 11px; line-height: 1.7; color: var(--nce-ink-4); max-width: 58ch; }
+.nce-write__picker { display: none; }
+
+.nce-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 8px;
+  border: 1px solid var(--nce-line-2);
+  border-radius: 999px;
+  background: var(--nce-surface);
+  font-size: 11.5px;
+  color: var(--nce-ink-2);
+}
+.nce-pill__name { max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nce-pill__remove {
+  border: 0;
+  background: transparent;
+  color: var(--nce-ink-4);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.nce-pill__remove:hover { color: var(--nce-ink); }
+
+/* ── Contextual suggestions, and the demo scripts one level down ───────── */
+
+.nce-suggest { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.nce-suggest__chip {
+  height: 34px;
+  padding-inline: 14px;
+  border: 1px solid var(--nce-line-2);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nce-surface) 70%, transparent);
+  color: var(--nce-ink-2);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.nce-suggest__chip:hover {
+  background: var(--nce-surface-2);
+  border-color: var(--nce-line-3);
+  color: var(--nce-ink);
+}
+.nce-suggest__chip:focus-visible { outline: 2px solid var(--nce-blue); outline-offset: 1px; }
+
+/* The one chip that starts a run. It carries the script mark, so a chip that
+   moves a demo is never mistaken for a chip that just writes a sentence. */
+.nce-suggest__chip[data-script="true"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-color: color-mix(in srgb, var(--nce-blue) 42%, transparent);
+  color: var(--nce-ink);
+}
+.nce-suggest__mark { font-size: 9px; color: var(--nce-blue); }
+
+/* One line under the composer: the context control, and what is on screen. */
+.nce-dock__foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-inline: 2px;
+}
+.nce-dock__note { font-size: 11px; line-height: 1.6; color: var(--nce-ink-4); min-width: 0; }
+
+/* ═══════════════════ 8 · Context, one compact control ═══════════════════ */
+
+.nce-scope { position: relative; display: inline-flex; align-items: center; gap: 8px; }
+.nce-scope__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding-inline: 12px;
+  border: 1px solid var(--nce-line-2);
+  border-radius: 999px;
+  color: var(--nce-ink-2);
+  font-size: 12.5px;
+  cursor: pointer;
+  list-style: none;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+.nce-scope__trigger::-webkit-details-marker { display: none; }
+.nce-scope__trigger:hover { color: var(--nce-ink); border-color: var(--nce-line-3); }
+.nce-scope__label { color: var(--nce-ink-3); white-space: nowrap; }
+.nce-scope__sep { color: var(--nce-ink-4); }
+.nce-scope__value { color: var(--nce-ink); font-weight: 600; white-space: nowrap; }
+.nce-scope__caret { font-size: 10px; color: var(--nce-ink-4); }
+
+/* ═══════════════════ 9 · Buttons ═══════════════════ */
+
+.nce-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 15px;
+  border-radius: 11px;
+  border: 1px solid var(--nce-line-2);
+  background: transparent;
+  color: var(--nce-ink);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 160ms ease, border-color 160ms ease, opacity 160ms ease;
+}
+.nce-btn:hover { background: rgba(255, 255, 255, 0.055); }
+.nce-btn:focus-visible { outline: 2px solid var(--nce-blue); outline-offset: 1px; }
+.nce-btn[data-variant="primary"] {
+  border-color: transparent;
+  background: var(--nce-blue);
+  color: #04101f;
+  font-weight: 600;
+}
+.nce-btn[data-variant="primary"]:hover { opacity: 0.9; background: var(--nce-blue); }
+.nce-btn[data-variant="danger"] { border-color: color-mix(in srgb, var(--nce-red) 45%, transparent); color: var(--nce-red); }
+.nce-btn--quiet { border-color: var(--nce-line); color: var(--nce-ink-2); }
+.nce-btn--sm { min-height: 30px; font-size: 12px; padding: 0 12px; border-radius: 9px; }
+.nce-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ═══════════════════ 10 · Panels — used inside the summary and the tools ═══ */
+
+.nce-panel { display: flex; flex-direction: column; gap: 8px; }
+.nce-panel__title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--nce-ink-2);
+}
+.nce-panel__count { font-size: 11px; color: var(--nce-ink-4); font-variant-numeric: tabular-nums; }
+
+.nce-note { margin: 0; font-size: 12px; line-height: 1.8; color: var(--nce-ink-4); }
+.nce-note--tight { margin: 0; }
+
+.nce-summary__counts { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--nce-ink-4); }
+.nce-summary__count { display: inline-flex; align-items: baseline; gap: 6px; }
+.nce-summary__count b { font-weight: 600; color: var(--nce-ink-2); font-variant-numeric: tabular-nums; }
+
+/* ── Legend ────────────────────────────────────────────────────────────── */
+
+.nce-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.nce-legend__row { display: flex; align-items: center; gap: 9px; }
+.nce-legend__glyph { width: 16px; text-align: center; font-style: normal; }
+.nce-legend__glyph[data-tone="blue"] { color: var(--nce-blue); }
+.nce-legend__glyph[data-tone="blue-low"] { color: var(--nce-blue-low); }
+.nce-legend__glyph[data-tone="amber"] { color: var(--nce-amber); }
+.nce-legend__glyph[data-tone="green"] { color: var(--nce-green); }
+.nce-legend__glyph[data-tone="red"] { color: var(--nce-red); }
+.nce-legend__glyph[data-tone="off"] { color: var(--nce-off); }
+.nce-legend__label { font-size: 12.5px; }
+
+/* ── Team ──────────────────────────────────────────────────────────────── */
+
+.nce-team { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.nce-team__row { display: flex; align-items: flex-start; gap: 10px; opacity: 0.6; }
+.nce-team__row[data-engaged="true"] { opacity: 1; }
+.nce-team__badge {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--nce-line-2);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--nce-ink-3);
+}
+.nce-team__row[data-accent="blue"] .nce-team__badge { border-color: color-mix(in srgb, var(--nce-accent-blue) 45%, transparent); color: var(--nce-accent-blue); }
+.nce-team__row[data-accent="violet"] .nce-team__badge { border-color: color-mix(in srgb, var(--nce-accent-violet) 45%, transparent); color: var(--nce-accent-violet); }
+.nce-team__row[data-accent="orange"] .nce-team__badge { border-color: color-mix(in srgb, var(--nce-accent-orange) 45%, transparent); color: var(--nce-accent-orange); }
+.nce-team__row[data-accent="mint"] .nce-team__badge { border-color: color-mix(in srgb, var(--nce-accent-mint) 45%, transparent); color: var(--nce-accent-mint); }
+.nce-team__row[data-accent="capso"] .nce-team__badge { border-color: color-mix(in srgb, var(--nce-accent-capso) 45%, transparent); color: var(--nce-accent-capso); }
+.nce-team__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.nce-team__name { font-size: 12.5px; display: inline-flex; gap: 7px; align-items: baseline; }
+.nce-team__code { font-size: 10px; color: var(--nce-ink-4); letter-spacing: 0.06em; }
+.nce-team__mandate { font-size: 11.5px; line-height: 1.7; color: var(--nce-ink-4); }
+.nce-team__flag { font-size: 11px; color: var(--nce-ink-4); white-space: nowrap; }
+
+/* ── Timeline ──────────────────────────────────────────────────────────── */
+
+.nce-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.nce-timeline__row { display: flex; align-items: baseline; gap: 9px; }
+.nce-timeline__at { flex: none; width: 38px; font-size: 10.5px; color: var(--nce-ink-4); font-variant-numeric: tabular-nums; }
+.nce-timeline__dot { flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--nce-ink-4); align-self: center; }
+.nce-timeline__dot[data-kind="agent"] { background: var(--nce-blue); }
+.nce-timeline__dot[data-kind="mission"] { background: var(--nce-accent-violet); }
+.nce-timeline__dot[data-kind="approval"] { background: var(--nce-amber); }
+.nce-timeline__dot[data-kind="error"] { background: var(--nce-red); }
+.nce-timeline__dot[data-kind="human"] { background: var(--nce-green); }
+.nce-timeline__text { font-size: 12.5px; line-height: 1.7; }
+.nce-timeline__cause { margin-inline-start: 8px; font-size: 11px; color: var(--nce-ink-4); }
+
+/* ── Dependency graph, derived from dependsOn ──────────────────────────── */
+
+.nce-graph { display: flex; gap: 10px; align-items: flex-start; overflow-x: auto; padding-block: 4px; }
+.nce-graph__col { display: flex; flex-direction: column; gap: 6px; min-width: 120px; }
+.nce-graph__level { font-size: 10px; color: var(--nce-ink-4); }
+.nce-graph__node {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--nce-line);
+  border-radius: 8px;
+  background: var(--nce-surface);
+}
+.nce-graph__num { font-size: 10px; color: var(--nce-ink-4); }
+.nce-graph__label { font-size: 11.5px; line-height: 1.6; }
+.nce-graph__edges { display: flex; gap: 6px; flex-wrap: wrap; }
+.nce-graph__edge { font-size: 10px; color: var(--nce-ink-4); }
+
+/* ── History ───────────────────────────────────────────────────────────── */
+
+.nce-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.nce-history__row { display: flex; align-items: baseline; gap: 10px; }
+.nce-history__at { flex: none; width: 44px; font-size: 10.5px; color: var(--nce-ink-4); font-variant-numeric: tabular-nums; }
+.nce-history__text { flex: 1; font-size: 12.5px; }
+.nce-history__state { font-size: 11.5px; white-space: nowrap; }
+.nce-history__state[data-tone="blue"] { color: var(--nce-blue); }
+.nce-history__state[data-tone="blue-low"] { color: var(--nce-blue-low); }
+.nce-history__state[data-tone="amber"] { color: var(--nce-amber); }
+.nce-history__state[data-tone="green"] { color: var(--nce-green); }
+.nce-history__state[data-tone="red"] { color: var(--nce-red); }
+.nce-history__state[data-tone="off"] { color: var(--nce-off); }
+
+/* ── Reference boards, flat and labelled ───────────────────────────────── */
+
+.nce-refs { display: flex; flex-direction: column; gap: 8px; }
+.nce-refs__marker { display: inline-block; color: var(--nce-ink-4); transition: transform 160ms ease; }
+.nce-refs[open] .nce-refs__marker { transform: rotate(90deg); }
+.nce-refs > summary { cursor: pointer; list-style: none; }
+.nce-refs > summary::-webkit-details-marker { display: none; }
+.nce-refs__list { display: flex; flex-direction: column; gap: 10px; }
+.nce-refs__item { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.nce-refs__item img { width: 100%; height: auto; border: 1px solid var(--nce-line); border-radius: 10px; }
+.nce-refs__item figcaption { font-size: 11.5px; color: var(--nce-ink-4); }
+
+/* ═══════════════════ 11 · Review tools page ═══════════════════
+   `.nce--lab`: the tools are NOT the experience, so they do not take the shell
+   into focus mode (the guarded rules above need `.nce[data-mode]`). The page
+   scrolls normally and reads like a review instrument.                       */
+
+.nce--lab {
+  min-height: 0;
+  overflow: visible;
+  padding: 0 26px 64px;
+  gap: 20px;
+}
+
+.nce-lab__head { display: flex; flex-direction: column; gap: 6px; padding-block: 8px 4px; }
+.nce-lab__title { margin: 0; font-size: 22px; font-weight: 600; }
+.nce-lab__note { margin: 0; max-width: 76ch; font-size: 13px; line-height: 1.85; color: var(--nce-ink-3); }
+
+.nce-lab__block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 860px;
+  padding-block-start: 16px;
+  border-block-start: 1px solid var(--nce-line);
+}
+.nce-lab__block-title { margin: 0; font-size: 14px; font-weight: 600; }
+
+.nce-lab__scenarios { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.nce-lab__scenario {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--nce-line);
+  border-radius: 12px;
+  background: var(--nce-surface);
+}
+.nce-lab__scenario-head { display: flex; align-items: baseline; gap: 10px; }
+.nce-lab__scenario-name { font-size: 13.5px; font-weight: 600; }
+.nce-lab__scenario-code { font-size: 11px; color: var(--nce-ink-4); font-variant-numeric: tabular-nums; }
+.nce-lab__scenario-summary { font-size: 12.5px; line-height: 1.8; color: var(--nce-ink-3); }
+
+/* ═══════════════════ 12 · The chrome ═══════════════════
+   The identity and the one menu, the ONE panel, the notice line, and the two
+   small things a long thread needs. All of it additive: the conversation's own
+   rules above are untouched.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── The identity, and the way to change it ─────────────────────────────── */
+
+/* EXEC's presence in the bar. NOT a control: the picker moved into the composer,
+   where the writing is, so this is the identity line and nothing else. */
+.nce-agent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 8px;
+}
+.nce-agent__names { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.nce-agent__name { font-size: 13.5px; font-weight: 600; letter-spacing: 0.1em; line-height: 1.35; }
+.nce-agent__role {
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--nce-ink-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Every popover on this surface: one shape, one elevation, one order ────
+   ORDER, stated once: a popover (60) is always above the panel (40), and the
+   panel is always above the conversation. A dropdown that a panel clipped would
+   look broken; a panel that closed whenever a menu opened would cost the reader
+   their place for no reason. */
+
+.nce-menu__list,
+.nce-scope__menu {
+  position: absolute;
+  z-index: 60;
+  inset-block-start: calc(100% + 8px);
+  inset-inline-start: 0;
+  min-width: 250px;
+  max-width: 320px;
+  padding: 8px;
+  border: 1px solid var(--nce-line-2);
+  border-radius: var(--nce-r-3);
+  background: var(--nce-surface-2);
+  box-shadow: var(--nce-pop), var(--nce-hairline);
+}
+
+.nce-menu__title,
+.nce-scope__head {
+  margin: 0;
+  padding: 4px 8px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--nce-ink-4);
+}
+
+/* ── The one menu ───────────────────────────────────────────────────────── */
+
+.nce-menu { position: relative; }
+.nce-menu__list { inset-inline-start: auto; inset-inline-end: 0; }
+.nce-menu__list {
+  max-height: min(680px, calc(100dvh - 88px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.nce-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--nce-ink-2);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 130ms ease, color 130ms ease;
+}
+.nce-menu__item:hover { background: rgba(255, 255, 255, 0.06); color: var(--nce-ink); }
+.nce-menu__item:focus-visible { outline: 2px solid var(--nce-blue); outline-offset: -2px; }
+.nce-menu__item--future { color: var(--nce-ink-4); cursor: not-allowed; }
+.nce-menu__item--future:hover { background: transparent; color: var(--nce-ink-4); }
+.nce-menu__badge {
+  margin-inline-start: auto;
+  padding: 1px 7px;
+  border: 1px solid var(--nce-line);
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--nce-ink-4);
+}
+.nce-menu__sep { display: block; height: 1px; margin: 6px 4px; background: var(--nce-line); }
+
+/* ── Development, two disclosures down ───────────────────────────────────────
+   The scripts are a build-time instrument. They live inside the header menu,
+   inside one more disclosure, and they are labelled as development on the row —
+   so the conversation is never surrounded by a scenario picker, and no reviewer
+   has to wonder whether a script is part of the product.                      */
+
+.nce-menu__item--dev { color: var(--nce-ink-3); }
+.nce-menu__devbody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 4px;
+  padding-inline-start: 6px;
+  border-inline-start: 1px solid var(--nce-line);
+}
+.nce-menu__note {
+  margin: 2px 4px 6px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--nce-ink-4);
+}
+.nce-menu__script {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  text-align: start;
+}
+.nce-menu__scripttext { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.nce-menu__scriptname { font-size: 12.5px; color: var(--nce-ink); }
+.nce-menu__scriptsummary { font-size: 10.5px; line-height: 1.6; color: var(--nce-ink-4); }
+.nce-menu__scriptverb { flex: none; font-size: 10.5px; color: var(--nce-blue); }
+.nce-menu__script[data-running="true"] .nce-menu__scriptverb { color: var(--nce-amber); }
+
+/* ── Context ─────────────────────────────────────────────────────────────── */
+
+.nce-scope__menu { min-width: 268px; }
+.nce-scope__item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--nce-ink-2);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: start;
+  cursor: pointer;
+}
+.nce-scope__item:hover { background: rgba(255, 255, 255, 0.06); color: var(--nce-ink); }
+.nce-scope__item[data-active="true"] { color: var(--nce-ink); background: rgba(255, 255, 255, 0.07); }
+.nce-scope__where { margin-inline-start: auto; font-size: 10.5px; color: var(--nce-ink-4); }
+.nce-scope__note {
+  margin: 6px 0 0;
+  padding: 6px 10px 4px;
+  border-block-start: 1px solid var(--nce-line);
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--nce-ink-4);
+}
+
+/* ── The body: the stage, and the panel beside it ───────────────────────── */
+
+.nce-body { flex: 1; display: flex; min-height: 0; }
+.nce-stage { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+/* z-index 40: the panel is above the conversation and below every popover. */
+.nce-side {
+  position: relative;
+  z-index: 40;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  width: 360px;
+  min-height: 0;
+  border-inline-start: 1px solid var(--nce-line);
+  background: var(--nce-ground-2);
+  outline: none;
+}
+.nce-side__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 56px;
+  padding-inline: 16px;
+  border-block-end: 1px solid var(--nce-line);
+}
+.nce-side__title { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.03em; }
+.nce-side__close {
+  margin-inline-start: auto;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: var(--nce-r-1);
+  background: transparent;
+  color: var(--nce-ink-3);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 130ms ease, color 130ms ease;
+}
+.nce-side__close:hover { background: rgba(255, 255, 255, 0.06); color: var(--nce-ink); }
+.nce-side__close:focus-visible { outline: 2px solid var(--nce-blue); outline-offset: 1px; }
+.nce-side__body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; }
+
+.nce-side[data-kind="workspace"] .nce-side__body,
+.nce-side[data-kind="history"] .nce-side__body { display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Conversations ──────────────────────────────────────────────────────── */
+
+.nce-hist { display: flex; flex-direction: column; gap: 12px; }
+.nce-hist__new { width: 100%; justify-content: center; }
+.nce-hist__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.nce-hist__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid var(--nce-line);
+  border-radius: var(--nce-r-2);
+  background: transparent;
+  color: var(--nce-ink-2);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color 130ms ease, border-color 130ms ease;
+}
+button.nce-hist__row:hover { background: rgba(255, 255, 255, 0.045); color: var(--nce-ink); }
+.nce-hist__row[data-open="true"] { border-color: color-mix(in srgb, var(--nce-blue) 35%, var(--nce-line)); }
+.nce-hist__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nce-hist__title { display: flex; align-items: center; gap: 7px; font-size: 12.5px; }
+.nce-hist__glyph { color: var(--nce-ink-4); font-size: 11px; }
+.nce-hist__meta { display: flex; align-items: baseline; gap: 5px; font-size: 10.5px; color: var(--nce-ink-4); }
+.nce-hist__code { font-variant-numeric: tabular-nums; }
+.nce-hist__warn { color: var(--nce-amber); }
+.nce-hist__badge,
+.nce-hist__open {
+  margin-inline-start: auto;
+  font-size: 10.5px;
+  color: var(--nce-ink-4);
+  white-space: nowrap;
+}
+.nce-hist__badge { color: var(--nce-blue); }
+.nce-hist__note { margin: 0; font-size: 11px; line-height: 1.75; color: var(--nce-ink-4); }
+
+/* ── Workspace ──────────────────────────────────────────────────────────── */
+
+.nce-work { display: flex; flex-direction: column; gap: 18px; }
+.nce-group { display: flex; flex-direction: column; gap: 8px; }
+.nce-group__title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nce-ink-4);
+}
+.nce-group__empty { margin: 0; font-size: 11.5px; line-height: 1.8; color: var(--nce-ink-4); }
+.nce-group__note { margin: 2px 0 0; font-size: 11px; line-height: 1.75; color: var(--nce-ink-4); }
+.nce-work__sections { display: flex; flex-direction: column; gap: 6px; }
+.nce-sub { border: 1px solid var(--nce-line); border-radius: var(--nce-r-2); background: color-mix(in srgb, var(--nce-surface) 60%, transparent); }
+.nce-sub__bar {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--nce-ink-2);
+  cursor: pointer;
+  list-style: none;
+}
+.nce-sub__bar::-webkit-details-marker { display: none; }
+.nce-sub__bar::before { content: "▸ "; color: var(--nce-ink-4); }
+.nce-sub[open] > .nce-sub__bar::before { content: "▾ "; }
+.nce-sub__bar:hover { color: var(--nce-ink); }
+.nce-sub__body { padding: 2px 12px 12px; }
+.nce-sub .nce-steps { gap: 8px; }
+
+.nce-kv { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.nce-kv__row { display: flex; flex-direction: column; gap: 1px; }
+.nce-kv__row dt { font-size: 10.5px; color: var(--nce-ink-4); }
+.nce-kv__row dd { margin: 0; font-size: 11.5px; line-height: 1.75; color: var(--nce-ink-2); }
+.nce-kv__plain { margin: 0; font-size: 11.5px; line-height: 1.8; color: var(--nce-ink-2); }
+
+/* ── What just changed ──────────────────────────────────────────────────── */
+
+.nce-noticewrap { flex: none; padding: 10px 24px 0; }
+.nce-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  max-width: var(--nce-col-w);
+  margin-inline: auto;
+  padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--nce-amber) 30%, var(--nce-line));
+  border-radius: var(--nce-r-2);
+  background: color-mix(in srgb, var(--nce-amber) 8%, transparent);
+  font-size: 11.5px;
+  color: var(--nce-ink-2);
+}
+.nce-notice__glyph { color: var(--nce-amber); }
+.nce-notice__list { margin: 0; padding-inline-start: 14px; display: flex; flex-direction: column; gap: 2px; }
+.nce-notice__close {
+  margin-inline-start: auto;
+  border: 0;
+  background: transparent;
+  color: var(--nce-ink-4);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.nce-notice__close:hover { color: var(--nce-ink); }
+
+/* ── Back to the newest line ────────────────────────────────────────────── */
+
+/* Anchored to the TOP of the dock rather than to the room, so it always floats
+   just above the composer — including while the composer is growing. */
+.nce-newest {
+  position: absolute;
+  inset-block-end: calc(100% + 10px);
+  inset-inline-end: 24px;
+  z-index: 12;
+  box-shadow: var(--nce-pop);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding-inline: 12px;
+  border: 1px solid var(--nce-line-2);
+  border-radius: 999px;
+  background: var(--nce-surface-2);
+  color: var(--nce-ink-2);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.nce-newest:hover { color: var(--nce-ink); border-color: var(--nce-line-3); }
+
+/* ── The composer's pop menus ────────────────────────────────────────────────
+   The rail holds two: the agent (with the brain as a separate section inside it)
+   and the attachments. They are anchored to their trigger and they OPEN FROM IT —
+   the transform origin is the trigger's own corner, so the first frame of the
+   animation is at the control that was pressed rather than in the middle of
+   nowhere. On a narrow window the same menu becomes a sheet at the foot of the
+   page (§14); the items, the focus order and the keys do not change. */
+
+.nce-pop { position: relative; z-index: 1; display: inline-flex; flex: none; }
+.nce-pop[data-kind="tool"] { width: var(--nce-hit); height: var(--nce-hit); }
+.nce-pop[data-kind="tool"] > .nce-tool { width: 100%; height: 100%; }
+.nce-pop[data-open="true"] { z-index: 9; }
+
+.nce-pop__menu {
+  position: absolute;
+  z-index: 8;
+  bottom: calc(100% + 10px);
+  inset-inline-start: 0;
+  width: max-content;
+  min-width: 248px;
+  max-width: 330px;
+  padding: 8px;
+  border: 1px solid var(--nce-line-2);
+  border-radius: var(--nce-r-2);
+  background: rgba(13, 17, 24, 0.94);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: var(--nce-pop), var(--nce-hairline);
+  transform-origin: bottom left;
+  animation: nce-pop-in 170ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+/* In Arabic the menu is anchored to the rail's right edge, so it grows from its
+   right corner: the origin follows the direction, not the other way round. */
+.nce[dir="rtl"] .nce-pop__menu { transform-origin: bottom right; }
+
+@keyframes nce-pop-in {
+  from { opacity: 0; transform: translateY(7px) scale(0.975); }
+  to { opacity: 1; transform: none; }
+}
+
+.nce-pop__title {
+  margin: 0;
+  padding: 6px 8px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--nce-ink-4);
+}
+.nce[lang="ar"] .nce-pop__title { letter-spacing: 0; }
+
+.nce-pop__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--nce-r-1);
+  background: transparent;
+  color: var(--nce-ink-2);
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+.nce-pop__item:hover { background: rgba(255, 255, 255, 0.06); color: var(--nce-ink); }
+.nce-pop__item:focus-visible { outline: 2px solid var(--nce-blue); outline-offset: -2px; color: var(--nce-ink); }
+.nce-pop__item[data-active="true"] { color: var(--nce-ink); }
+/* A row that states a fact rather than offering a choice. It can still be reached
+   with the arrow keys (so the menu walks uniformly) but it does nothing. */
+.nce-pop__item[data-state="off"] { color: var(--nce-ink-4); cursor: default; }
+.nce-pop__item[data-state="off"]:hover { background: transparent; color: var(--nce-ink-4); }
+.nce-pop__glyph { flex: none; width: 16px; text-align: center; font-size: 13px; color: var(--nce-ink-4); }
+.nce-pop__label { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.nce-pop__name { font-size: 13px; }
+.nce-pop__sub { font-size: 11px; color: var(--nce-ink-4); }
+.nce-pop__check { margin-inline-start: auto; flex: none; color: var(--nce-blue); font-size: 12px; }
+.nce-pop__note {
+  margin: 2px 0 0;
+  padding: 5px 8px 3px;
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--nce-ink-4);
+}
+.nce-pop__sep { display: block; height: 1px; margin: 7px 4px; background: var(--nce-line); }
+/* Only used on a narrow window, where the menu is a sheet over the page. */
+.nce-pop__scrim { display: none; }
+
+/* ═══════════════════ 13 · The three motions ═══════════════════
+   Each one is short, each one says something specific, and each one is off
+   under `prefers-reduced-motion` (the block at the end of this file).
+
+     1. `nce-rise`   — the start screen gives way to the conversation. The swap
+                       happens where the eye is NOT: the composer below it is not
+                       remounted and does not move.
+     2. `nce-decide` — a decision arriving inside the conversation. It settles
+                       into place instead of appearing between two lines.
+     3. `nce-panel-*`— the output opening and closing beside (or over) the
+                       conversation, without moving a single line of the thread.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes nce-rise {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes nce-decide {
+  from { opacity: 0; transform: translateY(7px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes nce-panel-in-start {
+  from { opacity: 0; transform: translateX(-18px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes nce-panel-in-end {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes nce-panel-out-start {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateX(-18px); }
+}
+@keyframes nce-panel-out-end {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateX(18px); }
+}
+
+/* The sheet a narrow window gets instead of the beside-panel: one edge for both
+   directions, because its shared edge is the bottom of the screen. */
+@keyframes nce-sheet {
+  from { opacity: 0; transform: translateY(28px); }
+  to { opacity: 1; transform: none; }
+}
+
+.nce-hero,
+.nce-col--enter { animation: nce-rise 240ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+
+.nce-approval { animation: nce-decide 220ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+
+/* The panel comes in from the edge it lives on: the end side, which is the right
+   in English and the left in Arabic. */
+.nce[dir="ltr"] .nce-side { animation: nce-panel-in-end 200ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+.nce[dir="rtl"] .nce-side { animation: nce-panel-in-start 200ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+.nce[dir="ltr"] .nce-side[data-closing="true"] { animation: nce-panel-out-end 180ms ease-in both; }
+.nce[dir="rtl"] .nce-side[data-closing="true"] { animation: nce-panel-out-start 180ms ease-in both; }
+
+/* ═══════════════════ 14 · Narrow windows ═══════════════════ */
+
+/* Beside the conversation while there is room for both and the reading column
+   still breathes; a sheet over it when there is not. Below 1080px the two would
+   fight, and the conversation would lose. */
+@media (max-width: 1079px) {
+  .nce-side {
+    position: fixed;
+    inset-block: 0;
+    inset-inline-end: 0;
+    z-index: 40;
+    width: min(92vw, 400px);
+    box-shadow: -18px 0 48px rgba(0, 0, 0, 0.55);
+  }
+  /* A sheet rises from the bottom edge, so the shared edge is the bottom one —
+     the same in both directions. */
+  .nce[dir] .nce-side,
+  .nce[dir] .nce-side[data-closing="true"],
+  .nce[dir] .nce-side[data-closing="false"] { animation-name: nce-sheet; }
+}
+
+@media (min-width: 1080px) {
+  .nce-side { border-radius: 0; }
+}
+
+@media (max-width: 760px) {
+  /* The header keeps every control on a phone: the identity loses its role line,
+     the buttons lose their words, and the context loses its qualifying text —
+     rather than any of them being dropped or pushed onto a second row. */
+  .nce-top { height: 68px; padding-inline: 10px; gap: 4px; }
+  .nce-top__identity { flex: 1 1 auto; max-width: 104px; padding-inline: 2px; gap: 7px; }
+  .nce-top__identity .nce-face,
+  .nce-top__identity img { width: 32px; height: 32px; }
+  .nce-top__name { display: none; }
+  .nce-top__brand {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 54px;
+    color: var(--nce-ink);
+    line-height: 1;
+    direction: ltr;
+  }
+  .nce-top__brand > span { font-size: 13px; font-weight: 700; letter-spacing: 0.22em; }
+  .nce-top__brand > small { font-size: 7px; font-weight: 500; letter-spacing: 0.31em; color: var(--nce-ink-3); }
+  .nce-top__right { gap: 2px; }
+  .nce-agent { padding-inline: 6px; gap: 8px; }
+  .nce-agent__role { display: none; }
+  .nce-agent__name { font-size: 13px; }
+  .nce-top__btn { min-width: 44px; min-height: 44px; padding-inline: 9px; justify-content: center; }
+  .nce-top__btn-label { display: none; }
+  .nce-top__back { min-width: 44px; min-height: 44px; padding-inline: 8px; justify-content: center; }
+  .nce-menu__btn { width: 44px; height: 44px; }
+  .nce-livebtn { width: 44px; min-width: 44px; height: 44px; padding: 0; justify-content: center; }
+
+  .nce-scroll .nce-col { padding: 20px 14px 24px; gap: 18px; }
+
+  /* The composer sits at the foot of the room and clears the home indicator. */
+  .nce-dock .nce-col { padding: 10px 12px 12px; padding-block-end: max(12px, env(safe-area-inset-bottom)); }
+  .nce-write { border-radius: var(--nce-r-3); }
+  .nce-write[data-variant] { padding: 10px 11px 9px; }
+  .nce-write__input { min-height: 48px; }
+  .nce-write__input textarea { min-height: 44px; max-height: 38vh; padding: 6px 6px 4px; font-size: 16px; }
+  .nce-write__rail { gap: 5px; }
+  .nce-tool { width: 48px; height: 48px; }
+  .nce-tool__face { min-width: 40px; height: 40px; }
+  .nce-tool[data-tone="primary"] .nce-tool__face { width: 44px; min-width: 44px; height: 44px; }
+
+  .nce-taskbar { padding: 10px 14px 0; gap: 8px; }
+  .nce-taskbar__progress { display: none; }
+  .nce-taskbar__plan { margin-inline-start: auto; }
+
+  .nce-hero { min-height: auto; flex-direction: row; justify-content: flex-start; align-items: flex-start; padding: 40px 16px 24px; gap: 12px; text-align: start; transform: none; }
+  .nce-hero__copy { gap: 14px; max-width: calc(100% - 84px); padding-block-start: 4px; }
+  .nce-hero__line { font-size: 22px; max-width: 16ch; line-height: 1.45; }
+  .nce-face[data-size="hero"] { width: 72px; height: 72px; }
+  .nce-face[data-size="hero"] .nce-face__img { width: 72px; height: 72px; }
+  .nce-hero__suggest { gap: 7px; justify-content: flex-start; }
+  .nce-suggest__chip { min-height: 36px; height: auto; padding: 7px 12px; font-size: 12px; line-height: 1.45; }
+
+  .nce-newest { inset-inline-end: 14px; }
+  .nce-newest__label { display: none; }
+  .nce-noticewrap { padding: 8px 14px 0; }
+  .nce-side { width: min(94vw, 360px); }
+
+  .nce-menu__list,
+  .nce-scope__menu { max-width: calc(100vw - 24px); }
+
+  /* The active scope is already repeated below the composer. Keeping its full
+     chooser in a 390px app bar crowds out the NEXUP identity and menu. */
+  .nce-top > .nce-scope { display: none; }
+
+  .nce-top > .nce-switch { flex: 0 1 110px; max-width: 110px; }
+  .nce-top > .nce-switch .nce-switch__item { max-width: 55px; padding-inline: 6px; font-size: 10.5px; }
+
+  .nce-result { grid-template-columns: 1fr; gap: 10px; padding: 13px; }
+  .nce-result__summary { grid-row: 1; padding-inline-end: 0; align-items: flex-start; }
+  .nce-result__status { align-self: flex-start; }
+  .nce-result__actions { grid-row: 2; justify-content: stretch; }
+  .nce-result__actions button { flex: 1; min-height: 44px; }
+  .nce-result__details { grid-row: 3; }
+  .nce-verify li { grid-template-columns: 1fr; gap: 2px; }
+  .nce-verify li > .nce-note { white-space: normal; }
+
+  .nce-brief__row { flex-direction: column; gap: 1px; }
+  .nce-brief__row dt { flex: none; }
+  .nce-steps__row { flex-wrap: wrap; }
+  .nce-steps__owner { width: 100%; }
+
+  /* Review tools open on a phone: the scenario list is six rows of secondary
+     matter and, unbounded, it pushed the thread to zero height and left the
+     composer somewhere down the page. It scrolls inside a bound instead; the
+     conversation and the composer keep their room. */
+  .nce-tools { max-height: 22vh; overflow-y: auto; }
+  .nce--lab { padding: 0 14px 48px; }
+}
+
+/* Touch has no hover to reveal a control with, so nothing is hidden from it. */
+@media (hover: none) {
+  .nce-msg__acts { opacity: 1; }
+}
+
+/* ═══════════════════ 15 · Touch: the rail, one-handed ═══════════════════
+   The touch surface is NOT a scaled-down pointer surface. Nothing here waits for
+   a hover, nothing magnifies as a finger passes over it, and the faces grow so a
+   thumb has something to hit. The hit boxes were already 44px (--nce-hit) — the
+   faces catch up. */
+
+@media (pointer: coarse) {
+  .nce-tool__face { min-width: 38px; height: 38px; }
+  .nce-tool[data-tone="primary"] .nce-tool__face { width: 40px; min-width: 40px; height: 40px; }
+  .nce-chip { height: 38px; }
+  .nce-chip::before { inset: -4px; }
+  .nce-write__rail { gap: 4px; }
+  /* Press feedback has to be immediate and slightly deeper on touch: there is no
+     pointer to hover first, so the press IS the whole interaction. */
+  .nce-tool:active .nce-tool__face { transform: scale(0.9); }
+}
+
+@media (max-width: 720px) {
+  /* The menu becomes a SHEET: a box anchored to a control near the bottom edge
+     would grow off the top of the window, and on a phone the thumb is already
+     there. Same items, same focus order, same keys. */
+  .nce-pop { position: static; }
+  .nce-pop[data-kind="tool"] { width: var(--nce-hit); height: var(--nce-hit); }
+  .nce-pop__scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 7;
+    background: rgba(4, 6, 10, 0.5);
+  }
+  .nce-pop__menu {
+    position: fixed;
+    inset-inline: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: 62dvh;
+    overflow-y: auto;
+    border-radius: var(--nce-r-3);
+    transform-origin: bottom center;
+  }
+  .nce[dir="rtl"] .nce-pop__menu { transform-origin: bottom center; }
+  .nce-pop__item { min-height: 46px; font-size: 14px; }
+  .nce-pop__title { padding-block-start: 8px; }
+}
+
+/* ═══════════════════ 16 · When the effects stand down ═══════════════════
+   Three ways in, one destination: the visitor's own saved choice, the system's
+   reduced-transparency preference, and a browser that cannot blur a backdrop at
+   all. In every one of them the surface becomes SOLID — same size, same order,
+   same labels, same controls in the same places — and only the transparency and
+   the pointer response are gone. Nothing is hidden and nothing is disabled. */
+
+/* ═══════════════════ 15 · The room's own frame: rail, orbit, live work ═══════
+   The shell's rail stands down above, so the room draws the navigation here:
+   the sidebar on a wide window, the phone's tab bar on a narrow one, an orbital
+   field behind everything, and the one live-work view.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── The frame ─────────────────────────────────────────────────────────────
+   One row: the navigation, then the column that scrolls and writes. The room's
+   own column direction lives one level up, so every rule written for `.nce-top`,
+   `.nce-body` and `.nce-dock` keeps working unchanged. */
+.nce-shell {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.nce-main {
+  position: relative;
+  isolation: isolate;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── The orbital field ─────────────────────────────────────────────────────
+   Behind EVERYTHING, in one element so that "less transparency" can switch the
+   whole field off in a single rule. Static by construction: there is no animation
+   to reduce, only a lit background — the reference is a still image, and a moving
+   field behind the conversation would be motion nobody asked for.
+
+   It is drawn faint enough that the worst case — glass over an orbit arm, text
+   over that — stays readable, which is the one rule the brief sets for it: the
+   light must not lower the contrast of the words on top of it. */
+.nce-orbit {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background-image:
+    var(--nce-orbit-image),
+    radial-gradient(44% 38% at 2% 46%, rgba(222, 183, 132, 0.13), transparent 72%),
+    radial-gradient(34% 28% at 82% 8%, rgba(255, 245, 224, 0.065), transparent 74%),
+    radial-gradient(42% 34% at 88% 94%, rgba(193, 151, 105, 0.055), transparent 76%);
+  background-position: center, center, center, center;
+  background-size: cover, auto, auto, auto;
+  background-repeat: no-repeat;
+}
+
+.nce-orbit > i { display: none; }
+
+/* THE FIELD MIRRORS WITH THE ROOM. The reference puts its sky on the side the
+   navigation is on, and in Arabic that side is the other one. Rather than keep
+   two sets of coordinates, the whole overlay — body, limb, bloom, threads, stars
+   — is flipped once here. Nothing inside it carries text or a control, so there
+   is nothing that would need to be un-mirrored. */
+.nce[dir="rtl"] .nce-orbit { transform: scaleX(-1); }
+
+.nce-top,
+.nce-body,
+.nce-tabbar { position: relative; }
+.nce-top { z-index: 3; }
+.nce-body,
+.nce-tabbar { z-index: 1; }
+
+/* ── The body ───────────────────────────────────────────────────────────────
+   One planet, most of it off-screen. Everything is sized in `vmax` from a single
+   pair of numbers so the limb's curvature is the same gesture at 390px and at
+   1440px instead of the same pixel offset on both: the lit edge lands at 15vmax
+   from the inline-start edge and curves away above and below the middle.
+
+   ITS FILL IS DARKER THAN THE ROOM. That is what makes it a mass in front of the
+   sky rather than a lighter panel: the warm bloom lives OUTSIDE it and on its
+   lit edge, which is where the reference keeps it too. */
+.nce-orbit__body {
+  left: -103vmax;
+  top: calc(44% - 59vmax);
+  inline-size: 118vmax;
+  block-size: 118vmax;
+  border-radius: 50%;
+  background: radial-gradient(circle at 76% 26%, #1b1813 0%, #131211 40%, #0c0d0c 72%, #0a0b0a 100%);
+  box-shadow: 0 0 140px 14px rgba(206, 166, 116, 0.06);
+}
+
+/* ── The limb: the one genuinely bright thing in the field ──────────────────
+   A two-pixel warm hairline on the body's own circle, bloomed outward by its own
+   shadow, and faded along its length by a vertical mask so the light has a
+   direction — brightest above the middle, as the reference has it, and gone by
+   the time it reaches the reading column. */
+.nce-orbit__limb {
+  left: -103vmax;
+  top: calc(44% - 59vmax);
+  inline-size: 118vmax;
+  block-size: 118vmax;
+  border-radius: 50%;
+  border: 2px solid var(--nce-champagne);
+  box-shadow:
+    0 0 32px -2px rgba(240, 214, 175, 0.45),
+    inset 0 0 44px -8px rgba(240, 214, 175, 0.18);
+  -webkit-mask-image: linear-gradient(180deg, #000 2%, #000 44%, rgba(0, 0, 0, 0.46) 72%, rgba(0, 0, 0, 0.1) 100%);
+  mask-image: linear-gradient(180deg, #000 2%, #000 44%, rgba(0, 0, 0, 0.46) 72%, rgba(0, 0, 0, 0.1) 100%);
+  opacity: 0.34;
+}
+
+/* ── The bloom ──────────────────────────────────────────────────────────────
+   Warm light around the limb, additively mixed so it LIGHTS the ground instead of
+   painting a brown shape over it. This is the difference between the reference's
+   sky and a tinted screen: the warmth is light with a position, not a wash. */
+.nce-orbit__well {
+  inset: 0;
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(34% 30% at 5% 30%, rgba(224, 185, 138, 0.1), transparent 68%),
+    radial-gradient(26% 22% at 1% 11%, rgba(245, 218, 180, 0.065), transparent 70%),
+    radial-gradient(48% 38% at -4% 96%, rgba(196, 152, 104, 0.07), transparent 72%),
+    radial-gradient(20% 17% at 13% 60%, rgba(255, 240, 214, 0.045), transparent 74%);
+}
+
+/* Two long arcs, one sweeping past the upper inline-start corner and one past
+   the lower inline-end, so the field reads in both directions without the layout
+   mirroring it — an orbit drawn twice would look like a shape, not a field. */
+/* ── The threads ────────────────────────────────────────────────────────────
+   Two long faint arcs crossing the field — the “connected threads” the reference
+   keeps near the edges. They pass UNDER the reading column and are gone by the
+   time the type starts, which is the one rule this background has to obey: the
+   light may not cost the words anything. */
+.nce-orbit__ring[data-ring="a"] {
+  inline-size: 190vmax;
+  block-size: 190vmax;
+  left: -88vmax;
+  top: -46vmax;
+  border: 1px solid var(--nce-orbit-arm);
+  border-radius: 50%;
+}
+
+.nce-orbit__ring[data-ring="b"] {
+  inline-size: 128vmax;
+  block-size: 128vmax;
+  left: -74vmax;
+  bottom: -58vmax;
+  border: 1px solid color-mix(in srgb, var(--nce-champagne) 9%, transparent);
+  border-radius: 50%;
+}
+
+/* ── The grain ──────────────────────────────────────────────────────────────
+   The reference's sky has a texture you can see in the smooth areas. It is a
+   fractal-noise SVG generated inline here — no image file, no third-party asset,
+   nothing fetched at runtime — desaturated and kept at four percent so it reads
+   as film grain rather than as a pattern. */
+.nce-orbit__grain {
+  inset: 0;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+/* A sparse field. Twelve stars, no tiling and no image: a repeated pattern would
+   read as texture, and this is meant to read as distance. */
+.nce-orbit__stars {
+  inset: 0;
+  opacity: 0.5;
+  background-repeat: no-repeat;
+  background-image:
+    radial-gradient(1.4px 1.4px at 11% 18%, var(--nce-orbit-star), transparent 100%),
+    radial-gradient(1px 1px at 27% 62%, var(--nce-orbit-star), transparent 100%),
+    radial-gradient(1.2px 1.2px at 38% 9%, var(--nce-orbit-star), transparent 100%),
+    radial-gradient(1px 1px at 46% 84%, var(--nce-orbit-star), transparent 100%),
+    radial-gradient(1.6px 1.6px at 58% 31%, var(--nce-orbit-star), transparent 100%),
+    radial-gradient(1px 1px at 63% 71%, var(--nce-orbit-star), transparent 100%),
+    radial-gradient(1.2px 1.2px at 72% 12%, var(--nce-orbit-star), transparent 100%),
+    radial-gradient(1px 1px at 79% 52%, var(--nce-orbit-star), transparent 100%),
+    radial-gradient(1.4px 1.4px at 86% 27%, var(--nce-orbit-star), transparent 100%),
+    radial-gradient(1px 1px at 91% 78%, var(--nce-orbit-star), transparent 100%),
+    radial-gradient(1px 1px at 17% 41%, var(--nce-orbit-star), transparent 100%),
+    radial-gradient(1px 1px at 52% 95%, var(--nce-orbit-star), transparent 100%);
+}
+
+/* ── The sidebar ───────────────────────────────────────────────────────────
+   Folds to a spine of icons. WHAT FOLDS IS THE LABEL, NOT THE NAME: each row's
+   accessible name is the label it carries at either width, so the navigation is
+   the same navigation for a screen reader. The width transition is the only
+   movement, and it is removed with every other transition under reduced motion. */
+.nce-rail {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  inline-size: 238px;
+  padding: 20px 12px 16px;
+  border-inline-end: 1px solid var(--nce-line);
+  /* THE SIDEBAR IS A FRAME, NOT A PANEL. The reference does not fill it: the sky
+     behind the room runs continuously through it and only the hairline says where
+     it ends, which is why the orbital light reads as one space rather than as two
+     panes. A one-pixel vertical scrim keeps its labels legible where the limb
+     happens to pass behind them. */
+  background:
+    radial-gradient(108% 32% at 34% -5%, rgba(246, 223, 197, 0.2), transparent 70%),
+    linear-gradient(118deg, rgba(255, 246, 228, 0.055), transparent 40%),
+    linear-gradient(180deg, #191813, #0f100f 40%, #090a09);
+  box-shadow: inset -1px 0 0 rgba(255, 244, 225, 0.045), 18px 0 48px -44px rgba(240, 214, 175, 0.28);
+  min-height: 0;
+  overflow: hidden auto;
+  transition: inline-size 200ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.nce-rail__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 18px;
+  min-width: 0;
+}
+
+/* The approved head, at 30px: the same asset as everything else on the surface,
+   never a redrawn glyph standing in for it. */
+.nce-rail__head {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: 30px;
+  block-size: 30px;
+}
+.nce-rail__headimg { inline-size: 30px; block-size: 30px; object-fit: contain; }
+
+.nce-rail__brandtext { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.nce-rail__wordmark {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  color: var(--nce-ink);
+  line-height: 1.15;
+}
+.nce-rail__sub {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--nce-ink-4);
+  line-height: 1.3;
+}
+
+.nce-rail__fold {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline-end: 8px;
+  z-index: 2;
+  inline-size: 26px;
+  block-size: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--nce-line);
+  border-radius: 50%;
+  background: var(--nce-surface);
+  color: var(--nce-ink-3);
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
+}
+.nce-rail__fold:hover { color: var(--nce-ink); border-color: var(--nce-champagne-line); }
+.nce-rail__fold:focus-visible { outline: none; box-shadow: var(--nce-focus); }
+
+.nce-rail__list { display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 0; list-style: none; }
+
+.nce-navrow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  inline-size: 100%;
+  min-block-size: 48px;
+  padding-inline: 14px;
+  border: 1px solid transparent;
+  border-radius: var(--nce-r-2);
+  background: transparent;
+  color: var(--nce-ink-2);
+  font: inherit;
+  font-size: 15.5px;
+  font-weight: 500;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+/* The glyph is a drawing, not a character: 20px of line art at 1.6px stroke, so
+   the icons carry the same weight as the 15.5px label beside them instead of
+   looking like a smaller font. */
+.nce-navrow__glyph {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 20px;
+  block-size: 20px;
+  color: var(--nce-ink-2);
+}
+.nce-navrow__glyph svg { display: block; inline-size: 20px; block-size: 20px; }
+.nce-navrow__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nce-navrow__dot {
+  flex: none;
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: var(--nce-tone);
+  --nce-tone: var(--nce-blue);
+}
+.nce-navrow__dot[data-tone="blue-low"] { --nce-tone: var(--nce-blue-low); }
+.nce-navrow__dot[data-tone="amber"] { --nce-tone: var(--nce-amber); }
+.nce-navrow__dot[data-tone="green"] { --nce-tone: var(--nce-green); }
+.nce-navrow__dot[data-tone="red"] { --nce-tone: var(--nce-red); }
+.nce-navrow__dot[data-tone="off"] { --nce-tone: var(--nce-off); }
+.nce-navrow__count {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--nce-ink-4);
+  font-variant-numeric: tabular-nums;
+}
+
+.nce-navrow:hover { background: rgba(246, 223, 197, 0.05); color: var(--nce-ink); }
+
+/* The active row is a CHAMPAGNE-LIT PILL — a warm surface with a warmer hairline,
+   which is what the reference draws for the one place you are. The mint is
+   reserved for the primary action and for a selection you make (the send button,
+   the Edit button); a location is not an action. The label goes to full ink and
+   full weight with it, so the state is never carried by colour alone. */
+.nce-navrow[data-active="true"] {
+  color: var(--nce-ink);
+  font-weight: 600;
+  border-color: rgba(243, 228, 203, 0.24);
+  background: linear-gradient(180deg, rgba(243, 228, 203, 0.11), rgba(243, 228, 203, 0.035));
+  box-shadow: inset 0 1px 0 rgba(255, 246, 230, 0.12), 0 12px 30px -22px rgba(0, 0, 0, 0.9);
+}
+.nce-navrow[data-active="true"] .nce-navrow__glyph { color: var(--nce-champagne); }
+.nce-navrow:focus-visible { outline: none; box-shadow: var(--nce-focus); }
+
+.nce-rail__recent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-block-start: 14px;
+  padding-block-start: 16px;
+  border-block-start: 1px solid var(--nce-line);
+  min-height: 0;
+}
+.nce-rail__caption {
+  margin: 0 0 8px;
+  padding-inline: 14px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--nce-ink-4);
+}
+.nce-rail__rows { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+
+/* A session row is TWO lines with the file mark beside them, as the reference
+   draws it: the title at reading weight and the age under it in the quiet tone.
+   The title is the thing being scanned, so it is the thing that grew. */
+.nce-rail__row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  inline-size: 100%;
+  padding: 9px 14px 9px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--nce-r-2);
+  background: transparent;
+  color: var(--nce-ink-2);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+.nce-rail__row::before {
+  content: "";
+  flex: none;
+  inline-size: 17px;
+  block-size: 17px;
+  background: currentColor;
+  opacity: 0.72;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z'/%3E%3Cpath d='M14 3v5h5'/%3E%3Cpath d='M9 13h6M9 17h4'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z'/%3E%3Cpath d='M14 3v5h5'/%3E%3Cpath d='M9 13h6M9 17h4'/%3E%3C/svg%3E");
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+.nce-rail__row:hover { background: rgba(243, 228, 203, 0.06); color: var(--nce-ink); }
+.nce-rail__row:focus-visible { outline: none; box-shadow: var(--nce-focus); }
+.nce-rail__row[data-open="true"] {
+  border-color: rgba(243, 228, 203, 0.16);
+  background: rgba(243, 228, 203, 0.05);
+  color: var(--nce-ink);
+}
+.nce-rail__rowtitle {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.nce-rail__rowmeta {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--nce-ink-4);
+  font-variant-numeric: tabular-nums;
+}
+
+.nce-rail__spacer { flex: 1; min-block-size: 8px; }
+
+.nce-rail__foot { display: flex; flex-direction: column; gap: 8px; }
+
+/* NEW SESSION IS A QUIET OUTLINED PILL, not a mint block. The reference reserves
+   the action colour for the ONE thing on screen that commits something (the send
+   button, the Edit on an output); a secondary way to start over is a bordered
+   surface with a plus, and painting it mint made the loudest object on the page
+   the one nobody had asked for yet. */
+.nce-rail__new {
+  inline-size: 100%;
+  justify-content: center;
+  gap: 10px;
+  min-block-size: 48px;
+  font-size: 15px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.025);
+  border-color: var(--nce-line-2);
+  color: var(--nce-ink);
+  box-shadow: none;
+}
+.nce-rail__new:hover {
+  background: rgba(243, 228, 203, 0.08);
+  border-color: rgba(243, 228, 203, 0.24);
+  color: var(--nce-ink);
+}
+.nce-rail__badge { align-self: flex-start; margin-block-start: 2px; }
+
+/* FOLDED: icons only, and the label leaves the drawing while staying in the
+   accessible name. */
+.nce[data-nav="collapsed"] .nce-rail { inline-size: 76px; padding-inline: 12px; }
+.nce[data-nav="collapsed"] .nce-rail__brandtext,
+.nce[data-nav="collapsed"] .nce-rail__caption,
+.nce[data-nav="collapsed"] .nce-rail__rows,
+.nce[data-nav="collapsed"] .nce-navrow__label,
+.nce[data-nav="collapsed"] .nce-navrow__count,
+.nce[data-nav="collapsed"] .nce-rail__newtext,
+.nce[data-nav="collapsed"] .nce-rail__badge { display: none; }
+.nce[data-nav="collapsed"] .nce-rail__brand,
+.nce[data-nav="collapsed"] .nce-navrow,
+.nce[data-nav="collapsed"] .nce-rail__new { justify-content: center; padding-inline: 0; }
+.nce[data-nav="collapsed"] .nce-navrow__dot {
+  position: absolute;
+  inset-block-start: 6px;
+  inset-inline-end: 8px;
+}
+
+/* ── The phone's tab bar ───────────────────────────────────────────────────
+   Below 761px the sidebar is REPLACED, not shrunk: three tabs at the foot of the
+   room, with the safe-area inset added to the bar's own padding so the tabs clear
+   the home indicator instead of sitting under it. */
+.nce-tabbar { display: none; }
+
+/* ── View live work ────────────────────────────────────────────────────────
+   The header's one control: a champagne-lined pill with the run's state dot,
+   exactly as the reference draws it, mint when the view is open. */
+.nce-livebtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  block-size: 34px;
+  padding-inline: 13px;
+  border: 1px solid var(--nce-champagne-line);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(246, 223, 197, 0.07), rgba(246, 223, 197, 0.02));
+  color: var(--nce-ink);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 90ms ease;
+}
+.nce-livebtn:hover { border-color: rgba(246, 223, 197, 0.3); background: linear-gradient(180deg, rgba(246, 223, 197, 0.11), rgba(246, 223, 197, 0.03)); }
+.nce-livebtn:active { transform: scale(0.985); }
+.nce-livebtn:focus-visible { outline: none; box-shadow: var(--nce-focus); }
+.nce-livebtn[data-open="true"] {
+  border-color: rgba(173, 214, 191, 0.34);
+  background: linear-gradient(180deg, rgba(173, 214, 191, 0.16), rgba(173, 214, 191, 0.05));
+}
+.nce-livebtn__glyph { font-size: 13px; line-height: 1; color: var(--nce-champagne); }
+.nce-livebtn__dot {
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: var(--nce-tone);
+  --nce-tone: var(--nce-blue);
+  box-shadow: 0 0 0 3px rgba(246, 223, 197, 0.07);
+}
+.nce-livebtn__dot[data-tone="blue-low"] { --nce-tone: var(--nce-blue-low); }
+.nce-livebtn__dot[data-tone="amber"] { --nce-tone: var(--nce-amber); }
+.nce-livebtn__dot[data-tone="green"] { --nce-tone: var(--nce-green); }
+.nce-livebtn__dot[data-tone="red"] { --nce-tone: var(--nce-red); }
+.nce-livebtn__dot[data-tone="off"] { --nce-tone: var(--nce-off); }
+
+/* ── The live-work band ────────────────────────────────────────────────────
+   Pinned above the thread and only drawn while the control says it is open. Its
+   height is bounded, so a long plan cannot squeeze the conversation out of the
+   window — the band scrolls inside itself instead. */
+.nce-live {
+  /* `0 1 auto`, NOT `none`: in a window too short to hold everything, the BAND
+     gives way rather than pushing the composer off the bottom edge. Measured at
+     1440×520 before this rule: the composer ended 22px below the window, because
+     the band and the task bar took their full height first and the two flex-none
+     items left the dock nowhere to sit. Its own content scrolls, so a plan that
+     does not fit is still reachable. */
+  flex: 0 1 auto;
+  min-block-size: 0;
+  width: 100%;
+  max-width: var(--nce-col-w);
+  margin: 12px auto 0;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--nce-champagne-line);
+  border-radius: var(--nce-r-3);
+  background:
+    linear-gradient(180deg, rgba(246, 223, 197, 0.05), transparent 34%),
+    var(--nce-surface-2);
+  box-shadow: var(--nce-lift);
+  max-block-size: min(42vh, 340px);
+  overflow: auto;
+  animation: nce-live-in 180ms ease-out both;
+}
+
+.nce-live__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  position: sticky;
+  inset-block-start: 0;
+}
+.nce-live__dot {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--nce-tone);
+  --nce-tone: var(--nce-blue);
+}
+.nce-live__dot[data-tone="blue-low"] { --nce-tone: var(--nce-blue-low); }
+.nce-live__dot[data-tone="amber"] { --nce-tone: var(--nce-amber); }
+.nce-live__dot[data-tone="green"] { --nce-tone: var(--nce-green); }
+.nce-live__dot[data-tone="red"] { --nce-tone: var(--nce-red); }
+.nce-live__dot[data-tone="off"] { --nce-tone: var(--nce-off); }
+.nce-live__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--nce-ink);
+}
+.nce-live__task { font-size: 12.5px; color: var(--nce-ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nce-live__progress { font-size: 11.5px; color: var(--nce-ink-4); font-variant-numeric: tabular-nums; }
+.nce-live__head .nce-btn { margin-inline-start: auto; }
+.nce-live__hint { margin: 8px 0 0; font-size: 12px; line-height: 1.6; color: var(--nce-ink-3); }
+.nce-live__demo {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--nce-ink-4);
+}
+.nce-live__empty { margin: 10px 0 0; font-size: 12.5px; line-height: 1.7; color: var(--nce-ink-3); }
+
+/* The run's own disclosure, inside the band: the band is the container, the
+   summary keeps its own rules — with the double frame removed, because a card
+   inside a card is two borders for one thing. */
+.nce-live .nce-summary {
+  margin-block-start: 12px;
+  border: 0;
+  background: transparent;
+}
+.nce-live .nce-summary__bar { border-block-end: 1px solid var(--nce-line); }
+
+@keyframes nce-live-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── The composer's second choice ──────────────────────────────────────────
+   Model sits beside the field on a wide window. On a narrow one it leaves the
+   row and its statement moves into the tools menu, where it is read rather than
+   shrunk — the brief's rule for secondary controls on a phone. */
+.nce-write__narrowonly { display: none; }
+
+@media (max-width: 760px) {
+  /* The sidebar is replaced by the tab bar, so the room is one column again. */
+  .nce-rail { display: none; }
+
+  .nce-tabbar {
+    flex: none;
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    border-block-start: 1px solid var(--nce-line);
+    background: var(--nce-ground-2);
+  }
+
+  .nce-tabbar__tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-block-size: 48px;
+    padding: 4px 2px;
+    border: 0;
+    border-radius: var(--nce-r-2);
+    background: transparent;
+    color: var(--nce-ink-3);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    transition: color 140ms ease, background-color 140ms ease;
+  }
+  .nce-tabbar__tab[data-active="true"] {
+    color: var(--nce-ink);
+    background: linear-gradient(180deg, rgba(173, 214, 191, 0.14), rgba(173, 214, 191, 0.04));
+  }
+  .nce-tabbar__tab:focus-visible { outline: none; box-shadow: var(--nce-focus); }
+  .nce-tabbar__glyph { font-size: 15px; line-height: 1; }
+  .nce-tabbar__badge {
+    align-self: center;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--nce-ink-4);
+  }
+
+  /* The tab bar carries the safe-area inset, so the composer stops carrying it
+     too: two insets stacked is a dead band under the send button. */
+  .nce-dock .nce-col { padding-block-end: 10px; }
+
+  .nce-livebtn { padding-inline: 10px; gap: 6px; }
+  .nce-livebtn__label { display: none; }
+  .nce-write__wideonly { display: none; }
+  .nce-write__identity { display: inline-flex; }
+  .nce-write__narrowonly { display: block; }
+
+  .nce-live {
+    margin: 10px 12px 0;
+    padding: 10px 12px 12px;
+    max-block-size: 40vh;
+  }
+}
+
+/* Less transparency is a REQUEST, not a fallback: the field goes entirely, the
+   surfaces stay. The same request also switches the saved “reduce effects”
+   setting, which is handled with the other effects below. */
+@media (prefers-reduced-transparency: reduce) {
+  .nce-orbit { display: none; }
+}
+
+/* A printed page, or anything else without a compositor: the grounds are opaque
+   already, so the only thing to drop is the field's glow. */
+@media print {
+  .nce-orbit { display: none; }
+}
+
+@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+  .nce-write,
+  .nce-pop__menu {
+    background: var(--nce-surface-2);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .nce-write,
+  .nce-pop__menu {
+    background: var(--nce-surface-2);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+.nce[data-effects="calm"] .nce-write,
+.nce[data-effects="calm"] .nce-pop__menu {
+  background: var(--nce-surface-2);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.nce[data-effects="calm"] .nce-write__rail::after { display: none; }
+.nce[data-effects="calm"] .nce-tool__face { transform: none; }
+
+/* The orbital field is an effect, so the setting reaches it — by FADING it, not by
+   removing it: the layout, the text and every control stay exactly where they are,
+   which is what the setting promises. */
+.nce[data-effects="calm"] .nce-orbit { opacity: 0.34; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nce,
+  .nce * {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+  /* The pointer response is a TRANSFORM, not a transition, so the rule above does
+     not reach it: a magnifying button is motion however it is animated. Removed
+     here instead, and the sheen with it. */
+  .nce-tool__face { transform: none !important; }
+  .nce-write__rail::after { display: none; }
+}
+
+/* Magnetic lean for the composer tools: set per tool by the pointer's distance
+   (see Composer in chrome.tsx). A painted transform on the face only. */
+@media (hover: hover) and (pointer: fine) {
+  .nce-write__rail .nce-tool__face {
+    transform: translateY(calc(var(--nce-mag, 0) * -2px)) scale(calc(1 + var(--nce-mag, 0) * 0.08));
+  }
+}
+
+/* ═══════════════════ 18 · EXEC workspace information architecture ═══════
+   The daily navigation, conversation and inspectable work now form one clear
+   workspace. These rules are appended so the integration overlay remains
+   reversible and does not rewrite shared Product surfaces. */
+.nce-sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.nce-rail__new--top {
+  margin-block: 6px 10px;
+  border-color: color-mix(in srgb, var(--nce-action) 48%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--nce-action) 26%, #171a18), color-mix(in srgb, var(--nce-action) 11%, #0c0e0d));
+  box-shadow: inset 0 1px 0 rgba(238, 255, 247, 0.16), 0 14px 30px -24px var(--nce-action);
+}
+.nce-rail__new--top:hover {
+  border-color: color-mix(in srgb, var(--nce-action) 68%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--nce-action) 32%, #171a18), color-mix(in srgb, var(--nce-action) 15%, #0c0e0d));
+}
+
+.nce-rail__recent { margin-block-start: 10px; }
+.nce-rail__caption {
+  display: flex;
+  align-items: center;
+  min-block-size: 36px;
+  margin: 0;
+  cursor: pointer;
+  list-style: none;
+}
+.nce-rail__caption::-webkit-details-marker { display: none; }
+.nce-rail__caption::after {
+  content: "⌄";
+  margin-inline-start: auto;
+  color: var(--nce-ink-4);
+  transition: transform 160ms ease;
+}
+.nce-rail__recent:not([open]) .nce-rail__caption::after { transform: rotate(-90deg); }
+.nce-rail__search,
+.nce-panel-search { display: block; padding: 2px 4px 8px; }
+.nce-rail__search input,
+.nce-panel-search input {
+  inline-size: 100%;
+  min-block-size: 40px;
+  padding-inline: 12px;
+  border: 1px solid var(--nce-line-2);
+  border-radius: 12px;
+  background: rgba(5, 7, 7, 0.56);
+  color: var(--nce-ink);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.nce-rail__search input:focus,
+.nce-panel-search input:focus { border-color: var(--nce-action); box-shadow: var(--nce-focus); }
+.nce-rail__empty,
+.nce-empty { margin: 8px 4px; color: var(--nce-ink-3); font-size: 12.5px; line-height: 1.65; }
+
+.nce-account { position: relative; }
+.nce-account__trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 52px;
+  padding: 7px 9px;
+  border: 1px solid var(--nce-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--nce-ink);
+  cursor: pointer;
+  list-style: none;
+}
+.nce-account__trigger::-webkit-details-marker { display: none; }
+.nce-account__trigger:focus-visible { outline: none; box-shadow: var(--nce-focus); }
+.nce-account__avatar {
+  display: grid;
+  place-items: center;
+  inline-size: 34px;
+  block-size: 34px;
+  border: 1px solid var(--nce-line-2);
+  border-radius: 50%;
+  background: linear-gradient(145deg, rgba(173, 214, 191, 0.2), rgba(246, 223, 197, 0.08));
+  font-weight: 700;
+}
+.nce-account__copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; }
+.nce-account__copy strong { font-size: 13px; font-weight: 600; }
+.nce-account__copy small { color: var(--nce-ink-4); font-size: 10.5px; }
+.nce-account__trigger > svg { inline-size: 14px; block-size: 14px; color: var(--nce-ink-4); }
+.nce-account__menu {
+  margin-block-start: 6px;
+  padding: 6px;
+  border: 1px solid var(--nce-line);
+  border-radius: 14px;
+  background: rgba(7, 9, 9, 0.84);
+}
+.nce-account__static {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 9px 10px;
+  color: var(--nce-ink-3);
+  font-size: 12.5px;
+}
+.nce-account__static strong { color: var(--nce-ink); font-weight: 600; }
+.nce-review { margin-block-start: 8px; padding-block-start: 8px; border-block-start: 1px solid var(--nce-line); }
+.nce-review > summary {
+  min-block-size: 40px;
+  padding: 10px;
+  border-radius: 9px;
+  color: var(--nce-ink-2);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.nce-review > summary:hover { background: rgba(255, 255, 255, 0.05); color: var(--nce-ink); }
+
+.nce-side {
+  width: clamp(330px, 31vw, 430px);
+  border-inline-start-color: rgba(243, 228, 203, 0.2);
+  background:
+    radial-gradient(90% 24% at 50% 0%, rgba(246, 223, 197, 0.11), transparent 68%),
+    linear-gradient(180deg, rgba(19, 19, 17, 0.98), rgba(8, 10, 9, 0.99));
+  box-shadow: inset 1px 0 0 rgba(255, 247, 232, 0.04), -18px 0 42px -36px rgba(230, 199, 154, 0.28);
+}
+.nce-side__head { min-block-size: 60px; height: auto; }
+.nce-side__title { font-size: 16px; font-weight: 620; }
+.nce-side__close { inline-size: 44px; block-size: 44px; }
+.nce-side__body { padding: 18px; }
+.nce-hist__row { justify-content: space-between; min-block-size: 52px; color: var(--nce-ink); text-align: start; }
+.nce-hist__row small { flex: none; color: var(--nce-ink-4); font-size: 10.5px; }
+.nce-hist__row[data-open="true"] { border-color: rgba(173, 214, 191, 0.32); background: rgba(173, 214, 191, 0.08); cursor: default; }
+
+.nce-workspace,
+.nce-plugins { display: flex; flex-direction: column; gap: 14px; }
+.nce-workspace__tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--nce-line);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.24);
+}
+.nce-workspace__tab {
+  min-block-size: 42px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--nce-ink-3);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.nce-workspace__tab[aria-selected="true"] {
+  background: linear-gradient(180deg, rgba(243, 228, 203, 0.13), rgba(243, 228, 203, 0.045));
+  color: var(--nce-ink);
+  box-shadow: inset 0 1px 0 rgba(255, 247, 233, 0.12);
+}
+.nce-workspace__tab:focus-visible { outline: 2px solid var(--nce-action); outline-offset: 1px; }
+.nce-workspace__view { min-height: 0; }
+.nce-plugin,
+.nce-output-mini {
+  padding: 14px;
+  border: 1px solid var(--nce-line);
+  border-radius: 16px;
+  background:
+    radial-gradient(100% 70% at 18% 0%, rgba(246, 223, 197, 0.075), transparent 64%),
+    rgba(255, 255, 255, 0.025);
+  box-shadow: inset 0 1px 0 rgba(255, 250, 240, 0.05);
+}
+.nce-plugin__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.nce-plugin h3,
+.nce-output-mini h3 { margin: 0; color: var(--nce-ink); font-size: 14px; font-weight: 620; }
+.nce-plugin__head span,
+.nce-output-mini > span {
+  flex: none;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--nce-ink-3);
+  font-size: 10px;
+}
+.nce-plugin[data-connected="true"] .nce-plugin__head span { background: rgba(173, 214, 191, 0.12); color: var(--nce-action); }
+.nce-plugin p,
+.nce-output-mini p { margin: 8px 0; color: var(--nce-ink-2); font-size: 12.5px; line-height: 1.65; }
+.nce-plugin small { color: var(--nce-ink-4); font-size: 10.5px; }
+.nce-output-list { display: flex; flex-direction: column; gap: 10px; }
+
+/* An empty composer is compact; JavaScript grows the textarea until the cap. */
+.nce-write { padding: 10px 12px 9px; border-radius: 24px; }
+.nce-write[data-variant="hero"] { padding: 11px 13px 10px; }
+.nce-write__input { min-height: 36px; }
+.nce-write__input textarea {
+  min-height: 36px;
+  height: 36px;
+  max-height: 144px;
+  padding: 5px 7px;
+  line-height: 1.55;
+}
+.nce-write__rail { padding-block-start: 2px; }
+.nce-col { max-width: 880px; }
+.nce-msg { max-width: 78ch; }
+
+.nce[data-nav="collapsed"] .nce-rail__recent,
+.nce[data-nav="collapsed"] .nce-account__copy,
+.nce[data-nav="collapsed"] .nce-account__trigger > svg,
+.nce[data-nav="collapsed"] .nce-account__menu { display: none; }
+.nce[data-nav="collapsed"] .nce-account__trigger { justify-content: center; padding-inline: 0; border-color: transparent; }
+
+@media (max-width: 760px) {
+  /* The full-screen mobile workspace lives inside `.nce-body`; raise that
+     stacking context above the header while a panel is open so the header menu
+     cannot intercept its Back control. */
+  .nce:not([data-panel="none"]) .nce-body { z-index: 5; }
+  .nce-side {
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .nce-side__head {
+    padding-block-start: env(safe-area-inset-top);
+    min-block-size: calc(60px + env(safe-area-inset-top));
+  }
+  .nce-side__body { padding: 16px; padding-block-end: calc(24px + env(safe-area-inset-bottom)); }
+  .nce-write,
+  .nce-write[data-variant] { padding: 9px 10px 8px; border-radius: 20px; }
+  .nce-write__input { min-height: 36px; }
+  .nce-write__input textarea { min-height: 36px; height: 36px; max-height: 128px; padding: 5px 6px; }
+  .nce-chip { height: 38px; }
+  .nce-top__right .nce-livebtn { display: inline-flex; }
+}

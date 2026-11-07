@@ -4,6 +4,11 @@ import { createSequentialIdFactory, sequentialClock } from "@/modules/ai-workfor
 import { createWorkforcePrismaClient, type WorkforcePrismaHandle } from "@/modules/ai-workforce/persistence/prisma-client";
 import { createHermesRuntime, type HermesRuntimeConfig } from "@/modules/workforce";
 import { createWorkforceApplication, type WorkforceApplication } from "@/modules/workforce/application";
+import type { BudgetGovernor } from "@/modules/ai-workforce/policies/budget-governor";
+import {
+  createExecutionAuthority,
+  type ExecutionAuthority,
+} from "@/modules/workforce/execution/execution-authority";
 import { DeterministicHermesTransport } from "@/modules/workforce/runtimes/hermes/testing/deterministic-transport";
 
 /**
@@ -19,6 +24,49 @@ import { DeterministicHermesTransport } from "@/modules/workforce/runtimes/herme
 
 export const FOUNDER = "actor_founder";
 export const RESTART_KEY = "restart-proof-1";
+
+/**
+ * The explicit test-only budget governor, per
+ * `docs/AI_WORKFORCE_STEP5A_REMEDIATION_DESIGN.md` §0.2.
+ *
+ * Every process in this proof runs the real Hermes adapter over a deterministic
+ * transport, and a RUNTIME leg is always `VARIABLE_PROVIDER_COST` — refused by
+ * the shipped DENY governor, which is left exactly as shipped. Each child states
+ * its own governor so the restart behaviour, not the budget, is what is measured.
+ */
+const processProofTestGovernor: BudgetGovernor = {
+  policyRef: "test.process-proof.allow",
+  async evaluate(input) {
+    return {
+      allowed: true,
+      reason: "ALLOWED_ATTESTED_INCLUDED_ROUTE",
+      policyRef: "test.process-proof.allow",
+      spend: input.spend,
+    };
+  },
+};
+
+/**
+ * The authority each child acts under, as the authenticated edge would build it.
+ *
+ * A restart proof still has to be an AUTHORISED caller: 5A-4 refuses to start
+ * work without a server-created authority, and a child process that invented one
+ * from a mission id or a stored string would be exactly the reconstruction the
+ * cutover forbids. Every call that can start or settle an attempt carries this.
+ */
+export function proofAuthority(): ExecutionAuthority {
+  return createExecutionAuthority({
+    userId: "user_proof",
+    actorId: "actor_human_proof",
+    actorSlug: "human-proof",
+    actorType: "HUMAN",
+    permissionTokens: ["aiworkforce.access"],
+    accessibleBusinessSlugs: ["nexup"],
+    isSuperAdmin: false,
+    hasOfficeFinanceFull: false,
+    requestedAt: "2026-08-03T00:00:00.000Z",
+  });
+}
 
 export function databaseUrl(): string {
   const url = process.env.APP_PROOF_DATABASE_URL;
@@ -84,6 +132,8 @@ export type BootedProcess = {
   handle: WorkforcePrismaHandle;
   /** The transport this process bound, so a proof can COUNT what it did. */
   transport: DeterministicHermesTransport;
+  /** This process's own authenticated authority, as the edge builds it. */
+  authority: ExecutionAuthority;
   disconnect: () => Promise<void>;
 };
 
@@ -135,12 +185,18 @@ export async function bootProcess(prefix: string, options: BootOptions = {}): Pr
   });
   const runtime = createHermesRuntime(hermesConfig(), { transport, ids, now, allowTestTransport: true });
 
-  const application = await createWorkforceApplication(handle, { ids, now, runtime });
+  const application = await createWorkforceApplication(handle, {
+    ids,
+    now,
+    runtime,
+    budget: processProofTestGovernor,
+  });
 
   return {
     application,
     handle,
     transport,
+    authority: proofAuthority(),
     disconnect: () => handle.disconnect(),
   };
 }

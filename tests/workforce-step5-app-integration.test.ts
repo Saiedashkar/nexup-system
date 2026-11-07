@@ -20,6 +20,12 @@ import {
 } from "@/modules/workforce/application";
 import { DeterministicHermesTransport } from "@/modules/workforce/runtimes/hermes/testing/deterministic-transport";
 
+import type { BudgetGovernor } from "@/modules/ai-workforce/policies/budget-governor";
+import {
+  createExecutionAuthority,
+  type ExecutionAuthority,
+} from "@/modules/workforce/execution/execution-authority";
+
 /**
  * STEP 5/8 — the APPLICATION boundary, against a real PostgreSQL.
  *
@@ -53,11 +59,40 @@ const MIGRATIONS = [
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_1B/migration.sql",
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_2/migration.sql",
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_3/migration.sql",
+  // Step 5A-4: the application now owns the DURABLE execution claim, so the
+  // throwaway database has to carry the claim ledger. Still PROPOSED SQL applied
+  // to a temp cluster — no migration is added to prisma/migrations.
+  "prisma/proposed-migrations/AI_WORKFORCE_PHASE_4/migration.sql",
+  // Fifth review: recovery progress lives in the ROWS (`recoverySweptAt`), which
+  // the durable repositories select, so the database carries PHASE_5 as well.
+  "prisma/proposed-migrations/AI_WORKFORCE_PHASE_5/migration.sql",
 ];
 
 const FOUNDER = "actor_founder";
 const MARKER = "NEXUP_APP_INTEGRATION_OK";
 const describeIfDatabase = BASE_URL ? describe : describe.skip;
+
+/**
+ * The explicit test-only budget governor, per
+ * `docs/AI_WORKFORCE_STEP5A_REMEDIATION_DESIGN.md` §0.2.
+ *
+ * This proof runs the real Hermes adapter over a deterministic transport, and a
+ * RUNTIME leg is always `VARIABLE_PROVIDER_COST` — which the shipped DENY
+ * governor refuses, by design, and which the 5A-4 suite proves it refuses. The
+ * application's DEFAULT is unchanged; this proof states its own governor so the
+ * application BOUNDARY can be exercised end to end without a provider turn.
+ */
+const appIntegrationTestGovernor: BudgetGovernor = {
+  policyRef: "test.app-integration.allow",
+  async evaluate(input) {
+    return {
+      allowed: true,
+      reason: "ALLOWED_ATTESTED_INCLUDED_ROUTE",
+      policyRef: "test.app-integration.allow",
+      spend: input.spend,
+    };
+  },
+};
 
 function psql(sql: string, database = "postgres") {
   return execSync(
@@ -123,6 +158,8 @@ describeIfDatabase("STEP 5 — the application boundary runs the whole lifecycle
     handle: WorkforcePrismaHandle;
     transport: CountingTransport;
     actorId: string;
+    /** What the authenticated API edge would hand the command service. */
+    authority: ExecutionAuthority;
   };
 
   /** One "process": its own pool, ids, clock and registries. */
@@ -140,10 +177,27 @@ describeIfDatabase("STEP 5 — the application boundary runs the whole lifecycle
       allowTestTransport: true,
     });
 
-    const application = await createWorkforceApplication(handle, { ids, now, runtime });
+    const application = await createWorkforceApplication(handle, {
+      ids,
+      now,
+      runtime,
+      budget: appIntegrationTestGovernor,
+    });
     if (!application.routing.actorId) throw new Error(`the application has no routed actor: ${application.routing.reason}`);
 
-    return { application, handle, transport, actorId: application.routing.actorId };
+    const authority = createExecutionAuthority({
+      userId: "user_operator",
+      actorId: "actor_human_operator",
+      actorSlug: "human-operator",
+      actorType: "HUMAN",
+      permissionTokens: ["aiworkforce.access"],
+      accessibleBusinessSlugs: ["nexup"],
+      isSuperAdmin: false,
+      hasOfficeFinanceFull: false,
+      requestedAt: "2026-08-02T00:00:00.000Z",
+    });
+
+    return { application, handle, transport, actorId: application.routing.actorId, authority };
   }
 
   function command(key: string, overrides: Record<string, unknown> = {}) {
@@ -181,9 +235,9 @@ describeIfDatabase("STEP 5 — the application boundary runs the whole lifecycle
   });
 
   it("runs Command → Mission → Task → Actor → Capability → Runtime → Execution → Review → COMPLETED", async () => {
-    const { application, transport, actorId } = await boot("it1");
+    const { application, transport, actorId, authority } = await boot("it1");
 
-    const outcome = await application.commands.issueCommand(command("lifecycle-1"));
+    const outcome = await application.commands.issueCommand(command("lifecycle-1"), { authority });
     expect(outcome.kind).toBe("issued");
     if (outcome.kind !== "issued") throw new Error("expected an issued command");
 
@@ -200,7 +254,7 @@ describeIfDatabase("STEP 5 — the application boundary runs the whole lifecycle
     // `drain` settles the in-flight task through the runtime port and then
     // reconciles the mission — the same call an API worker or a restarted
     // process makes.
-    const settled = await application.commands.drain(outcome.mission.id);
+    const settled = await application.commands.drain(outcome.mission.id, { authority });
     expect(settled.mission.state).toBe("WAITING");
 
     const snapshot = await application.commands.snapshot(outcome.mission.id);
@@ -222,6 +276,7 @@ describeIfDatabase("STEP 5 — the application boundary runs the whole lifecycle
     const decided = await application.commands.decide(snapshot.reviews[0]!.id, {
       decision: "APPROVED",
       decidedBy: FOUNDER,
+      authority,
     });
     expect(decided.mission.state).toBe("COMPLETED");
 
@@ -240,9 +295,9 @@ describeIfDatabase("STEP 5 — the application boundary runs the whole lifecycle
   }, 120_000);
 
   it("returns the SAME mission for a retry, and runs nothing new", async () => {
-    const { application, transport } = await boot("it2");
+    const { application, transport, authority } = await boot("it2");
 
-    const first = await application.commands.issueCommand(command("retry-1"));
+    const first = await application.commands.issueCommand(command("retry-1"), { authority });
     expect(first.kind).toBe("issued");
     if (first.kind !== "issued") throw new Error("expected an issued command");
     const startsAfterFirst = transport.starts;
@@ -250,7 +305,7 @@ describeIfDatabase("STEP 5 — the application boundary runs the whole lifecycle
     expect(executionsAfterFirst).toHaveLength(1);
 
     // The client retries the SAME command (same key, same body).
-    const retry = await application.commands.issueCommand(command("retry-1"));
+    const retry = await application.commands.issueCommand(command("retry-1"), { authority });
     expect(retry.kind).toBe("replayed");
     expect(retry.replayed).toBe(true);
     if (retry.kind !== "replayed") throw new Error("expected a replay");
@@ -265,18 +320,18 @@ describeIfDatabase("STEP 5 — the application boundary runs the whole lifecycle
   }, 120_000);
 
   it("refuses a reused key with a DIFFERENT command (COMMAND_KEY_REUSED)", async () => {
-    const { application } = await boot("it3");
-    await application.commands.issueCommand(command("reuse-1"));
+    const { application, authority } = await boot("it3");
+    await application.commands.issueCommand(command("reuse-1"), { authority });
 
     await expect(
-      application.commands.issueCommand(command("reuse-1", { goal: "a completely different goal" })),
+      application.commands.issueCommand(command("reuse-1", { goal: "a completely different goal" }), { authority }),
     ).rejects.toMatchObject({ code: "COMMAND_KEY_REUSED" });
   }, 120_000);
 
   it("still creates a NEW mission for a genuinely new command", async () => {
-    const { application } = await boot("it4");
-    const first = await application.commands.issueCommand(command("new-1"));
-    const second = await application.commands.issueCommand(command("new-2"));
+    const { application, authority } = await boot("it4");
+    const first = await application.commands.issueCommand(command("new-1"), { authority });
+    const second = await application.commands.issueCommand(command("new-2"), { authority });
     if (first.kind !== "issued" || second.kind !== "issued") throw new Error("expected both to be issued");
     expect(second.mission.id).not.toBe(first.mission.id);
 
@@ -289,7 +344,31 @@ describeIfDatabase("STEP 5 — the application boundary runs the whole lifecycle
   }, 120_000);
 
   it("refuses a capability the actor is NOT assigned, with zero transport calls", async () => {
-    const { application, transport } = await boot("it5");
+    const { application, transport, authority } = await boot("it5");
+
+    // A capability that genuinely EXISTS and is ACTIVE, but was never granted to
+    // the routed actor. The refusal has to come from the ASSIGNMENT edge: a
+    // capability nobody registered would be refused for an unrelated reason and
+    // would prove nothing about assignment.
+    await application.domain.capabilities.register({
+      id: "strategy.unassigned",
+      name: "Ungranted strategy capability",
+      kind: "SKILL",
+      version: "1.0.0",
+      description: "Registered so that an assignment refusal can be observed.",
+      owner: "actor_founder",
+      status: "ACTIVE",
+      riskLevel: "LOW",
+      approvalRequirement: "NONE",
+      runtimeRequirements: {
+        requiredRuntimeTypes: ["EXTERNAL_AGENT_RUNTIME"],
+        supportsDeterministic: true,
+        requiresRuntime: true,
+      },
+      procedureRef: "sop://strategy/unassigned",
+      tags: ["strategy"],
+      metadata: {},
+    });
 
     const outcome = await application.commands.issueCommand(
       command("unassigned-1", {
@@ -298,29 +377,38 @@ describeIfDatabase("STEP 5 — the application boundary runs the whole lifecycle
             title: "unassigned-task",
             objective: "try to run a capability nobody granted",
             instruction: "should never run",
-            requiredCapabilityId: "strategy.not-assigned",
+            requiredCapabilityId: "strategy.unassigned",
           },
         ],
       }),
+      { authority },
     );
     if (outcome.kind !== "issued") throw new Error("expected an issued command");
 
-    // FAIL CLOSED: the task is not dispatched, and the reason is reported.
+    // FAIL CLOSED: the task is not dispatched, and the reason is reported — by
+    // the execution boundary's own assignment gate, not by the old dispatcher's
+    // wording.
     expect(outcome.tasks[0]!.state).toBe("READY");
-    expect(outcome.changes.some((change) => change.includes("BLOCKED") && /not assigned/i.test(change))).toBe(true);
+    expect(
+      outcome.changes.some((change) => change.includes("BLOCKED") && /holds no ACTIVE assignment/i.test(change)),
+    ).toBe(true);
     expect(await executionsOf(application, outcome.mission.id)).toHaveLength(0);
     expect(transport.starts).toBe(0);
     expect(transport.invokes).toBe(0);
   }, 120_000);
 
   it("rehydrates the finished mission through a FRESH application", async () => {
-    const { application } = await boot("it6");
-    const outcome = await application.commands.issueCommand(command("rehydrate-1"));
+    const { application, authority } = await boot("it6");
+    const outcome = await application.commands.issueCommand(command("rehydrate-1"), { authority });
     if (outcome.kind !== "issued") throw new Error("expected an issued command");
-    await application.commands.drain(outcome.mission.id);
+    await application.commands.drain(outcome.mission.id, { authority });
     const snapshot = await application.commands.snapshot(outcome.mission.id);
     expect(snapshot.reviews).toHaveLength(1);
-    await application.commands.decide(snapshot.reviews[0]!.id, { decision: "APPROVED", decidedBy: FOUNDER });
+    await application.commands.decide(snapshot.reviews[0]!.id, {
+      decision: "APPROVED",
+      decidedBy: FOUNDER,
+      authority,
+    });
 
     // A DIFFERENT application: new pool, new registries, new ids — nothing in
     // common except the database.

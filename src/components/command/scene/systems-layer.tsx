@@ -1,6 +1,7 @@
 "use client";
 
 import { SYSTEMS, type DepartmentId } from "../state/organization-model";
+import { systemStateLabel, useLocale } from "../i18n/command-locale";
 import { cssVars } from "../ui/css-vars";
 import { IconChevronRight } from "../ui/icons";
 
@@ -33,8 +34,9 @@ import { IconChevronRight } from "../ui/icons";
 export const SYSTEM_DEPTH = -240;
 
 export function SystemsLayer({ focus, onOpen }: { focus: DepartmentId | null; onOpen: (message: string) => void }) {
+  const { t } = useLocale();
   return (
-    <div className="nc-systems-layer" role="group" aria-label="Connected systems">
+    <div className="nc-systems-layer" role="group" aria-label={t("ctx.connectedSystems")}>
       {SYSTEMS.map((system) => {
         const relevant = focus ? system.linkedDepartments.includes(focus) : false;
         const state = focus ? (relevant ? "relevant" : "fallback") : "rest";
@@ -60,9 +62,9 @@ export function SystemsLayer({ focus, onOpen }: { focus: DepartmentId | null; on
               </span>
               <span className="nc-sysnode__text">
                 <span className="nc-sysnode__name">{system.name}</span>
-                <span className="nc-sysnode__meta">
+                <span className="nc-sysnode__meta" title={system.status}>
                   <span className="nc-sysnode__dot" aria-hidden="true" />
-                  {system.status}
+                  {systemStateLabel(t, system.statusKind)}
                   <span className="nc-sysnode__kind">{system.kind}</span>
                 </span>
               </span>

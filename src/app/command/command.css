@@ -42,6 +42,9 @@
   --nc-growth: #2dd4bf;
   --nc-client: #ff7a59;
   --nc-operations: #f0b429;
+  /* Creative & Production is the one hue the palette was missing: a magenta that
+     cannot be confused with the client orange or the technology violet. */
+  --nc-creative: #f0559b;
   --nc-product: #a78bfa;
   --nc-finance: #4c93ff;
   --nc-human: #f3f0e9;
@@ -1050,7 +1053,14 @@
   font-size: 11.5px;
 }
 .nc-lab[data-open="false"] { width: auto; }
-.nc-lab__head { display: flex; align-items: center; gap: 9px; padding: 10px 12px; cursor: pointer; width: 100%; text-align: left; }
+/* The bar carries the toggle AND the opt-out. It is a plain row, and both of its
+   controls are real buttons with the browser's own chrome removed — the lab is an
+   instrument, so it should look like one panel, not like two stacked widgets. */
+.nc-lab__bar { display: flex; align-items: center; gap: 2px; padding-inline-end: 6px; }
+.nc-lab__head { display: flex; align-items: center; gap: 9px; padding: 10px 12px; cursor: pointer; flex: 1 1 auto; min-width: 0; text-align: left; background: none; border: 0; color: inherit; font: inherit; }
+.nc-lab__sign { font-size: 12px; line-height: 1; color: var(--nc-handoff); }
+.nc-lab__hide { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(255, 162, 92, 0.24); background: none; font-size: 13px; line-height: 1; color: var(--nc-text-4); cursor: pointer; }
+.nc-lab__hide:hover { color: var(--nc-text); border-color: rgba(255, 162, 92, 0.5); }
 .nc-lab__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--nc-handoff); box-shadow: 0 0 8px rgba(255, 162, 92, 0.7); animation: nc-breathe var(--nc-dur-breath) var(--nc-ease-standard) infinite; }
 .nc-lab__title { font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--nc-handoff); font-weight: 700; }
 .nc-lab__body { padding: 4px 12px 12px; border-top: 1px solid rgba(255, 162, 92, 0.16); animation: nc-rise var(--nc-dur-quick) var(--nc-ease-out) both; }

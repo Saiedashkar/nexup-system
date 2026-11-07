@@ -1,0 +1,390 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEXUP COMMAND — MISSION CONTROL · GLASS & DEPTH
+   ───────────────────────────────────────────────────────────────────────────
+   One page, one direction: Mission Control drinks the approved material a little
+   further than the rest of the product. Everything here is scoped to
+   `.nlm-stage`, the wrapper only `/command/missions` renders, so no other
+   surface can inherit this without asking for it.
+
+   House rules, the same every layer before this one kept:
+     · additive — it redefines NO token; the champagne edge, the smoked glass,
+       the ivory text and the mint action colour all come from `foundation.css`;
+     · the page's order and behaviour are untouched. This file paints; it never
+       changes a grid span, an order, a label or a control;
+     · no gradient for its own sake: every gradient below is either the glass
+       itself (a light pass over a smoked plate) or the shared background's
+       depth, which the direction asks for by name;
+     · motion is CSS only, slow by design, calmer on a phone, and it stops dead
+       under `prefers-reduced-motion`.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1 · THE STAGE — the page's own grid, so the air can sit behind it
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nlm-stage {
+  grid-column: span 12;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+  align-content: start;
+  min-width: 0;
+}
+
+/* Content sits above the air, and only content takes a cell. */
+.nc-root .nlm-stage > *:not(.nlm-air) {
+  position: relative;
+  z-index: 1;
+}
+.nc-root .nlm-stage > .nl-stale { grid-column: span 12; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2 · THE AIR — three layers, three speeds, one material
+   ───────────────────────────────────────────────────────────────────────────
+   Fixed to the viewport so scrolling moves the content THROUGH the light
+   instead of dragging the light along with it — that is the whole 3D read. Three
+   layers at 96s / 148s / 210s never line up, so the depth never pulses. Alpha
+   stays under 0.10: this is glass, not a lava lamp, and it must never compete
+   with a mission title or a state pill.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nlm-air {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.nc-root .nlm-air i {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate3d(0, 0, 0);
+}
+
+/* L1 · the champagne bloom: nearest, warmest, fastest of the three. */
+.nc-root .nlm-air i:nth-child(1) {
+  width: 82vmax;
+  height: 82vmax;
+  left: -26vmax;
+  top: -34vmax;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(243, 173, 73, 0.1),
+    rgba(246, 219, 173, 0.045) 44%,
+    transparent 70%
+  );
+  filter: blur(58px);
+  animation: nlm-air-a 96s linear infinite;
+}
+
+/* L2 · the ivory pass on the far side, slower and cooler. */
+.nc-root .nlm-air i:nth-child(2) {
+  width: 68vmax;
+  height: 68vmax;
+  right: -20vmax;
+  top: 6vmax;
+  background: radial-gradient(circle at 50% 50%, rgba(246, 219, 173, 0.075), transparent 66%);
+  filter: blur(74px);
+  animation: nlm-air-b 148s linear infinite;
+}
+
+/* L3 · the floor: the widest, dimmest, slowest layer — the horizon under the
+   two above it, which is what gives the composition a background AND a ground. */
+.nc-root .nlm-air i:nth-child(3) {
+  width: 104vmax;
+  height: 56vmax;
+  left: 6vmax;
+  bottom: -26vmax;
+  background: radial-gradient(ellipse at 50% 50%, rgba(208, 173, 137, 0.06), transparent 64%);
+  filter: blur(84px);
+  animation: nlm-air-c 210s linear infinite;
+}
+
+/* A single, static, very fine mesh: the grain that keeps a blurred gradient from
+   looking like a compression artefact. It never moves — moving texture at this
+   scale is noise, not depth. */
+.nc-root .nlm-air::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(246, 219, 173, 0.028) 0 1px, transparent 1px 96px),
+    repeating-linear-gradient(90deg, rgba(246, 219, 173, 0.028) 0 1px, transparent 1px 96px);
+  opacity: 0.5;
+}
+
+@keyframes nlm-air-a {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(4vw, 3vh, 0) scale(1.08); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes nlm-air-b {
+  0% { transform: translate3d(0, 0, 0) scale(1.04); }
+  50% { transform: translate3d(-5vw, 4vh, 0) scale(1); }
+  100% { transform: translate3d(0, 0, 0) scale(1.04); }
+}
+@keyframes nlm-air-c {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(3vw, -3vh, 0) scale(1.06); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3 · THE FIGURES — dark, semi-transparent, champagne edge, one light pass
+   ───────────────────────────────────────────────────────────────────────────
+   `--nlm-lx/--nlm-ly` is where the light lands on THIS card. The default sits
+   top-start; section 6 moves it per section, which is the "same material,
+   different light" the direction asks for.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nlm-stage .nl-figure {
+  border-color: var(--nc-champagne-line);
+  background:
+    radial-gradient(
+      130% 104% at var(--nlm-lx, 12%) var(--nlm-ly, -34%),
+      rgba(246, 219, 173, 0.1),
+      rgba(246, 219, 173, 0.022) 46%,
+      transparent 68%
+    ),
+    linear-gradient(180deg, rgba(39, 38, 33, 0.72), rgba(13, 14, 13, 0.58));
+  backdrop-filter: blur(16px) saturate(1.04);
+  -webkit-backdrop-filter: blur(16px) saturate(1.04);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 230, 0.09),
+    0 20px 44px -30px rgba(0, 0, 0, 0.92);
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+/* The sheen: a single hairline of light along the top edge, not a glow. */
+.nc-root .nlm-stage .nl-figure::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(246, 219, 173, 0.42) 22%,
+    rgba(255, 246, 230, 0.5) 50%,
+    rgba(246, 219, 173, 0.36) 78%,
+    transparent
+  );
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.nc-root .nlm-stage a.nl-figure:hover {
+  border-color: var(--nc-champagne-pale);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 230, 0.12),
+    0 26px 52px -30px rgba(0, 0, 0, 0.95);
+}
+
+.nc-root .nlm-stage .nl-figure__value { color: var(--nc-text); }
+.nc-root .nlm-stage .nl-figure__label { color: var(--nc-text-2); }
+.nc-root .nlm-stage .nl-figure__note { color: var(--nc-text-3); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4 · THE FILTERS — one glass bar, chips that are chips
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nlm-stage .nl-readout {
+  display: grid;
+  gap: 8px;
+  padding: 11px 12px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(246, 219, 173, 0.18);
+  border-radius: var(--nc-r-2);
+  background:
+    radial-gradient(120% 130% at 80% -40%, rgba(246, 219, 173, 0.07), transparent 60%),
+    linear-gradient(180deg, rgba(33, 33, 29, 0.64), rgba(12, 13, 12, 0.56));
+  backdrop-filter: blur(18px) saturate(1.05);
+  -webkit-backdrop-filter: blur(18px) saturate(1.05);
+  box-shadow: inset 0 1px 0 rgba(255, 246, 230, 0.07);
+}
+
+.nc-root .nlm-stage .nl-chip {
+  border-color: rgba(246, 219, 173, 0.16);
+  background: rgba(16, 17, 15, 0.52);
+  color: var(--nc-text-3);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255, 246, 230, 0.04);
+}
+.nc-root .nlm-stage .nl-chip:hover {
+  color: var(--nc-text);
+  border-color: var(--nc-champagne-line);
+  background: rgba(32, 32, 28, 0.6);
+}
+.nc-root .nlm-stage .nl-chip[data-active="true"] {
+  color: var(--nc-text);
+  border-color: var(--nc-champagne-pale);
+  background:
+    radial-gradient(120% 140% at 30% -60%, rgba(255, 246, 230, 0.16), transparent 62%),
+    linear-gradient(180deg, rgba(58, 53, 43, 0.72), rgba(20, 20, 18, 0.62));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 230, 0.16),
+    0 0 20px -12px rgba(243, 173, 73, 0.6);
+}
+.nc-root .nlm-stage .nl-chip[data-active="true"] .nl-chip__count { color: var(--nc-champagne-pale); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5 · THE TABLE — the one surface that goes DARKER, on purpose
+   ───────────────────────────────────────────────────────────────────────────
+   Glass is the frame; the mission list is the reading. So the table drops to a
+   near-opaque charcoal (0.88–0.94) and keeps the surrounding glass visible
+   AROUND it. Names, departments and states stay at full contrast; the background
+   still shows at the edges, which is what makes the table read as a pane of
+   smoked glass laid on the room rather than as a white card on a dark page.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nlm-stage .nl-table {
+  padding: 12px 12px 6px;
+  border: 1px solid rgba(246, 219, 173, 0.14);
+  border-radius: var(--nc-r-2);
+  background:
+    radial-gradient(140% 90% at 100% -20%, rgba(246, 219, 173, 0.05), transparent 58%),
+    linear-gradient(180deg, rgba(10, 10, 9, 0.9), rgba(6, 6, 6, 0.94));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 230, 0.06),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.nc-root .nlm-stage .nl-table__head {
+  color: var(--nc-text-3);
+  border-bottom: 1px solid rgba(246, 219, 173, 0.12);
+  padding-bottom: 9px;
+}
+
+.nc-root .nlm-stage .nl-row { border-top-color: rgba(246, 219, 173, 0.09); }
+.nc-root .nlm-stage a.nl-row:hover,
+.nc-root .nlm-stage button.nl-row:hover {
+  background: rgba(246, 219, 173, 0.06);
+  border-color: rgba(246, 219, 173, 0.18);
+  box-shadow: inset 2px 0 0 0 rgba(246, 219, 173, 0.5);
+}
+.nc-root .nlm-stage .nl-row .nl-cell__title { color: var(--nc-text); }
+.nc-root .nlm-stage .nl-row .nl-cell__meta { color: var(--nc-text-4); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6 · THE BREAKDOWN — the same glass as the figures, a different light
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nlm-stage .nl-breakdown__cell {
+  border-color: var(--nc-champagne-line);
+  background:
+    radial-gradient(
+      130% 120% at var(--nlm-lx, 20%) var(--nlm-ly, -40%),
+      rgba(246, 219, 173, 0.09),
+      rgba(246, 219, 173, 0.02) 48%,
+      transparent 70%
+    ),
+    linear-gradient(180deg, rgba(36, 35, 31, 0.68), rgba(12, 13, 12, 0.56));
+  backdrop-filter: blur(14px) saturate(1.04);
+  -webkit-backdrop-filter: blur(14px) saturate(1.04);
+  box-shadow: inset 0 1px 0 rgba(255, 246, 230, 0.07);
+  transition: border-color 150ms ease, transform 150ms ease;
+}
+.nc-root .nlm-stage .nl-breakdown__cell:hover {
+  border-color: var(--nc-champagne-pale);
+  transform: translateY(-1px);
+}
+.nc-root .nlm-stage .nl-breakdown__cell[data-empty="true"] { opacity: 0.72; }
+
+/* ── The per-section light: same material, the light moved ─────────────────
+   Two panels and the figure row, each lit from a different corner, in the order
+   the page already had. Nothing is reordered; only `--nlm-lx/--nlm-ly` moves. */
+.nc-root .nlm-stage > .nl-figures { --nlm-lx: 6%; --nlm-ly: -46%; }
+.nc-root .nlm-stage > .nl-panel:nth-of-type(1) { --nlm-lx: 14%; --nlm-ly: -28%; }
+.nc-root .nlm-stage > .nl-panel:nth-of-type(2) { --nlm-lx: 74%; --nlm-ly: -22%; }
+
+/* In RTL the reading starts on the right, so the light does too. */
+.nc-root[dir="rtl"] .nlm-stage > .nl-figures { --nlm-lx: 94%; --nlm-ly: -46%; }
+.nc-root[dir="rtl"] .nlm-stage > .nl-panel:nth-of-type(1) { --nlm-lx: 86%; --nlm-ly: -28%; }
+.nc-root[dir="rtl"] .nlm-stage > .nl-panel:nth-of-type(2) { --nlm-lx: 26%; --nlm-ly: -22%; }
+.nc-root[dir="rtl"] .nlm-stage .nl-breakdown__cell { --nlm-lx: 80%; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   7 · THE PHONE — the depth calms down, the reading does not
+   ───────────────────────────────────────────────────────────────────────────
+   A fixed parallax behind a bouncing scroll is a stutter nobody asked for, and
+   the mobile browser has no spare compositor for three 70vmax blurs. So on a
+   phone the layers keep their colours and lose their travel: shorter blurs, a
+   long slow fade instead of a drift, and the sheen reduced to the top edge.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 760px) {
+  .nc-root .nlm-stage { gap: 12px; }
+
+  .nc-root .nlm-air i { filter: blur(38px); opacity: 0.9; }
+  .nc-root .nlm-air i:nth-child(1) {
+    width: 120vmax;
+    height: 120vmax;
+    left: -46vmax;
+    top: -54vmax;
+    animation: nlm-air-breathe 58s ease-in-out infinite;
+  }
+  .nc-root .nlm-air i:nth-child(2) { display: none; }
+  .nc-root .nlm-air i:nth-child(3) {
+    width: 130vmax;
+    height: 70vmax;
+    left: -18vmax;
+    bottom: -30vmax;
+    animation: none;
+  }
+  .nc-root .nlm-air::after { opacity: 0.28; }
+
+  .nc-root .nlm-stage .nl-figure {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .nc-root .nlm-stage .nl-readout { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+  .nc-root .nlm-stage .nl-figure::after { opacity: 0.55; }
+
+  /* The stacked mobile row is already a card; it keeps the darker pane. */
+  .nc-root .nlm-stage .nl-row { background: rgba(8, 8, 8, 0.5); }
+  .nc-root .nlm-stage .nl-table { padding: 10px 10px 4px; background: rgba(6, 6, 6, 0.72); }
+}
+
+@keyframes nlm-air-breathe {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(0, 2vh, 0) scale(1.05); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   8 · THE HOUSE RULES — reduced motion, and browsers without backdrop-filter
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  /* The shared background stops existing as motion: it keeps its light and
+     loses its travel, which is the point — the depth is decoration, the
+     contrast is not. */
+  .nc-root .nlm-air i { animation: none !important; }
+  .nc-root .nlm-stage .nl-figure,
+  .nc-root .nlm-stage .nl-breakdown__cell,
+  .nc-root .nlm-stage a.nl-figure:hover,
+  .nc-root .nlm-stage .nl-breakdown__cell:hover {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+/* Without backdrop-filter the glass would be a flat wash, so the plates go
+   slightly more opaque and lose the blur they cannot render. The hierarchy — and
+   every contrast ratio — stays exactly the same. */
+@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+  .nc-root .nlm-stage .nl-figure,
+  .nc-root .nlm-stage .nl-readout,
+  .nc-root .nlm-stage .nl-breakdown__cell {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: linear-gradient(180deg, rgba(30, 30, 27, 0.92), rgba(12, 13, 12, 0.88));
+  }
+}

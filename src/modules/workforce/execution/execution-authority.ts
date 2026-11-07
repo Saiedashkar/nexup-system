@@ -43,6 +43,23 @@ import type { ActorType } from "../actors/actor-contracts";
 export type ExecutionAuthority = {
   /** The signed-in user id — the only link back to the legacy session. */
   userId: string;
+  /**
+   * WHERE this authority came from, and therefore WHAT it may authorise.
+   *
+   *   REQUEST         built at the API edge from an AUTHENTICATED session. The
+   *                   only origin that may start NEW work.
+   *   RECONCILIATION  built by the recovery sweep for an attempt that was already
+   *                   authorised. It may OBSERVE and ADOPT; it may never start a
+   *                   new execution attempt.
+   *
+   * This field exists because the audit's standing rule is that unattended
+   * background execution authority is NOT invented in this phase. A recovery
+   * process genuinely needs an authority to settle work (otherwise a restart
+   * could never finish anything), so instead of leaving "who is calling"
+   * implicit, the origin is DECLARED and the execution path REFUSES the
+   * background origin for anything that would start new work.
+   */
+  origin: ExecutionAuthorityOrigin;
   /** The workforce actor this request acts as. Resolved, never payload-supplied. */
   actorId: ActorId;
   actorSlug: string;
@@ -63,8 +80,24 @@ export type ExecutionAuthority = {
  * `Partial<ExecutionAuthority>`: a missing field must be a compile error, because
  * every one of them is load-bearing for an authorization decision.
  */
+export const EXECUTION_AUTHORITY_ORIGINS = ["REQUEST", "RECONCILIATION"] as const;
+export type ExecutionAuthorityOrigin = (typeof EXECUTION_AUTHORITY_ORIGINS)[number];
+
+/**
+ * How long an edge-built authority stays usable.
+ *
+ * The request deadline the final preflight checks: an authority minted for one
+ * HTTP request must not still be authorising a dispatch much later, because the
+ * session facts it mirrors (scope, rights, role) may have changed in between.
+ * 15 minutes is deliberately generous for a slow interactive request and far
+ * shorter than any human decision cadence.
+ */
+export const AUTHORITY_MAX_AGE_MS = 15 * 60_000;
+
 export type ExecutionAuthorityInput = {
   userId: string;
+  /** Defaults to REQUEST — an authority is REQUEST unless it says otherwise. */
+  origin?: ExecutionAuthorityOrigin;
   actorId: ActorId;
   actorSlug: string;
   actorType: ActorType;
@@ -106,6 +139,7 @@ export function createExecutionAuthority(input: ExecutionAuthorityInput): Execut
 
   const authority: ExecutionAuthority = {
     userId,
+    origin: input.origin ?? "REQUEST",
     actorId,
     actorSlug,
     actorType: input.actorType,
@@ -118,6 +152,87 @@ export function createExecutionAuthority(input: ExecutionAuthorityInput): Execut
   };
 
   assertNoCredentials(authority, "Execution authority");
+  return authority;
+}
+
+/**
+ * Builds the narrowly typed RECONCILIATION authority.
+ *
+ * It is NOT an authenticated user and NOT a session: it says, in the type, that
+ * the caller is the recovery path acting on work that was already authorised.
+ * `assertForegroundAuthority` (below) is what turns that declaration into an
+ * enforceable rule, so this builder cannot be used to smuggle background start
+ * authority into a dispatch.
+ */
+export function createReconciliationAuthority(input: {
+  /** The recovery component taking responsibility (a code identifier). */
+  component: string;
+  correlationId?: string;
+  requestedAt?: string;
+}): ExecutionAuthority {
+  const at = input.requestedAt ?? new Date().toISOString();
+  return createExecutionAuthority({
+    userId: `reconciler:${input.component}`,
+    origin: "RECONCILIATION",
+    // System identity, not a person: it can never satisfy human authority.
+    actorId: `system:${input.component}`,
+    actorSlug: `system-${input.component}`,
+    actorType: "SYSTEM",
+    permissionTokens: [],
+    accessibleBusinessSlugs: [],
+    isSuperAdmin: false,
+    hasOfficeFinanceFull: false,
+    requestedAt: at,
+    ...(input.correlationId ? { correlationId: input.correlationId } : {}),
+  });
+}
+
+/** True when this authority may start NEW work. */
+export function isForegroundAuthority(authority: ExecutionAuthority): boolean {
+  return authority.origin === "REQUEST";
+}
+
+/**
+ * The fail-closed gate in front of anything that can START a new execution
+ * attempt.
+ *
+ * @throws AUTHORITY_UNRESOLVED when the authority is not an authenticated
+ *         REQUEST (a reconciliation authority, or a hand-built object claiming a
+ *         shape it did not come from).
+ * @throws AUTHORITY_UNRESOLVED when the authority is stale past its deadline.
+ */
+export function assertForegroundAuthority(
+  authority: ExecutionAuthority | null | undefined,
+  options: { now?: Date; maxAgeMs?: number } = {},
+): ExecutionAuthority {
+  if (!authority || typeof authority !== "object") {
+    throw new AiWorkforceError(
+      "AUTHORITY_UNRESOLVED",
+      "Starting a new execution attempt requires a server-created execution authority",
+    );
+  }
+  if (authority.origin !== "REQUEST") {
+    throw new AiWorkforceError(
+      "AUTHORITY_UNRESOLVED",
+      `A "${authority.origin}" authority may observe and adopt work but may never start a new execution attempt`,
+      { origin: authority.origin, actorId: authority.actorId ?? null },
+    );
+  }
+  const now = options.now ?? new Date();
+  const mintedAt = new Date(authority.requestedAt).getTime();
+  if (!Number.isFinite(mintedAt)) {
+    throw new AiWorkforceError("AUTHORITY_UNRESOLVED", "The execution authority carries no usable timestamp", {
+      requestedAt: authority.requestedAt ?? null,
+    });
+  }
+  const maxAgeMs = options.maxAgeMs ?? AUTHORITY_MAX_AGE_MS;
+  if (now.getTime() - mintedAt > maxAgeMs) {
+    throw new AiWorkforceError(
+      "AUTHORITY_UNRESOLVED",
+      `The execution authority expired ${Math.round((now.getTime() - mintedAt - maxAgeMs) / 1000)}s ago; it must be rebuilt from the session`,
+      { requestedAt: authority.requestedAt, maxAgeMs },
+    );
+  }
   return authority;
 }
 
@@ -156,6 +271,7 @@ export function authorityIsHumanDecisionActor(authority: ExecutionAuthority): bo
 /** A bounded, JSON-safe summary (never a credential, safe to log or audit). */
 export function summarizeExecutionAuthority(authority: ExecutionAuthority): {
   userId: string;
+  origin: ExecutionAuthorityOrigin;
   actorId: string;
   actorSlug: string;
   actorType: ActorType;
@@ -165,6 +281,7 @@ export function summarizeExecutionAuthority(authority: ExecutionAuthority): {
 } {
   return {
     userId: authority.userId,
+    origin: authority.origin,
     actorId: authority.actorId,
     actorSlug: authority.actorSlug,
     actorType: authority.actorType,

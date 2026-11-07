@@ -28,7 +28,7 @@ it("cannot verify an execution the runtime no longer knows, and escalates it to 
   const handleId = process.env.APP_PROOF_HANDLE_ID;
   if (!handleId) throw new Error("APP_PROOF_HANDLE_ID must be set");
 
-  const { application, transport, disconnect } = await bootProcess("procE", {
+  const { application, transport, authority, disconnect } = await bootProcess("procE", {
     // The remote does not know this run: 404, like a restarted bridge.
     unknownRunIds: [handleId],
   });
@@ -37,7 +37,7 @@ it("cannot verify an execution the runtime no longer knows, and escalates it to 
   expect(before.tasks[0]!.state).toBe("RUNNING");
   expect(before.tasks[0]!.attempt).toBe(1);
 
-  await application.commands.drain(missionId as never);
+  await application.commands.drain(missionId as never, { authority });
 
   const after = await application.commands.snapshot(missionId as never);
   const counts = transport.counts();

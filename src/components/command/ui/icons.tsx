@@ -332,13 +332,54 @@ export const IconDeptFinance = (p: IconProps = {}) =>
     p,
   );
 
+/**
+ * Creative & Production (Pass 4) — a clapperboard: a slate with the hinged top
+ * and the hinge line. Deliberately NOT a sparkle or a palette: this space makes
+ * work to a brief and releases it, which is a production floor, not a mood board.
+ */
+export const IconDeptCreative = (p: IconProps = {}) =>
+  svg(
+    <>
+      <path d="M3.8 8.6h16.4v9.2a1.6 1.6 0 0 1-1.6 1.6H5.4a1.6 1.6 0 0 1-1.6-1.6z" />
+      <path d="M5.2 8.6L15.4 4.6M10.2 8.6L20.4 4.6" />
+      <path d="M10.4 12.6l4 2-4 2z" />
+    </>
+    ,
+    p,
+  );
+
+/**
+ * Knowledge & Models (Pass 2, re-labelled in Pass 4) — an open ledger with a
+ * second shelf: what the organization has written down, and what it can still
+ * reach. Deliberately NOT a brain, a bulb or a star: it is a library, not an
+ * oracle, and it is a shared service rather than a department.
+ */
+export const IconDeptKnowledge = (p: IconProps = {}) =>
+  svg(
+    <>
+      <path d="M4.4 5.8a1.7 1.7 0 0 1 1.7-1.7h5.1a3.1 3.1 0 0 1 3.1 3.1v12.1H6.1a1.7 1.7 0 0 1-1.7-1.7z" />
+      <path d="M14.3 8.6h3.6a1.7 1.7 0 0 1 1.7 1.7v9h-5.3" />
+      <path d="M7.4 8.8h4M7.4 12.2h4" />
+    </>
+    ,
+    p,
+  );
+
 /** Keyed lookup so department data stays serialisable (no component refs). */
+/**
+ * Every department AND the shared services, so an id always resolves to a mark.
+ * `knowledge` stays here rather than leaving with its department slot: its surface
+ * is still reachable, and a surface without an icon would be the one place the
+ * taxonomy change showed as a hole.
+ */
 export const DEPARTMENT_ICONS = {
   growth: IconDeptGrowth,
   client: IconDeptClient,
   operations: IconDeptOperations,
+  creative: IconDeptCreative,
   product: IconDeptProduct,
   finance: IconDeptFinance,
+  knowledge: IconDeptKnowledge,
 } as const;
 
 /* ── Actors (Phase UI-02.1) — the human/AI presence vocabulary ────────────

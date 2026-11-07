@@ -3,6 +3,16 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 
 const publicPaths = new Set(["/login", "/api/auth/login", "/api/auth/logout"]);
 
+// EXEC conversation turn — ROUTE-MANAGED AUTH.
+//
+// This is deliberately an exact-path set, not a prefix: only the one route that
+// owns the `exec-conversation/v1` error envelope (and must answer a foreign
+// origin with 403 before it says anything about a session) skips the blanket
+// `/api/**` 401 here. The route is NOT public — the handler re-checks the
+// session itself, and nothing runs without it. Any sibling path, including
+// `/api/exec/turn/<anything>`, keeps the blanket guard below.
+const routeManagedAuthPaths = new Set(["/api/exec/turn"]);
+
 // Business-specific route prefixes
 const businessRoutes: Record<string, string[]> = {
   nexup: ["/office/nexup", "/api/nexup", "/api/pool", "/api/withdrawals", "/api/expenses", "/api/services", "/api/projects", "/api/client-payments"],
@@ -40,6 +50,7 @@ const officeFinanceRoutes = [
 
 export default async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  if (routeManagedAuthPaths.has(pathname)) return NextResponse.next();
   if (publicPaths.has(pathname)) return NextResponse.next();
 
   const session = await verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value);

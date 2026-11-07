@@ -2,11 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useCommand } from "../state/command-store";
+import { useLocale } from "../i18n/command-locale";
 import { DEPARTMENTS, EXECUTIVE } from "../state/organization-model";
 import { departmentAttention, workspaceHref } from "../state/department-workspace";
-import { DEPARTMENT_ICONS, IconMap, IconSpark } from "../ui/icons";
+import { DEPARTMENT_ICONS, IconSpark } from "../ui/icons";
 import { cssVars } from "../ui/css-vars";
-import { STATUS_LABEL } from "../state/visual-state";
 
 /**
  * The List view.
@@ -19,25 +19,26 @@ import { STATUS_LABEL } from "../state/visual-state";
  */
 export function OrganizationListView() {
   const { snapshot, setExecOpen, execOpen } = useCommand();
+  const { t, tc } = useLocale();
   const router = useRouter();
 
   const rows = [
     {
       key: EXECUTIVE.id,
       Icon: IconSpark,
-      name: EXECUTIVE.label,
-      capability: EXECUTIVE.kicker,
+      name: t("areas.exec.label"),
+      capability: t("cc.execKicker"),
       accentVar: "--nc-lime",
       visual: snapshot.visual.executive,
       attention: snapshot.visual.executive.needsApproval ? 1 : 0,
       onOpen: () => setExecOpen(true),
-      action: "Open the Executive console",
+      action: t("cc.openConsoleAria"),
     },
     ...DEPARTMENTS.map((department) => ({
       key: department.id,
       Icon: DEPARTMENT_ICONS[department.id],
-      name: department.name,
-      capability: department.capability,
+      name: t(`dept.${department.id}.name`),
+      capability: t(`dept.${department.id}.capability`),
       accentVar: department.accentVar,
       visual: snapshot.visual.departments[department.id],
       /* Needs-attention is the SAME number the workspace page shows, read from
@@ -45,19 +46,19 @@ export function OrganizationListView() {
       attention: departmentAttention(department.id),
       /* Phase UI-03: rows open the department's workspace route. */
       onOpen: () => router.push(workspaceHref(department.id)),
-      action: "Open department workspace",
+      action: t("cc.openDeptAria"),
     })),
   ];
 
   return (
-    <div className="nc-list">
+    <div className="nc-list" aria-label={t("cc.listAria")}>
       <div className="nc-list__headrow" aria-hidden="true">
         <span />
-        <span>Node</span>
-        <span>Status</span>
-        <span>Current work</span>
-        <span>Activity</span>
-        <span>Attention</span>
+        <span>{t("cc.colNode")}</span>
+        <span>{t("cc.colStatus")}</span>
+        <span>{t("cc.colCurrentWork")}</span>
+        <span>{t("cc.colActivity")}</span>
+        <span>{t("cc.colAttention")}</span>
       </div>
 
       <ul style={{ display: "contents" }}>
@@ -70,10 +71,10 @@ export function OrganizationListView() {
               style={cssVars({ "--nc-accent": `var(${accentVar})` })}
               onClick={onOpen}
               aria-current={key === EXECUTIVE.id && execOpen ? true : undefined}
-              aria-label={`${name} — ${STATUS_LABEL[visual.status]}. ${
-                visual.activeJob ?? capability
-              }. Activity ${Math.round(visual.activityLevel * 100)} percent.${
-                attention > 0 ? ` Needs attention: ${attention}.` : ""
+              aria-label={`${name} — ${t(`status.node.${visual.status}`)}. ${
+                visual.activeJob ? tc(visual.activeJob) : capability
+              }. ${t("cc.rowActivity", { percent: Math.round(visual.activityLevel * 100) })}${
+                attention > 0 ? ` ${t("cc.rowAttention", { count: attention })}.` : ""
               } ${action}.`}
             >
               <span className="nc-list__icon" aria-hidden="true">
@@ -89,15 +90,17 @@ export function OrganizationListView() {
               </span>
               <span className="nc-list__status">
                 <span className="nc-list__led" aria-hidden="true" />
-                {STATUS_LABEL[visual.status]}
+                {t(`status.node.${visual.status}`)}
               </span>
-              <span className="nc-list__job">{visual.activeJob ?? "—"}</span>
+              <span className="nc-list__job">{visual.activeJob ? tc(visual.activeJob) : "—"}</span>
               <span className="nc-list__meter" aria-hidden="true">
                 <i style={{ width: `${Math.round(visual.activityLevel * 100)}%` }} />
               </span>
               <span>
                 {attention > 0 ? (
-                  <span className="nc-list__flag">Needs you · {attention}</span>
+                  <span className="nc-list__flag">
+                    {t("cc.needsYouFlag")} · {attention}
+                  </span>
                 ) : (
                   <span className="nc-list__none">—</span>
                 )}
@@ -110,25 +113,13 @@ export function OrganizationListView() {
   );
 }
 
-/**
- * Map view — deliberately a placeholder.
- *
- * Drawing a business geography would mean inventing locations and a real
- * mapping surface, which is not part of this slice. Rather than fake it, it
- * says exactly what it is, consistent with how the rest of UI-01 labels what
- * is mocked.
+/*
+ * A "Map" reading used to live here — a placeholder that said the map would
+ * arrive in a later phase. It is gone for one reason: the home's reading switch
+ * offered it, `living-organization` composed nothing for it, and so choosing it
+ * left the middle of the page EMPTY. A reading that renders nothing is worse
+ * than a reading that does not exist, and the organization's real network map
+ * already exists where a network belongs — as the `map` mode inside a
+ * department's workspace. The three readings on the home are now exactly the
+ * three it composes: overview, cards, list.
  */
-export function OrganizationMapView() {
-  return (
-    <div className="nc-list__placeholder">
-      <span className="nc-list__placeholder-mark" aria-hidden="true">
-        <IconMap size={22} />
-      </span>
-      <span className="nc-section__title">Map view arrives in a later phase</span>
-      <span className="nc-section__note" style={{ maxWidth: 380 }}>
-        A real map needs business locations and a mapping surface. Nothing here is faked — the
-        organization, its state and its wiring are all readable in the Graph and List views.
-      </span>
-    </div>
-  );
-}

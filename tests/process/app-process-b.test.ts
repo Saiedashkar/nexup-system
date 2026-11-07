@@ -16,7 +16,7 @@ import { FOUNDER, bootProcess, missionIdFromEnv, writeReceipt } from "./support"
  */
 it("rehydrates the pending decision from the database alone and completes the mission", async () => {
   const missionId = missionIdFromEnv();
-  const { application, disconnect } = await bootProcess("procB", { statusSequence: ["succeeded"] });
+  const { application, authority, disconnect } = await bootProcess("procB", { statusSequence: ["succeeded"] });
 
   const rehydrated = await application.commands.snapshot(missionId as never);
   const task = rehydrated.tasks[0]!;
@@ -35,7 +35,7 @@ it("rehydrates the pending decision from the database alone and completes the mi
   expect(pending.executionRecordId).toBe(rehydrated.executions[0]!.id);
 
   // The human decision — the boundary an agent cannot cross, even here.
-  await application.commands.decide(pending.id, { decision: "APPROVED", decidedBy: FOUNDER });
+  await application.commands.decide(pending.id, { decision: "APPROVED", decidedBy: FOUNDER, authority });
 
   const final = await application.commands.snapshot(missionId as never);
   expect(final.mission.state).toBe("COMPLETED");

@@ -133,7 +133,7 @@ const SCENARIOS: DemoScenario[] = [
         handoffs: [],
       },
       activity: [
-        { id: "a1", text: "All five departments are idle.", time: "now" },
+        { id: "a1", text: "All six departments are idle.", time: "now" },
         { id: "a2", text: "No approvals waiting on you.", time: "—" },
       ],
       approvals: [],
@@ -141,14 +141,14 @@ const SCENARIOS: DemoScenario[] = [
   },
   {
     id: "growth-active",
-    label: "Growth active",
-    narrative: "Growth is working, so Executive → Growth carries signal and Growth's worker dots light up.",
+    label: "Marketing active",
+    narrative: "Marketing is working, so Executive → Marketing carries signal and Marketing's worker dots light up.",
     build: (revision) => ({
       scenario: "growth-active",
       revision,
-      narrative: "Growth is working, so Executive → Growth carries signal and Growth's worker dots light up.",
+      narrative: "Marketing is working, so Executive → Marketing carries signal and Marketing's worker dots light up.",
       visual: {
-        executive: executive({ status: "ACTIVE", activityLevel: 0.34, activeJob: "Monitoring Growth & Revenue" }),
+        executive: executive({ status: "ACTIVE", activityLevel: 0.34, activeJob: "Monitoring Marketing & Sales" }),
         departments: departmentsWith([
           [
             "growth",
@@ -172,14 +172,14 @@ const SCENARIOS: DemoScenario[] = [
   },
   {
     id: "product-active",
-    label: "Product active",
-    narrative: "The same contract, a different department — no Growth-specific logic anywhere in the visual layer.",
+    label: "Technology active",
+    narrative: "The same contract, a different department — no department-specific logic anywhere in the visual layer.",
     build: (revision) => ({
       scenario: "product-active",
       revision,
-      narrative: "The same contract, a different department — no Growth-specific logic anywhere in the visual layer.",
+      narrative: "The same contract, a different department — no department-specific logic anywhere in the visual layer.",
       visual: {
-        executive: executive({ status: "ACTIVE", activityLevel: 0.28, activeJob: "Reviewing Product & Tech output" }),
+        executive: executive({ status: "ACTIVE", activityLevel: 0.28, activeJob: "Reviewing Technology & Systems output" }),
         departments: departmentsWith([
           [
             "product",
@@ -233,21 +233,21 @@ const SCENARIOS: DemoScenario[] = [
       },
       activity: [
         { id: "a1", text: "Executive opened a planning pass over all departments.", time: "now" },
-        { id: "a2", text: "Five departments are holding for direction.", time: "now" },
+        { id: "a2", text: "Six departments are holding for direction.", time: "now" },
       ],
       approvals: [],
     }),
   },
   {
     id: "handoff",
-    label: "Growth → Operations",
-    narrative: "Watch the connection: energy travels from Growth to Operations, Operations takes the work, Growth decays.",
+    label: "Marketing → Operations",
+    narrative: "Watch the connection: energy travels from Marketing to Management & Operations, Management & Operations takes the work, Marketing decays.",
     build: (revision) => ({
       scenario: "handoff",
       revision,
-      narrative: "Watch the connection: energy travels from Growth to Operations, Operations takes the work, Growth decays.",
+      narrative: "Watch the connection: energy travels from Marketing to Management & Operations, Management & Operations takes the work, Marketing decays.",
       visual: {
-        executive: executive({ status: "ACTIVE", activityLevel: 0.3, activeJob: "Brokering Growth → Operations handoff" }),
+        executive: executive({ status: "ACTIVE", activityLevel: 0.3, activeJob: "Brokering Marketing → Management & Operations handoff" }),
         departments: departmentsWith([
           [
             "growth",
@@ -271,9 +271,9 @@ const SCENARIOS: DemoScenario[] = [
         handoffs: [{ id: `handoff-${revision}`, from: "growth", to: "operations" }],
       },
       activity: [
-        { id: "a1", departmentId: "growth", text: "Growth handed 3 enterprise demos to Operations.", time: "now" },
+        { id: "a1", departmentId: "growth", text: "Marketing handed 3 enterprise demos to Operations.", time: "now" },
         { id: "a2", departmentId: "operations", text: "Operations accepted the handoff and opened capacity check.", time: "now" },
-        { id: "a3", text: "Growth activity is decaying back to idle.", time: "now" },
+        { id: "a3", text: "Marketing activity is decaying back to idle.", time: "now" },
       ],
       approvals: [],
     }),
@@ -363,7 +363,7 @@ const SCENARIOS: DemoScenario[] = [
       revision,
       narrative: "A department failed and the Executive is escalating it — the error is visible, never hidden.",
       visual: {
-        executive: executive({ status: "BLOCKED", activityLevel: 0.26, activeJob: "Escalating Product & Tech failure" }),
+        executive: executive({ status: "BLOCKED", activityLevel: 0.26, activeJob: "Escalating Technology & Systems failure" }),
         departments: departmentsWith([
           [
             "product",

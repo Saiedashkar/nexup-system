@@ -23,10 +23,12 @@ import {
   spendClassForBinding,
 } from "@/modules/workforce/execution/capability-execution-contracts";
 import {
+  CLAIM_FINALIZATION_MARGIN_MS,
   DEFAULT_CLAIM_LEASE_TTL_MS,
   EXECUTION_CLAIM_STATES,
   InMemoryExecutionClaimRepository,
   REDISPATCHABLE_CLAIM_STATES,
+  claimLeaseTtlForTimeout,
   claimOutcomePermitsDispatch,
   executionBlockedClaimStates,
   isRedispatchableClaimState,
@@ -202,10 +204,13 @@ describe("Step 5A claim — a DISPATCHED attempt is adopted, never duplicated", 
     const claimed = await claims.claim(request());
     expect(claimed.kind).toBe("CLAIMED");
 
-    const entered = await claims.markDispatching(claimed.claim.id, { leaseOwner: "process_A" });
+    const entered = await claims.markDispatching(claimed.claim.id, { invocationToken: "process_A" });
     expect(entered?.state).toBe("DISPATCHING");
 
     const dispatched = await claims.markDispatched(claimed.claim.id, {
+      // Step 5A-4: reaching DISPATCHED requires the OWNING INVOCATION token, so a
+      // stale invocation cannot attach a handle to an attempt that moved on.
+      invocationToken: "process_A",
       executionRecordId: "exec_1",
       handleId: "run_bridge_1",
     });
@@ -235,6 +240,7 @@ describe("Step 5A claim — a DISPATCHED attempt is adopted, never duplicated", 
     // There is no way to record a handle for an attempt that never entered
     // dispatch: doing so would forge the identity a reconciler relies on.
     const forged = await claims.markDispatched(claimed.claim.id, {
+      invocationToken: "process_A",
       executionRecordId: "exec_forged",
       handleId: "run_forged",
     });
@@ -263,7 +269,7 @@ describe("Step 5A claim — an active claim blocks a second dispatch", () => {
     const { claims } = harness();
     const claimed = await claims.claim(request({ leaseOwner: "process_A" }));
     if (claimed.kind !== "CLAIMED") throw new Error("expected CLAIMED");
-    await claims.markDispatching(claimed.claim.id, { leaseOwner: "process_A" });
+    await claims.markDispatching(claimed.claim.id, { invocationToken: "process_A" });
 
     const other = await claims.claim(request({ leaseOwner: "process_B" }));
     expect(other.kind).toBe("IN_PROGRESS");
@@ -275,7 +281,7 @@ describe("Step 5A claim — an active claim blocks a second dispatch", () => {
     const claimed = await claims.claim(request({ leaseOwner: "process_A" }));
     if (claimed.kind !== "CLAIMED") throw new Error("expected CLAIMED");
 
-    const entered = await claims.markDispatching(claimed.claim.id, { leaseOwner: "process_A" });
+    const entered = await claims.markDispatching(claimed.claim.id, { invocationToken: "process_A" });
     expect(entered?.state).toBe("DISPATCHING");
   });
 
@@ -284,7 +290,7 @@ describe("Step 5A claim — an active claim blocks a second dispatch", () => {
     const claimed = await claims.claim(request({ leaseOwner: "process_A" }));
     if (claimed.kind !== "CLAIMED") throw new Error("expected CLAIMED");
 
-    expect(await claims.markDispatching(claimed.claim.id, { leaseOwner: "process_B" })).toBeNull();
+    expect(await claims.markDispatching(claimed.claim.id, { invocationToken: "process_B" })).toBeNull();
   });
 });
 
@@ -317,6 +323,17 @@ describe("Step 5A claim — an expired CLAIMED claim may be retaken", () => {
     const recovery = await claims.recoveryFor(second.claim.id, { requester: "process_C" });
     expect(recovery?.kind).toBe("IN_PROGRESS");
 
+    // A RECLAIM RENEWS the lease (Step 5A-4): the reclaiming invocation must hold
+    // a LIVE lease, because `markDispatching` refuses to enter dispatch on an
+    // expired one. So the verdict only becomes RECLAIM once THAT lease lapses —
+    // and it is IN_PROGRESS for the owning invocation too, not just for a
+    // stranger: a matching owner token is not permission to re-take an attempt.
+    expect(await claims.recoveryFor(second.claim.id, { requester: "process_B" })).toMatchObject({
+      kind: "IN_PROGRESS",
+    });
+
+    clock.advance(DEFAULT_CLAIM_LEASE_TTL_MS + 1_000);
+
     const dispatchable = await claims.recoveryFor(second.claim.id, { requester: "process_B" });
     expect(dispatchable?.kind).toBe("RECLAIM");
     if (dispatchable?.kind !== "RECLAIM") throw new Error("expected RECLAIM");
@@ -324,11 +341,14 @@ describe("Step 5A claim — an expired CLAIMED claim may be retaken", () => {
   });
 
   it("reclaims a RELEASED claim, because a refusal means no run exists", async () => {
-    const { claims } = harness();
+    const { claims, clock } = harness();
     const claimed = await claims.claim(request());
     if (claimed.kind !== "CLAIMED") throw new Error("expected CLAIMED");
 
-    const released = await claims.release(claimed.claim.id, "BUDGET_DENIED_VARIABLE_AI_EXECUTION");
+    const released = await claims.release(claimed.claim.id, {
+      invocationToken: "process_A",
+      detail: "BUDGET_DENIED_VARIABLE_AI_EXECUTION",
+    });
     expect(released?.state).toBe("RELEASED");
 
     const retaken = await claims.claim(request({ leaseOwner: "process_B" }));
@@ -339,7 +359,10 @@ describe("Step 5A claim — an expired CLAIMED claim may be retaken", () => {
     const recovery = await claims.recoveryFor(retaken.claim.id, { requester: "process_Z" });
     expect(recovery?.kind).toBe("IN_PROGRESS");
 
-    // The detail on the release is cleared by the reclaim: the attempt is live again.
+    // The detail on the release is cleared by the reclaim, and the reclaim holds
+    // a LIVE lease — so nothing may take it again until that lease lapses.
+    clock.advance(DEFAULT_CLAIM_LEASE_TTL_MS + 1_000);
+
     const fresh = await claims.recoveryFor(retaken.claim.id, { requester: "process_B" });
     expect(fresh?.kind).toBe("RECLAIM");
     if (fresh?.kind !== "RECLAIM") throw new Error("expected RECLAIM");
@@ -357,7 +380,7 @@ describe("Step 5A claim — an expired DISPATCHING claim is UNVERIFIED and never
     const { claims, clock } = harness();
     const claimed = await claims.claim(request({ leaseOwner: "process_A" }));
     if (claimed.kind !== "CLAIMED") throw new Error("expected CLAIMED");
-    await claims.markDispatching(claimed.claim.id, { leaseOwner: "process_A" });
+    await claims.markDispatching(claimed.claim.id, { invocationToken: "process_A" });
 
     clock.advance(DEFAULT_CLAIM_LEASE_TTL_MS + 1_000);
 
@@ -392,23 +415,28 @@ describe("Step 5A claim — an expired DISPATCHING claim is UNVERIFIED and never
     const { claims, clock } = harness();
     const claimed = await claims.claim(request());
     if (claimed.kind !== "CLAIMED") throw new Error("expected CLAIMED");
-    await claims.markDispatching(claimed.claim.id, { leaseOwner: "process_A" });
+    await claims.markDispatching(claimed.claim.id, { invocationToken: "process_A" });
 
     clock.advance(DEFAULT_CLAIM_LEASE_TTL_MS + 1_000);
 
     // Releasing an ENTERED attempt would invite a later re-dispatch of a run that
     // may exist, so the port refuses it outright.
-    expect(await claims.release(claimed.claim.id, "trying to free an entered attempt")).toBeNull();
+    expect(
+      await claims.release(claimed.claim.id, {
+        invocationToken: "process_A",
+        detail: "trying to free an entered attempt",
+      }),
+    ).toBeNull();
 
     // ...and the CAS that would start a second run cannot land either.
-    expect(await claims.markDispatching(claimed.claim.id, { leaseOwner: "process_B" })).toBeNull();
+    expect(await claims.markDispatching(claimed.claim.id, { invocationToken: "process_B" })).toBeNull();
   });
 
   it("records doubt directly when the owner observes a dispatch failure", async () => {
     const { claims } = harness();
     const claimed = await claims.claim(request());
     if (claimed.kind !== "CLAIMED") throw new Error("expected CLAIMED");
-    await claims.markDispatching(claimed.claim.id, { leaseOwner: "process_A" });
+    await claims.markDispatching(claimed.claim.id, { invocationToken: "process_A" });
 
     const unverified = await claims.markUnverified(
       claimed.claim.id,
@@ -447,6 +475,124 @@ describe("Step 5A claim — an expired DISPATCHING claim is UNVERIFIED and never
 });
 
 /* ══════════════════════════════════════════════════════
+   5B. 5A-4 CORRECTNESS REGRESSIONS (the runtime-verified defects)
+   ══════════════════════════════════════════════════════ */
+
+describe("Step 5A-4 — the two verified claim defects cannot come back", () => {
+  it("gives exactly ONE dispatch-permitting outcome to same-owner concurrent callers", async () => {
+    // THE REPRODUCED DEFECT. Two callers that presented the SAME `leaseOwner`
+    // string — one logical worker, two concurrent invocations — both received a
+    // dispatch-permitting outcome: one `CLAIMED`, one `RECLAIMED`. Both then
+    // proceeded to mark dispatch, so one attempt could reach the provider twice.
+    //
+    // The fix is that a LIVE lease parks EVERY caller, matching owner or not. The
+    // in-memory reference performs the whole check-and-insert in one synchronous
+    // critical section, so this is a genuine concurrency statement, not a race
+    // that happens to be won by whoever ran first.
+    const { claims } = harness();
+    const sameWorker = request({ leaseOwner: "process_A" });
+
+    const outcomes = await Promise.all([
+      claims.claim(sameWorker),
+      claims.claim({ ...sameWorker }),
+      claims.claim({ ...sameWorker }),
+      claims.claim({ ...sameWorker }),
+    ]);
+
+    const dispatchable = outcomes.filter(permitsDispatch);
+    expect(dispatchable).toHaveLength(1);
+    expect(dispatchable[0]!.kind).toBe("CLAIMED");
+    for (const loser of outcomes.filter((outcome) => !permitsDispatch(outcome))) {
+      expect(loser.kind).toBe("IN_PROGRESS");
+    }
+    // One row, and ONE holder: the three losers were told a live lease exists.
+    expect(await claims.count()).toBe(1);
+  });
+
+  it("treats a LIVE CLAIMED lease as IN_PROGRESS even for its own token", async () => {
+    const { claims } = harness();
+    const first = await claims.claim(request({ leaseOwner: "process_A" }));
+    expect(first.kind).toBe("CLAIMED");
+
+    const again = await claims.claim(request({ leaseOwner: "process_A" }));
+    expect(again.kind).toBe("IN_PROGRESS");
+    expect(permitsDispatch(again)).toBe(false);
+    // ...and the recovery verdict agrees for the same token.
+    expect((await claims.recoveryFor(first.claim.id, { requester: "process_A" }))?.kind).toBe("IN_PROGRESS");
+  });
+
+  it("refuses markDispatching once the lease has lapsed, even for the owner token", async () => {
+    // Defect B, reproduced at runtime: `markDispatching` accepted an
+    // already-expired lease, so an invocation that stalled past its window could
+    // enter dispatch on an attempt another caller was entitled to reclaim —
+    // two dispatches authorised for ONE attempt.
+    const { claims, clock } = harness();
+    const claimed = await claims.claim(request({ leaseOwner: "process_A" }));
+    if (claimed.kind !== "CLAIMED") throw new Error("expected CLAIMED");
+
+    clock.advance(DEFAULT_CLAIM_LEASE_TTL_MS + 1_000);
+
+    expect(
+      await claims.markDispatching(claimed.claim.id, { invocationToken: "process_A" }),
+    ).toBeNull();
+    expect((await claims.get(claimed.claim.id))?.state).toBe("CLAIMED");
+  });
+
+  it("keeps a live DISPATCHING attempt IN PROGRESS for its own token", async () => {
+    // The owner's own re-read used to DEMOTE its healthy DISPATCHING row to
+    // UNVERIFIED, after which `markDispatched` could no longer record the handle
+    // the runtime was about to return — a real execution recorded as a doubt.
+    const { claims } = harness();
+    const claimed = await claims.claim(request({ leaseOwner: "process_A" }));
+    if (claimed.kind !== "CLAIMED") throw new Error("expected CLAIMED");
+    await claims.markDispatching(claimed.claim.id, { invocationToken: "process_A" });
+
+    const reread = await claims.claim(request({ leaseOwner: "process_A" }));
+    expect(reread.kind).toBe("IN_PROGRESS");
+    expect((await claims.get(claimed.claim.id))?.state).toBe("DISPATCHING");
+
+    // ...so the handle can still be recorded by the invocation that owns it.
+    const dispatched = await claims.markDispatched(claimed.claim.id, {
+      invocationToken: "process_A",
+      executionRecordId: "exec_live",
+      handleId: "run_live",
+    });
+    expect(dispatched?.state).toBe("DISPATCHED");
+  });
+
+  it("refuses markDispatched and release from a token that does not own the claim", async () => {
+    const { claims } = harness();
+    const claimed = await claims.claim(request({ leaseOwner: "process_A" }));
+    if (claimed.kind !== "CLAIMED") throw new Error("expected CLAIMED");
+
+    expect(
+      await claims.release(claimed.claim.id, { invocationToken: "process_B", detail: "not mine" }),
+    ).toBeNull();
+    await claims.markDispatching(claimed.claim.id, { invocationToken: "process_A" });
+    expect(
+      await claims.markDispatched(claimed.claim.id, {
+        invocationToken: "process_B",
+        executionRecordId: "exec_stolen",
+        handleId: "run_stolen",
+      }),
+    ).toBeNull();
+  });
+
+  it("sizes the default lease to cover a full submission PLUS a finalization margin", () => {
+    // The configured numbers this is checked against are the REAL ones: the
+    // claim TTL and the Hermes submission timeout are both 120s, which is ZERO
+    // margin — a submission running to its own timeout would leave the lease
+    // already expired, letting a concurrent caller reclaim an attempt that is
+    // still being submitted.
+    expect(DEFAULT_CLAIM_LEASE_TTL_MS).toBeGreaterThan(120_000);
+    expect(claimLeaseTtlForTimeout(120_000)).toBe(180_000);
+    expect(claimLeaseTtlForTimeout(120_000)).toBeGreaterThan(120_000 + CLAIM_FINALIZATION_MARGIN_MS - 1);
+    // An unknown timeout still gets a lease longer than the default timeout.
+    expect(claimLeaseTtlForTimeout(undefined)).toBeGreaterThan(120_000);
+  });
+});
+
+/* ══════════════════════════════════════════════════════
    6. CONCURRENT RACE → ONE WINNER
    ══════════════════════════════════════════════════════ */
 
@@ -480,8 +626,12 @@ describe("Step 5A claim — a concurrent claim race produces one execution autho
 
     const winner = await claims.claim(request({ leaseOwner: "process_0" }));
     if (winner.kind !== "CLAIMED") throw new Error("expected CLAIMED");
-    await claims.markDispatching(winner.claim.id, { leaseOwner: "process_0" });
-    await claims.markDispatched(winner.claim.id, { executionRecordId: "exec_1", handleId: "run_1" });
+    await claims.markDispatching(winner.claim.id, { invocationToken: "process_0" });
+    await claims.markDispatched(winner.claim.id, {
+      invocationToken: "process_0",
+      executionRecordId: "exec_1",
+      handleId: "run_1",
+    });
 
     const later = await Promise.all(
       Array.from({ length: 8 }, (_, index) => claims.claim(request({ leaseOwner: `late_${index}` }))),
@@ -676,6 +826,7 @@ describe("Step 5A — the authenticated authority contract", () => {
       "businessCount",
       "correlationId",
       "isSuperAdmin",
+      "origin",
       "userId",
     ]);
   });
@@ -713,19 +864,24 @@ describe("Step 5A-1 — batch invariants (nothing is wired, nothing provider-spe
     expect(EXECUTION_AUDIT_EVENT_TYPES).toContain("PREFLIGHT");
   });
 
-  it("did not wire the service into the mission path", () => {
-    // `F. DO NOT YET wire CapabilityExecutionService into MissionOrchestrator`.
-    // Read the orchestrator and assert it still dispatches through the dispatcher
-    // and knows nothing about the new service: a later batch must change this
-    // line of the test, which is exactly what makes the boundary deliberate.
+  it("IS wired into the mission path (5A-4 inverts the 5A-1 guard, deliberately)", () => {
+    // 5A-1 asserted the OPPOSITE of this — `F. DO NOT YET wire
+    // CapabilityExecutionService into MissionOrchestrator` — precisely so the
+    // cutover would have to be deliberate. Batch 5A-4 IS that cutover, so the
+    // assertion is INVERTED rather than deleted, and it is tightened: the
+    // orchestrator must now hold the execution service and must NOT be able to
+    // reach a runtime directly.
     const orchestrator = fs.readFileSync(
       path.join(REPO_ROOT, "src", "modules", "workforce", "orchestration", "mission-orchestrator.ts"),
       "utf8",
     );
-    expect(orchestrator).toContain("AgentRuntimeDispatcher");
-    expect(orchestrator).not.toContain("CapabilityExecutionService");
-    expect(orchestrator).not.toContain("ExecutionClaimRepository");
-    expect(orchestrator).not.toContain("BudgetGovernor");
+    const code = orchestrator.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/.*$/gm, " ");
+    expect(code).toContain("CapabilityExecutionService");
+    expect(code).toContain("execution.execute(");
+    // No direct external execution surface survives in the orchestrator.
+    expect(code).not.toMatch(/dispatcher\.startJob|dispatcher\.dispatch\(|dispatcher\.cancelJob|dispatcher\.waitForExecution/);
+    expect(code).not.toMatch(/startJob\(|cancelJob\(|waitForExecution\(/);
+    expect(code).not.toMatch(/from\s+["'][^"']*runtimes\/agent-runtime-dispatcher["']/);
   });
 
   it("keeps the claim out of the lifecycle: it moves no task and no mission", () => {

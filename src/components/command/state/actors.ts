@@ -123,14 +123,17 @@ export function actorsFrom(ids: readonly string[]): Actor[] {
   return ids.map((id) => ACTOR_BY_ID[id]).filter((actor): actor is Actor => Boolean(actor));
 }
 
-/** How many of a set of actors are AI — used for restrained language like "2 AI · 1 human". */
-export function describeActors(actors: readonly Actor[]): string {
+/**
+ * How many of a set of actors are AI, and how many are human.
+ *
+ * It returns COUNTS, not a sentence, and that is the point: "3 human · 4 AI" is
+ * copy, copy belongs to the dictionary, and this module has no locale in it. The
+ * sentence used to be built here, so an Arabic reader got the English word
+ * "human" sitting in the middle of an Arabic line.
+ */
+export function actorCounts(actors: readonly Actor[]): { ai: number; human: number } {
   const ai = actors.filter((actor) => actor.kind === "ai").length;
-  const human = actors.length - ai;
-  const parts: string[] = [];
-  if (human) parts.push(`${human} human`);
-  if (ai) parts.push(`${ai} AI`);
-  return parts.join(" · ");
+  return { ai, human: actors.length - ai };
 }
 
 /**

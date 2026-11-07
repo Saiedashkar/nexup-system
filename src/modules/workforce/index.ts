@@ -91,7 +91,10 @@ export function createWorkforceDomain(options: CreateWorkforceDomainOptions = {}
   const assignments = new ActorAssignmentService({ actors, capabilities, ids, now });
   const missions = new MissionService({ missions: missionRepository, ids, now });
   const tasks = options.tasks ?? new InMemoryTaskRepository();
-  const executionRecords = options.executionRecords ?? new InMemoryExecutionRecordRepository();
+  // The in-memory record ledger gets the same clock the rest of the domain uses, so
+  // the recovery ROTATION stamps (`markRecoverySwept`) are the test's own
+  // timestamps instead of wall-clock time.
+  const executionRecords = options.executionRecords ?? new InMemoryExecutionRecordRepository({ now });
   const executions = new ExecutionRecorder({ records: executionRecords, ids, now });
   const reviewRepository = options.reviews ?? new InMemoryReviewRepository();
   const reviews = new ReviewService({ ids, now, actors, reviews: reviewRepository });
@@ -183,7 +186,13 @@ export { InMemoryRuntimeRegistry } from "./runtimes/runtime-registry";
 export type { RuntimeRegistry } from "./runtimes/runtime-registry";
 export { DeterministicRuntimeAdapter, isTerminalExecutionStatus } from "./runtimes/deterministic-runtime-adapter";
 
-/* ── Phase 2B — agent-runtime dispatch seam + Hermes adapter ── */
+/* ── Phase 2B — agent-runtime dispatch seam + Hermes adapter ──
+   Step 5A-4 NOTE: these stay exported because the offline runtime suites and
+   the Hermes adapter tests legitimately construct them. What changed is that the
+   MISSION path no longer has access to them: `MissionOrchestrator` holds a
+   `CapabilityExecutionService` and nothing else, and
+   `tests/workforce-step5a4-execution-cutover.test.ts` asserts that on the source
+   text, so an accidental re-introduction fails a test rather than a review. */
 export * from "./runtimes/agent-runtime-dispatcher";
 export { toJobRunnerDispatcher } from "./runtimes/agent-job-dispatcher-binding";
 export * from "./runtimes/hermes";
@@ -224,6 +233,32 @@ export * from "./execution/authority-resolution";
 export * from "./execution/session-authority";
 export * from "./execution/capability-execution-contracts";
 export * from "./execution/execution-claim";
+export * from "./execution/execution-claim-receipt";
+
+/* ── Step 5A-4 — the SINGLE governed execution path ──
+   The service, the receipt codec, the governed deterministic invoker and the
+   claim-aware reconciler. The mission path reaches an execution ONLY through
+   these. */
+export {
+  DefaultCapabilityExecutionService,
+  createCapabilityExecutionService,
+  approvalBindingRef,
+  DEFAULT_APPROVAL_TTL_MS,
+  DEFAULT_SUBMISSION_TIMEOUT_MS,
+} from "./execution/capability-execution-service";
+export type {
+  ApprovalBinding,
+  CapabilityExecutionServiceDeps,
+  ExecutionApprovalSource,
+  ExecutionAttemptCommitterLike,
+} from "./execution/capability-execution-service";
+export {
+  createGovernedToolInvoker,
+} from "./execution/governed-deterministic-invoker";
+export type {
+  GovernedDeterministicInvoker,
+  GovernedDeterministicResult,
+} from "./execution/governed-deterministic-invoker";
 
 export {
   InMemoryReviewRepository,
@@ -251,6 +286,9 @@ export * from "./orchestration/strategy-analyst";
 
 /* ── Step 5 — the real mission lifecycle, in ONE orchestrator ── */
 export * from "./orchestration/mission-orchestrator";
+/* The WIRING seam, split out in Step 5A-4 so the authority class itself cannot
+   name a runtime or a dispatcher. */
+export * from "./orchestration/create-mission-orchestrator";
 
 /* ── Step 5/8 — READ-ONLY query surfaces for the Command Center (Step 6 draws
    them; nothing here replaces a UI mock) ── */

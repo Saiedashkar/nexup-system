@@ -92,6 +92,11 @@ export async function POST(request: NextRequest) {
       // and not a constant.
       decidedBy: authority.actorId,
       note,
+      // A NEEDS_REVISION decision re-opens the task, so the SAME authority
+      // travels with it: the advance that follows may start a new attempt, and
+      // the execution service requires an authenticated request authority to do
+      // that.
+      authority,
     });
 
     const snapshot = await application.commands.snapshot(result.mission.id);

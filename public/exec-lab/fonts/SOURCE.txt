@@ -1,0 +1,7 @@
+IBM Plex Sans Arabic — arabic subset, weights 400/500/600/700
+
+Source: Google Fonts (family "IBM Plex Sans Arabic", release v15).
+Downloaded once from fonts.gstatic.com and stored here so the surface makes no
+third-party font request at runtime. Only the ARABIC unicode ranges are
+included; Latin stays with the project's self-hosted Inter.
+License: SIL Open Font License 1.1 — see OFL.txt in this directory.

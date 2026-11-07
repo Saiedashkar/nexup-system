@@ -13,6 +13,8 @@ import type { ReviewDecision, TaskReview } from "../review/task-review";
 import type { MissionId, ReviewId, TaskId } from "../core/refs";
 
 import type { ExecutionReconciler, ExecutionReconciliation } from "../execution/execution-reconciler";
+import type { ExecutionClaim } from "../execution/execution-claim";
+import type { ExecutionAuthority } from "../execution/execution-authority";
 
 import {
   commandFingerprint,
@@ -28,7 +30,14 @@ import type { CommandIntent, CommandIntentRepository } from "./command-intent";
  *
  * This is what a running NEXUP calls. It is deliberately the ONLY place that
  * pairs "a request arrived" with "the lifecycle moved", so idempotency cannot be
- * forgotten by one caller and remembered by another:
+ * forgotten by one caller and remembered by another.
+ *
+ * AUTHORITY IS THREADED, NOT RE-DERIVED (Step 5A-4). Every operation that can
+ * start, advance, settle or cancel work accepts the SAME server-created
+ * `ExecutionAuthority` the API edge built, and forwards it to the orchestrator
+ * and on to the Capability Execution Service. Nothing here reconstructs an
+ * authority from a task, a mission owner, `actor_founder`, a payload id or a
+ * stored requester string — there is no code path that could.
  *
  *   Command (with an idempotency key)
  *     → claim the key in the durable ledger
@@ -101,13 +110,13 @@ export class WorkforceCommandService {
    *         never burns a key.
    * @throws COMMAND_KEY_REUSED when the key arrives with a different payload.
    */
-  async issueCommand(raw: unknown): Promise<CommandOutcome> {
+  async issueCommand(raw: unknown, options: { authority?: ExecutionAuthority } = {}): Promise<CommandOutcome> {
     const command = parseMissionCommand(raw);
-    return this.submit(command);
+    return this.submit(command, options);
   }
 
   /** The typed form, for callers that build a Command in code. */
-  async submit(command: MissionCommand): Promise<CommandOutcome> {
+  async submit(command: MissionCommand, options: { authority?: ExecutionAuthority } = {}): Promise<CommandOutcome> {
     const fingerprint = commandFingerprint(command);
     const claim = await this.deps.intents.claim({
       scope: command.scope,
@@ -169,6 +178,7 @@ export class WorkforceCommandService {
       const advanced = await this.deps.orchestrator.plan(
         mission.id,
         toMissionTaskInputs(command, this.deps.route),
+        { ...(options.authority ? { authority: options.authority } : {}) },
       );
 
       return {
@@ -188,7 +198,10 @@ export class WorkforceCommandService {
   }
 
   /** Reconciles a mission: promote what is dispatchable, start at most one task. */
-  async advance(missionId: MissionId, options: { startNext?: boolean } = {}): Promise<MissionAdvanceResult> {
+  async advance(
+    missionId: MissionId,
+    options: { startNext?: boolean; authority?: ExecutionAuthority } = {},
+  ): Promise<MissionAdvanceResult> {
     // Deliberately no reconciliation here: `advance` is the read-only reconciler
     // of MISSION STATE and must stay free of provider calls, so a caller can
     // look at a mission without touching a runtime. Recovery is `drain`/`reconcile`.
@@ -205,6 +218,11 @@ export class WorkforceCommandService {
    * to a human rather than guessed at.
    */
   async reconcile(missionId: MissionId): Promise<ExecutionReconciliation[]> {
+    // NO AUTHORITY IS ACCEPTED HERE, deliberately. Reconciliation observes and
+    // adopts attempts that were ALREADY authorised and cannot start work at all,
+    // so there is nothing a caller's authority could authorise on this path.
+    // Taking one and ignoring it would imply the opposite — that this is a
+    // second way in — which is exactly the ambiguity the cutover removes.
     return this.deps.reconciler.reconcileMission(missionId);
   }
 
@@ -214,12 +232,28 @@ export class WorkforceCommandService {
   }
 
   /**
+   * The mission's still-OPEN claim incidents — a READ, from the durable ledger.
+   *
+   * `reconcile` reports what a sweep FOUND; this answers what is still unresolved
+   * right now, so an operator surface can show a crash claim (a `READY` task whose
+   * dispatch was entered and never identified, say) without having to run a sweep
+   * to find out. It observes only: it can never dispatch, release or resolve.
+   */
+  async claimIncidents(missionId: MissionId): Promise<ExecutionClaim[]> {
+    return this.deps.reconciler.openClaimIncidents(missionId);
+  }
+
+  /**
    * Waits for ONE running task through the runtime port and records what the
    * runtime reported. This is the operation a worker (or a restarted process)
    * uses to bring in-flight work to a decided state; without it the application
    * boundary could start a mission but never finish one.
    */
-  async settle(missionId: MissionId, taskId: TaskId, options: { waitTimeoutMs?: number } = {}): Promise<TaskAdvanceOutcome> {
+  async settle(
+    missionId: MissionId,
+    taskId: TaskId,
+    options: { waitTimeoutMs?: number; authority?: ExecutionAuthority } = {},
+  ): Promise<TaskAdvanceOutcome> {
     return this.deps.orchestrator.settleTask(missionId, taskId, options);
   }
 
@@ -230,7 +264,10 @@ export class WorkforceCommandService {
    * after a failed attempt, and for work another process started. It never
    * starts more than one task, so a retry cannot stampede the provider.
    */
-  async drain(missionId: MissionId, options: { waitTimeoutMs?: number } = {}): Promise<MissionAdvanceResult> {
+  async drain(
+    missionId: MissionId,
+    options: { waitTimeoutMs?: number; authority?: ExecutionAuthority } = {},
+  ): Promise<MissionAdvanceResult> {
     // 1. ADOPT FIRST. A task left RUNNING by a previous process has a handle
     //    this process never minted, so settling it directly would fail with
     //    RUNTIME_NOT_FOUND. Re-adoption puts the handle back under our watch
@@ -242,18 +279,19 @@ export class WorkforceCommandService {
     const snapshot = await this.snapshot(missionId);
     for (const task of snapshot.tasks) {
       if (task.state === "RUNNING") {
-        await this.deps.orchestrator.settleTask(
-          missionId,
-          task.id,
-          options.waitTimeoutMs ? { waitTimeoutMs: options.waitTimeoutMs } : {},
-        );
+        await this.deps.orchestrator.settleTask(missionId, task.id, {
+          ...(options.waitTimeoutMs ? { waitTimeoutMs: options.waitTimeoutMs } : {}),
+          ...(options.authority ? { authority: options.authority } : {}),
+        });
       }
     }
 
     // 3. Then let the mission follow its tasks and promote the next dispatchable
     //    one. A replayed Command never gets here, which is why a retry cannot
     //    cause a second execution.
-    const advanced = await this.deps.orchestrator.advance(missionId);
+    const advanced = await this.deps.orchestrator.advance(missionId, {
+      ...(options.authority ? { authority: options.authority } : {}),
+    });
     const notes = reconciliations.map(
       (row) => `execution:${row.executionRecordId}:${row.kind} (${row.status})`,
     );
@@ -261,12 +299,19 @@ export class WorkforceCommandService {
   }
 
   /** The human authority path: an approve/reject/needs-revision decision. */
-  async decide(reviewId: ReviewId, input: { decision: ReviewDecision; decidedBy: string; note?: string }): Promise<MissionAdvanceResult> {
+  async decide(
+    reviewId: ReviewId,
+    input: { decision: ReviewDecision; decidedBy: string; note?: string; authority?: ExecutionAuthority },
+  ): Promise<MissionAdvanceResult> {
     return this.deps.orchestrator.decide(reviewId, input);
   }
 
-  async cancel(missionId: MissionId, reason = "cancelled by request"): Promise<MissionAdvanceResult> {
-    return this.deps.orchestrator.cancelMission(missionId, reason);
+  async cancel(
+    missionId: MissionId,
+    reason = "cancelled by request",
+    options: { authority?: ExecutionAuthority } = {},
+  ): Promise<MissionAdvanceResult> {
+    return this.deps.orchestrator.cancelMission(missionId, reason, options);
   }
 
   /** Everything about one mission, in one read. Never advances anything. */

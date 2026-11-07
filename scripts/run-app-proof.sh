@@ -25,6 +25,19 @@
 # anywhere but 127.0.0.1, and it never reads DATABASE_URL.
 #
 # Usage:  bash scripts/run-app-proof.sh
+# Env:    APP_PROOF_DATA (default: %LOCALAPPDATA% — the BASE directory a
+#                        per-run scratch directory is created UNDER; the base
+#                        itself is never emptied or deleted)
+#
+# RESOURCE OWNERSHIP. This run does not own the development cluster (it reuses
+# whatever is already running), so ownership here covers its SCRATCH FILES only:
+# the vitest JSON report and the log live in a run directory THIS process creates
+# under the base and MARKS as its own, never in the repository root and never in
+# a shared fixed name, so two concurrent runs cannot overwrite each other. Cleanup
+# proves the ownership before it removes anything, so a caller-supplied base is
+# only ever a parent and a directory this run did not create is left untouched.
+# The PUBLISHED evidence under `docs/evidence/` is deliberately outside the run
+# directory and survives the run.
 
 set -euo pipefail
 
@@ -37,8 +50,40 @@ export PSQL_BIN="${PSQL_BIN:-C:/Program Files/PostgreSQL/18/bin/psql.exe}"
 export MSYS_NO_PATHCONV=1
 export MSYS2_ARG_CONV_EXCL='*'
 
-RESULTS_FILE=".tmp-app-proof-results.json"
-PROOF_LOG=".tmp-app-proof.log"
+# Per-run scratch: a fresh child of the base, marked as this run's before anything
+# is written, so the JSON report and log can never collide with another run's and
+# the repository root stays clean.
+BASE_DIR="${APP_PROOF_DATA:-${LOCALAPPDATA:-/tmp}}"
+RUN_TOKEN="$$-$(date +%s)-$RANDOM"
+RUN_DIR="$BASE_DIR/nexup-app-proof-$RUN_TOKEN"
+RESULTS_FILE="$RUN_DIR/vitest-results.json"
+PROOF_LOG="$RUN_DIR/proof.log"
+OWNERSHIP_MARKER="$RUN_DIR/.proof-runner-owned"
+
+# Ownership is PROVEN before anything is removed: the marker must exist AND carry
+# the token this run wrote. A caller's base, a leftover directory, or a path that
+# merely looks like ours is left untouched.
+owned_run_dir() {
+  [ -d "$RUN_DIR" ] && [ -f "$OWNERSHIP_MARKER" ] && [ "$(cat "$OWNERSHIP_MARKER" 2>/dev/null)" = "$RUN_TOKEN" ]
+}
+
+cleanup() {
+  local status=$?
+  if owned_run_dir; then
+    # Removes ONLY the scratch directory this process created and marked. The base
+    # is its parent and is left exactly as it was; the published evidence lives
+    # outside it and is never a candidate.
+    rm -rf "$RUN_DIR"
+  else
+    echo "not removing $RUN_DIR: this run did not create it" >&2
+  fi
+  exit "$status"
+}
+trap cleanup EXIT INT TERM
+
+# Create and CLAIM the scratch directory before a single file is written into it.
+mkdir -p "$RUN_DIR"
+printf '%s\n' "$RUN_TOKEN" > "$OWNERSHIP_MARKER"
 
 if ! node scripts/dev-db.mjs status 2>/dev/null | grep -q '"running": true'; then
   echo "── starting the isolated development cluster ────────────────────"

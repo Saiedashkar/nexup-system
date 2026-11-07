@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useCommand } from "./state/command-store";
+import { useLocale, type LocaleValue } from "./i18n/command-locale";
 import { FOUNDER } from "./state/organization-model";
 import { EXEC_INTENTS, executiveGreeting, executiveReply } from "./state/mock-intent";
+import type { CommandVisualSnapshot } from "./state/demo-scenarios";
 import { IconChevronDown, IconSpark } from "./ui/icons";
 
 /**
@@ -20,6 +22,7 @@ import { IconChevronDown, IconSpark } from "./ui/icons";
  */
 export function ExecutiveDockOrb() {
   const { execOpen, setExecOpen } = useCommand();
+  const { t } = useLocale();
 
   return (
     <div className="nc-exec-lead">
@@ -29,7 +32,7 @@ export function ExecutiveDockOrb() {
         data-open={execOpen}
         onClick={() => setExecOpen(!execOpen)}
         aria-expanded={execOpen}
-        aria-label="Talk to Executive"
+        aria-label={t("execDock.openAria")}
       >
         <span className="nc-exec-lead__wave" aria-hidden="true">
           <i />
@@ -40,14 +43,32 @@ export function ExecutiveDockOrb() {
         </span>
       </button>
       <span className="nc-exec-lead__text">
-        <span className="nc-exec-lead__title">Talk to Executive</span>
-        <span className="nc-exec-lead__hint">{execOpen ? "⌘K to close" : "⌘K · nothing runs without you"}</span>
+        <span className="nc-exec-lead__title">{t("execDock.talk")}</span>
+        <span className="nc-exec-lead__hint">
+          {execOpen ? t("execDock.hintClose") : t("execDock.hintOpen")}
+        </span>
       </span>
     </div>
   );
 }
 
-type Message = { id: number; role: "human" | "executive"; text: string };
+/* A message stores WHAT was said, never the rendered sentence: an Executive line
+   is recomposed from the dictionary on every render, so a language switch
+   rewrites the conversation instead of leaving earlier bubbles in the old
+   language. Human input is the one thing that is never translated. */
+type Message =
+  | { id: number; role: "human"; text: string }
+  | { id: number; role: "executive"; greeting: true }
+  | { id: number; role: "executive"; replyTo: string };
+
+function messageText(
+  message: Message,
+  snapshot: CommandVisualSnapshot,
+  t: LocaleValue["t"],
+): string {
+  if (message.role === "human") return message.text;
+  return "greeting" in message ? executiveGreeting(snapshot, t) : executiveReply(message.replyTo, snapshot, t);
+}
 
 /**
  * The raised console.
@@ -58,9 +79,10 @@ type Message = { id: number; role: "human" | "executive"; text: string };
  */
 export function ExecutiveSurface() {
   const { setExecOpen, snapshot, notify } = useCommand();
+  const { t } = useLocale();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>(() => [
-    { id: 0, role: "executive", text: executiveGreeting(snapshot) },
+    { id: 0, role: "executive", greeting: true },
   ]);
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextId = useRef(1);
@@ -80,7 +102,7 @@ export function ExecutiveSurface() {
     pending.current = setTimeout(() => {
       setMessages((current) => [
         ...current,
-        { id: nextId.current++, role: "executive", text: executiveReply(trimmed, snapshot) },
+        { id: nextId.current++, role: "executive", replyTo: trimmed },
       ]);
     }, 520);
   };
@@ -89,32 +111,32 @@ export function ExecutiveSurface() {
     <>
       <div className="nc-exec-surface__scrim" onClick={() => setExecOpen(false)} aria-hidden="true" />
 
-      <section className="nc-exec-surface" aria-label="Executive command surface">
+      <section className="nc-exec-surface" aria-label={t("execDock.surfaceAria")}>
         <header className="nc-exec-surface__head">
           <span className="nc-avatar" style={{ width: 24, height: 24, fontSize: 10 }} aria-hidden="true">
             {FOUNDER.initials}
           </span>
           <span>
             <span className="nc-exec-surface__title" style={{ display: "block" }}>
-              Executive
+              {t("execDock.title")}
             </span>
-            <span className="nc-exec-surface__kicker">{snapshot.scenario.replace(/-/g, " ")}</span>
+            <span className="nc-exec-surface__kicker">{t(`scenario.${snapshot.scenario}`)}</span>
           </span>
           <span style={{ flex: 1 }} />
           {/* EXEC is a first-class entity: the console can hand off to its page. */}
           <Link className="nc-btn nc-btn--sm" href="/command/exec" onClick={() => setExecOpen(false)}>
             <IconSpark size={13} />
-            Open EXEC
+            {t("execDock.openPage")}
           </Link>
-          <span className="nc-badge-mock">no AI provider</span>
+          <span className="nc-badge-mock">{t("execDock.noProvider")}</span>
           <button
             type="button"
             className="nc-context__collapse"
             onClick={() => {
               setExecOpen(false);
-              notify("Executive console closed — it is a mocked console in UI-01.");
+              notify(t("execDock.closeToast"));
             }}
-            aria-label="Close Executive surface"
+            aria-label={t("execDock.closeAria")}
           >
             <IconChevronDown size={14} />
           </button>
@@ -124,17 +146,22 @@ export function ExecutiveSurface() {
           {messages.map((message) => (
             <div key={message.id} className="nc-exec-surface__msg" data-role={message.role}>
               <div className="nc-exec-surface__who">
-                {message.role === "executive" ? "Executive" : "Founder · Human authority"}
+                {message.role === "executive" ? t("execDock.whoExec") : t("execDock.whoFounder")}
               </div>
-              <div className="nc-exec-surface__bubble">{message.text}</div>
+              <div className="nc-exec-surface__bubble">{messageText(message, snapshot, t)}</div>
             </div>
           ))}
         </div>
 
-        <div className="nc-exec-surface__intents">
+        <div className="nc-exec-surface__intents" aria-label={t("execDock.intentsAria")}>
           {EXEC_INTENTS.map((intent) => (
-            <button key={intent} type="button" className="nc-exec-surface__intent" onClick={() => send(intent)}>
-              {intent}
+            <button
+              key={intent}
+              type="button"
+              className="nc-exec-surface__intent"
+              onClick={() => send(t(intent))}
+            >
+              {t(intent)}
             </button>
           ))}
         </div>
@@ -153,12 +180,12 @@ export function ExecutiveSurface() {
             className="nc-exec-surface__input"
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder="Direct the Executive..."
-            aria-label="Direct the Executive"
+            placeholder={t("execDock.placeholder")}
+            aria-label={t("execDock.inputAria")}
             autoComplete="off"
           />
           <button type="submit" className="nc-btn nc-btn--sm nc-btn--lime" disabled={!input.trim()}>
-            Send
+            {t("execDock.send")}
           </button>
         </form>
       </section>

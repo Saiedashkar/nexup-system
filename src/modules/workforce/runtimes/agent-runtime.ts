@@ -251,9 +251,19 @@ export type AgentExecutionWaitOptions = {
 
 export const DEFAULT_EXECUTION_WAIT_TIMEOUT_MS = 120_000;
 
-/** Terminal = finished, one way or another. `UNKNOWN` is NOT terminal. */
+/**
+ * Terminal = finished, one way or another. `UNKNOWN` is NOT terminal.
+ *
+ * The LIST is exported as well as the predicate because the durable adapters need
+ * it as a QUERY PREDICATE (`status NOT IN (...)`), not as a JavaScript filter: the
+ * recovery page must exclude finished attempts inside the SQL, before `LIMIT`, or a
+ * pile of freshly finished attempts can consume the whole page. Exporting the list
+ * keeps that SQL and this predicate from drifting apart.
+ */
+export const TERMINAL_EXECUTION_STATUSES = ["SUCCEEDED", "FAILED", "CANCELLED"] as const satisfies readonly AgentExecutionStatus[];
+
 export function isTerminalExecutionStatus(status: AgentExecutionStatus): boolean {
-  return status === "SUCCEEDED" || status === "FAILED" || status === "CANCELLED";
+  return (TERMINAL_EXECUTION_STATUSES as readonly string[]).includes(status);
 }
 
 /** The asynchronous half of the port. */

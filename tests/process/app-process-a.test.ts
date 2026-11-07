@@ -24,12 +24,12 @@ it("issues a Command and exits", async () => {
 
   // A non-zero hold keeps the provider run alive, so the unsettled case really
   // hands over WORK IN FLIGHT rather than work that already finished.
-  const { application, disconnect } = await bootProcess("procA", { holdCompletionMs });
+  const { application, authority, disconnect } = await bootProcess("procA", { holdCompletionMs });
 
-  const outcome = await application.commands.issueCommand(restartCommand(key));
+  const outcome = await application.commands.issueCommand(restartCommand(key), { authority });
   if (outcome.kind !== "issued") throw new Error(`expected an issued command, got ${outcome.kind}`);
 
-  if (settle) await application.commands.drain(outcome.mission.id);
+  if (settle) await application.commands.drain(outcome.mission.id, { authority });
 
   const snapshot = await application.commands.snapshot(outcome.mission.id);
   const task = snapshot.tasks[0]!;

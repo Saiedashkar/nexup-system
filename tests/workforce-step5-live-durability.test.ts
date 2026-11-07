@@ -59,6 +59,9 @@ const MIGRATIONS = [
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_1A/migration.sql",
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_1B/migration.sql",
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_2/migration.sql",
+  // Fifth review: the durable record repository selects `recoverySweptAt`, which
+  // PHASE_5 adds to `ai_execution_records` (created by PHASE_2 above).
+  "prisma/proposed-migrations/AI_WORKFORCE_PHASE_5/migration.sql",
 ];
 
 const FOUNDER = "actor_founder";

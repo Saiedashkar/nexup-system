@@ -7,8 +7,9 @@
  * operating content of each department.
  *
  * Design rules, consistent with `organization-model.ts`:
- *   · Adding a sixth department stays a data change — nothing renders lazily
- *     from names like "Growth".
+ *   · Adding a department stays a data change — nothing renders lazily from
+ *     names like "Growth", and a SHARED SERVICE (`knowledge`) uses this same
+ *     configuration without claiming a department slot.
  *   · Nothing here touches a database, an AI provider or a real integration.
  *     Every value is illustrative and the UI says so out loud.
  *   · Team identities are ROLE-based, never a real person's name, so the same
@@ -65,12 +66,29 @@ export const DEPARTMENT_SLUGS: Record<DepartmentId, string> = {
   growth: "growth-revenue",
   client: "client-delivery",
   operations: "business-operations",
+  /* Pass 4 — the studio. The slug is new, so every pre-existing department URL
+     is untouched and remains the only way those five resolve. */
+  creative: "creative-production",
   product: "product-technology",
   finance: "finance-control",
+  /* Kept, not renamed: this is the shared-service route that already exists, and
+     a shared service that moved URL would break every link to it. */
+  knowledge: "knowledge-intelligence",
 };
 
-/** Where this department's workspace lives. */
+/**
+ * Where this department's workspace lives.
+ *
+ * MARKETING & SALES IS THE ONE EXCEPTION, and it is a route decision, not a
+ * visual one: the space owns TWO rooms (marketing and sales), so its plate opens
+ * the GATEWAY (`/command/sales`) instead of dropping the reader into a generic
+ * workspace. The gateway links on to the full workspace
+ * (`/command/departments/growth-revenue`), which is unchanged and still reachable,
+ * so nothing is lost and no link points at a page that does not exist. Every other
+ * id — including the shared service — resolves exactly as before.
+ */
 export function workspaceHref(id: DepartmentId): string {
+  if (id === "growth") return "/command/sales";
   return `/command/departments/${DEPARTMENT_SLUGS[id]}`;
 }
 
@@ -312,6 +330,59 @@ const CLIENT: DepartmentWorkspaceConfig = {
   systems: systemsFor("client"),
 };
 
+/* ── Department: Creative & Production (Pass 4) ─────────────────────────
+   THE OTHER HALF OF DEMAND. `growth` wins work for our OWN companies; this
+   space produces the work clients commissioned. Keeping them apart is the
+   whole point of the split: a client campaign is briefed, concepted, produced
+   and released under someone else's brand, so it has an owner, an approval
+   gate and an output to review that our own marketing does not.              */
+
+const CREATIVE: DepartmentWorkspaceConfig = {
+  departmentId: "creative",
+  purpose: "Brief → Concept → Produce → Publish",
+  ownership: "Creative Director + AI Builder",
+  state: "Working",
+  objective:
+    "Produce the campaigns and content clients have commissioned — on brief, on brand and on the date it was promised.",
+  focus: "Two client campaigns in production; concept sign-off is the drag.",
+  attention: ["Two concepts waiting on client sign-off"],
+  bottleneck: "Concept review rounds",
+  missions: [
+    { id: "cr-m1", title: "Spring campaign for Kensington", owner: "Concept & Art Direction", status: "Active", progress: 48, kind: "mission" },
+    { id: "cr-m2", title: "Nova launch film", owner: "Content Production", status: "Review", progress: 72, kind: "mission" },
+    { id: "cr-j1", title: "Retouch 40 campaign stills", owner: "Content Production", status: "Running", progress: 61, kind: "job" },
+    { id: "cr-t1", title: "Sign off the spring concept", owner: "Creative Director", status: "Needs you", progress: 0, kind: "task" },
+  ],
+  kpis: [
+    { id: "cr-k1", label: "Campaigns in production", value: "3", trend: "steady" },
+    { id: "cr-k2", label: "Concept approval rounds", value: "2.4", trend: "up 0.6 — the drag" },
+    { id: "cr-k3", label: "Released on date", value: "91%", trend: "up 3 points" },
+  ],
+  team: [
+    { id: "creative.director", name: "Creative Director", role: "Human lead", kind: "human", initials: "CD", status: "Active", mission: "Spring campaign for Kensington", capability: "Owns the brief and the final cut." },
+    { id: "creative.ai-director", name: "AI Studio Director", role: "AI director", kind: "ai", initials: "SD", status: "Thinking", mission: "Studio scheduling", capability: "Sequences production and flags slippage." },
+    { id: "creative.concept", name: "Concept & Art Direction", role: "AI specialist", kind: "ai", initials: "CA", status: "Active", mission: "Spring campaign for Kensington", capability: "Turns a brief into a treatment." },
+    { id: "creative.production", name: "Content Production", role: "AI specialist", kind: "ai", initials: "CP", status: "Active", mission: "Retouch 40 campaign stills", capability: "Copy, stills and edit to spec." },
+    { id: "creative.publish", name: "Media & Scheduling", role: "AI specialist", kind: "ai", initials: "MS", status: "Waiting", mission: "Release calendar", capability: "Places approved work and paces it." },
+  ],
+  flow: [
+    { id: "cr-f1", label: "Brief", state: "done", note: "The client's ask is written down." },
+    { id: "cr-f2", label: "Concept", state: "active", note: "A treatment the client can see." },
+    { id: "cr-f3", label: "Produce", state: "active", note: "Copy, design, stills and edit." },
+    { id: "cr-f4", label: "Review", state: "next", note: "Internal check, then the client's." },
+    { id: "cr-f5", label: "Publish", state: "next", note: "Released on the agreed date." },
+    { id: "cr-f6", label: "Report", state: "next", note: "What it did, measured." },
+  ],
+  capabilities: [
+    { id: "cr-c1", name: "Brief template", kind: "Template", usedBy: "Creative Director", note: "The shape every client ask takes." },
+    { id: "cr-c2", name: "Brand kit", kind: "Template", usedBy: "Concept & Art Direction", note: "Per-client voice, palette and type." },
+    { id: "cr-c3", name: "Production pipeline", kind: "Workflow", usedBy: "Content Production", note: "Draft, review, master, deliver." },
+    { id: "cr-c4", name: "Release scheduler", kind: "Automation", usedBy: "Media & Scheduling", note: "Times the release across channels." },
+  ],
+  memory: memoryLayers({ decisions: 6, lessons: 16, context: 71, projects: 8 }),
+  systems: systemsFor("creative"),
+};
+
 /* ── Department: Business Operations ───────────────────────────────────── */
 
 const OPERATIONS: DepartmentWorkspaceConfig = {
@@ -447,14 +518,67 @@ const FINANCE: DepartmentWorkspaceConfig = {
   systems: systemsFor("finance"),
 };
 
+/* ── Shared service: Knowledge & Models (Pass 2, relabelled in Pass 4) ──── │
+   This surface OWNS NO MISSIONS, and that is a decision rather than an
+   omission. It is the organization's memory and capability layer: it holds
+   skills, memory references and model information that the six departments read
+   from. It introduces no second executive and no runtime. Its `missions` array
+   is empty on purpose, so `departmentMissions("knowledge")` is `[]` and the work
+   totals on the Command Center count only commissioned work.                   */
+
+const KNOWLEDGE: DepartmentWorkspaceConfig = {
+  departmentId: "knowledge",
+  purpose: "Know → Remember → Reuse",
+  /* A shared service, owned by no single department: it is a steward role, not a
+     management line. */
+  ownership: "Shared service · Knowledge steward + AI analyst",
+  state: "Reading",
+  objective:
+    "Hold what the organization knows — skills, decisions, memory and model information — as a shared service every department reads from, so none of them has to rediscover it.",
+  focus: "Mapping the skills and memory references the six departments already hold.",
+  attention: [],
+  bottleneck: "Memory references not populated",
+  /* Deliberately empty: see the note above. */
+  missions: [],
+  kpis: [
+    { id: "k-k1", label: "Skills registered", value: "—", trend: "not read yet" },
+    { id: "k-k2", label: "Memory references", value: "—", trend: "sample structure only" },
+    { id: "k-k3", label: "Runtimes registered", value: "—", trend: "see Model Control" },
+    { id: "k-k4", label: "Reuse rate", value: "—", trend: "not measured" },
+  ],
+  team: [
+    { id: "knowledge.steward", name: "Knowledge Steward", role: "Human steward", kind: "human", initials: "KS", status: "Active", mission: "Reference mapping", capability: "Decides what the organization is allowed to remember." },
+    { id: "knowledge.analyst", name: "AI Analyst", role: "AI specialist", kind: "ai", initials: "KA", status: "Thinking", mission: "Skill inventory", capability: "Reads and organises what is already known." },
+    { id: "knowledge.curator", name: "Memory Curation", role: "AI specialist", kind: "ai", initials: "MC", status: "Waiting", mission: "Context layering", capability: "Keeps context and decisions legible and current." },
+  ],
+  flow: [
+    { id: "k-f1", label: "Capture", note: "Something worth keeping is noticed.", state: "active" },
+    { id: "k-f2", label: "Structure", note: "It is shaped into a reference.", state: "next" },
+    { id: "k-f3", label: "Verify", note: "A human confirms it is true.", state: "next" },
+    { id: "k-f4", label: "Publish", note: "It becomes readable by every space.", state: "next" },
+    { id: "k-f5", label: "Reuse", note: "Another space reads it instead of rediscovering it.", state: "next" },
+  ],
+  capabilities: [
+    { id: "k-c1", name: "Skill inventory", kind: "Skill", usedBy: "AI Analyst", note: "What the workforce and the systems can actually do." },
+    { id: "k-c2", name: "Reference registry", kind: "Template", usedBy: "Knowledge Steward", note: "The shape a new reference must take." },
+    { id: "k-c3", name: "Model register", kind: "Tool", usedBy: "Model Registry", note: "Reads the registry Model Control owns." },
+    { id: "k-c4", name: "Context layering", kind: "Automation", usedBy: "Memory Curation", note: "Keeps the layers separable and current." },
+  ],
+  memory: memoryLayers({ decisions: 0, lessons: 0, context: 0, projects: 0 }),
+  systems: systemsFor("knowledge"),
+};
+
 /* ── The lookup the route resolves against ─────────────────────────────── */
 
 export const WORKSPACES: Record<DepartmentId, DepartmentWorkspaceConfig> = {
   growth: GROWTH,
   client: CLIENT,
   operations: OPERATIONS,
+  creative: CREATIVE,
   product: PRODUCT,
   finance: FINANCE,
+  /* The shared service: same route, same modes, not a department slot. */
+  knowledge: KNOWLEDGE,
 };
 
 export function workspaceFor(id: DepartmentId): DepartmentWorkspaceConfig {

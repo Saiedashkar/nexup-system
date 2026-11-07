@@ -127,6 +127,16 @@ const SKILL_CATALOG: Record<string, SkillDef> = {
   "collections": { id: "collections", name: "Collections", source: "pack:finance.collections@v2" },
   "financial-controls": { id: "financial-controls", name: "Financial controls", source: "pack:finance.controls@v3" },
   "budget-ownership": { id: "budget-ownership", name: "Budget ownership", source: "pack:finance.budget@v1" },
+  /* ── Creative & Production (Pass 4) ──────────────────────────────────────
+     The studio's skills are the ones a client campaign needs and nothing else:
+     a brief read well, a concept defended, a production finished to spec and a
+     release paced. They are separate from `growth`'s demand skills on purpose —
+     that separation is the taxonomy, expressed where it is actually used. */
+  "art-direction": { id: "art-direction", name: "Art direction", source: "pack:studio.art@v2" },
+  "copywriting": { id: "copywriting", name: "Copywriting", source: "pack:studio.copy@v3" },
+  "content-production": { id: "content-production", name: "Content production", source: "pack:studio.production@v2" },
+  "brand-systems": { id: "brand-systems", name: "Brand systems", source: "pack:studio.brand@v2" },
+  "media-planning": { id: "media-planning", name: "Media planning", source: "pack:studio.media@v2" },
 };
 
 const TOOL_CATALOG: Record<string, ToolDef> = {
@@ -152,6 +162,8 @@ const TOOL_CATALOG: Record<string, ToolDef> = {
   "repo.review": { id: "repo.review", name: "repo.review", category: "Engineering" },
   "deploy.preview": { id: "deploy.preview", name: "deploy.preview", category: "Engineering" },
   "listing.publish": { id: "listing.publish", name: "listing.publish", category: "Portfolio" },
+  "asset.render": { id: "asset.render", name: "asset.render", category: "Production" },
+  "asset.deliver": { id: "asset.deliver", name: "asset.deliver", category: "Delivery" },
 };
 
 const WORKFLOW_CATALOG: Record<string, WorkflowDef> = {
@@ -229,6 +241,18 @@ const WORKFLOW_CATALOG: Record<string, WorkflowDef> = {
     id: "spend-approval",
     name: "Spend approval",
     steps: ["Capture request", "Check limit", "Route for approval", "Release"],
+  },
+  /* The studio's two sequences: one turns a brief into something a client can
+     see, the other turns an approved concept into a released campaign. */
+  "brief-to-concept": {
+    id: "brief-to-concept",
+    name: "Brief to concept",
+    steps: ["Read the brief", "Explore directions", "Write the treatment", "Client sign-off"],
+  },
+  "production-release": {
+    id: "production-release",
+    name: "Production release",
+    steps: ["Assemble", "Internal review", "Client review", "Master", "Release"],
   },
 };
 
@@ -539,8 +563,9 @@ function defineActor(spec: ActorSpec): ActorConfig {
 }
 
 /* ── The actors ────────────────────────────────────────────────────────────
-   Every Team item in every department resolves here. Five departments,
-   humans and AI agents, all through one structure.                        */
+   Every Team item in every department resolves here. Six departments, humans
+   and AI agents, all through one structure — and NO shared-service actor:
+   the knowledge steward belongs to the service, not to a department.      */
 
 const ACTOR_SPECS: ActorSpec[] = [
   /* ── Growth & Revenue ─────────────────────────────────────────────────── */
@@ -1342,6 +1367,174 @@ const ACTOR_SPECS: ActorSpec[] = [
     workflows: [["month-end-close", "Draft"]],
     memorySeeds: [["actor", "Margin baseline", "The reference the decline is measured against."]],
     work: [{ id: "ma-w1", title: "Margin review", kind: "mission", state: "Active", note: "Down 2 points." }],
+  },
+
+  /* ── Creative & Production ────────────────────────────────────────────
+     The team that produces client work. It reports into the studio's own
+     director and NOT into growth: producing a campaign for a client has a
+     brief, a sign-off and a release date, none of which belong to the demand
+     team that won our own companies' marketing.                                */
+  {
+    id: "creative-director",
+    name: "Creative Director",
+    type: "human",
+    departmentId: "creative",
+    role: "Human lead",
+    initials: "CD",
+    status: "Active",
+    mission: "Spring campaign for Kensington",
+    responsibility: "Own the brief and the final cut on every client campaign.",
+    purpose: "Keep the work on brand, on brief and on the promised date.",
+    reportsTo: "Founder",
+    collaborates: ["AI Studio Director", "Content Production"],
+    priority: "Sign off the spring concept",
+    attention: ["Two concepts waiting on client sign-off"],
+    capability: "Creative ownership and client sign-off.",
+    workspaceActorId: "creative.director",
+    skills: [
+      ["art-direction", "Mastered", "Today"],
+      ["brand-systems", "Proficient", "Yesterday"],
+      ["team-leadership", "Proficient", "Today"],
+    ],
+    tools: [
+      ["docs.create", "Allowed", "Today"],
+      ["calendar.schedule", "Allowed", "1h ago"],
+      ["asset.deliver", "Approval", "Yesterday"],
+    ],
+    workflows: [["brief-to-concept", "Ready"], ["production-release", "Ready"]],
+    autonomy: "Bounded autonomy",
+    contact: [
+      { id: "c1", label: "Channel", value: "Direct · studio desk" },
+      { id: "c2", label: "Decision window", value: "09:00 – 18:00" },
+    ],
+    memorySeeds: [["decisions", "Concepts go to the client twice, never three times", "After a campaign slipped two weeks in review."]],
+    work: [
+      { id: "cd-w1", title: "Spring campaign for Kensington", kind: "mission", state: "Active", note: "Concept in production." },
+      { id: "cd-w2", title: "Sign off the spring concept", kind: "approval", state: "Needs you", note: "Blocks the production run." },
+    ],
+  },
+  {
+    id: "ai-studio-director",
+    name: "AI Studio Director",
+    type: "ai-agent",
+    departmentId: "creative",
+    role: "AI director",
+    initials: "SD",
+    status: "Thinking",
+    mission: "Studio scheduling",
+    responsibility: "Sequence production and flag a campaign that will miss its date.",
+    purpose: "Keep every client campaign moving without manual chasing.",
+    reportsTo: "Creative Director",
+    collaborates: ["Concept & Art Direction", "Content Production", "Media & Scheduling"],
+    priority: "Clear the concept review queue",
+    attention: ["One campaign is one round from its date"],
+    capability: "Production sequencing and slippage flagging.",
+    workspaceActorId: "creative.ai-director",
+    autonomy: "Auto low-risk",
+    model: { policy: "AUTO", preferred: "reasoning-generalist", fallback: "fast-generalist" },
+    skills: [
+      ["content-production", "Mastered", "1h ago"],
+      ["prioritisation", "Proficient", "Today"],
+      ["media-planning", "Proficient", "Today"],
+    ],
+    tools: [
+      ["calendar.schedule", "Allowed", "1h ago"],
+      ["report.generate", "Allowed", "Today"],
+      ["asset.deliver", "Approval", "—"],
+    ],
+    workflows: [["production-release", "Ready"], ["incident-response", "Ready"]],
+    memorySeeds: [["department", "Studio operating context", "Briefs, the brand kits and the release calendar."]],
+    work: [
+      { id: "sd-w1", title: "Studio scheduling", kind: "job", state: "Running", note: "Three campaigns in the calendar." },
+      { id: "sd-w2", title: "Nova launch film date", kind: "blocker", state: "Flagged", note: "One review round left." },
+    ],
+  },
+  {
+    id: "concept-art-direction",
+    name: "Concept & Art Direction",
+    type: "ai-agent",
+    departmentId: "creative",
+    role: "AI specialist",
+    initials: "CA",
+    status: "Active",
+    mission: "Spring campaign for Kensington",
+    responsibility: "Turn a client brief into a treatment the client can see.",
+    purpose: "Give the studio something worth producing, and the client something to choose.",
+    reportsTo: "AI Studio Director",
+    collaborates: ["Content Production"],
+    priority: "Finish the second concept direction",
+    attention: [],
+    capability: "Brief reading, concepts and art direction.",
+    workspaceActorId: "creative.concept",
+    autonomy: "Execute with approval",
+    model: { policy: "AUTO", preferred: "reasoning-generalist", fallback: "fast-generalist" },
+    skills: [["art-direction", "Proficient", "Today"], ["brand-systems", "Proficient", "1h ago"], ["copywriting", "Proficient", "Today"]],
+    tools: [
+      ["docs.create", "Allowed", "Today"],
+      ["asset.render", "Allowed", "2h ago"],
+      ["asset.deliver", "Blocked", "—"],
+    ],
+    workflows: [["brief-to-concept", "Ready"]],
+    memorySeeds: [["project", "Kensington brand kit", "Voice, palette and type the client signed off."]],
+    work: [{ id: "ca-w1", title: "Spring campaign for Kensington", kind: "mission", state: "Active", note: "Two directions drafted." }],
+  },
+  {
+    id: "content-production",
+    name: "Content Production",
+    type: "ai-agent",
+    departmentId: "creative",
+    role: "AI specialist",
+    initials: "CP",
+    status: "Active",
+    mission: "Retouch 40 campaign stills",
+    responsibility: "Produce the copy, stills and edit to the approved concept.",
+    purpose: "Make the approved idea real, at the quality the client was promised.",
+    reportsTo: "AI Studio Director",
+    collaborates: ["Concept & Art Direction", "Media & Scheduling"],
+    priority: "Finish the retouch pass",
+    attention: [],
+    capability: "Copy, stills and edit to spec.",
+    workspaceActorId: "creative.production",
+    autonomy: "Execute with approval",
+    model: { policy: "ECONOMY", preferred: "fast-generalist", fallback: "reasoning-generalist" },
+    skills: [["content-production", "Mastered", "1h ago"], ["copywriting", "Proficient", "Today"]],
+    tools: [
+      ["asset.render", "Allowed", "1h ago"],
+      ["docs.create", "Allowed", "Today"],
+      ["sheet.read", "Read-only", "Yesterday"],
+    ],
+    workflows: [["production-release", "Ready"]],
+    memorySeeds: [["project", "Delivered masters", "Where the approved files for each client live."]],
+    work: [{ id: "cp-w1", title: "Retouch 40 campaign stills", kind: "job", state: "Running", note: "61% retouched." }],
+  },
+  {
+    id: "media-scheduling",
+    name: "Media & Scheduling",
+    type: "ai-agent",
+    departmentId: "creative",
+    role: "AI specialist",
+    initials: "MS",
+    status: "Waiting",
+    mission: "Release calendar",
+    responsibility: "Place approved work on the client's channels and pace it.",
+    purpose: "Release on the agreed date, and know what the work did afterwards.",
+    reportsTo: "AI Studio Director",
+    collaborates: ["Content Production"],
+    priority: "Hold the Nova release until review closes",
+    attention: ["One release is waiting on the client's last review round"],
+    capability: "Placement, cadence and release reporting.",
+    workspaceActorId: "creative.publish",
+    autonomy: "Execute with approval",
+    model: { policy: "AUTO", preferred: "fast-generalist", fallback: "reasoning-generalist" },
+    skills: [["media-planning", "Proficient", "Today"], ["content-production", "Learning", "Yesterday"]],
+    tools: [
+      ["calendar.schedule", "Allowed", "1h ago"],
+      ["x.publish", "Approval", "—"],
+      ["report.generate", "Allowed", "Yesterday"],
+    ],
+    workflows: [["production-release", "Ready"]],
+    memorySeeds: [["project", "Release calendar", "Every approved date per client, in one place."]],
+    work: [{ id: "ms-w1", title: "Release calendar", kind: "job", state: "Scheduled", note: "Nova is held one round." }],
   },
 ];
 

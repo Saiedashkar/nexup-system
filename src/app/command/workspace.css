@@ -446,14 +446,27 @@
 }
 
 /* Two stacked SVG layers — relationships under, nodes over — share ONE viewBox,
-   so `preserveAspectRatio` keeps the wiring perfectly aligned with the nodes. */
-.nc-dw-map__canvas { position: relative; width: 100%; aspect-ratio: 1120 / 380; }
+   so `preserveAspectRatio` keeps the wiring perfectly aligned with the nodes.
+   The ratio itself comes from `--nc-map-ratio`, which the component sets from the
+   same two numbers it hands to `viewBox`: the drawing and its frame are one fact. */
+.nc-dw-map__canvas {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--nc-map-ratio, 1120 / 380);
+}
 .nc-dw-map__net,
 .nc-dw-map__nodes { position: absolute; inset: 0; width: 100%; height: 100%; }
 .nc-dw-map__nodes { overflow: visible; }
 
-/* Lines carry their relationship STATE (system.css). Selecting a node fades the
-   relationships it is not part of. */
+/* AN OWNERSHIP AND A DEPENDENCY ARE NOT THE SAME LINE, so they do not look the
+   same: what a role owns is drawn at full strength, what it merely draws on is
+   lighter. The kind is `data-rel`; the colour still comes from the destination's
+   state (see the component). */
+.nc-dw-map .nc-net__line[data-rel="uses"],
+.nc-dw-map .nc-net__line[data-rel="reaches"] { opacity: 0.55; }
+
+/* Selecting a node fades the relationships it is not part of. Declared last so it
+   wins over the two rules above at equal specificity. */
 .nc-dw-map .nc-net__line[data-dim="true"] { opacity: 0.12; }
 
 .nc-dw-map__node {
@@ -471,18 +484,27 @@
 }
 .nc-dw-map__node[data-tone="human"] .nc-dw-map__plate { stroke: rgba(243, 240, 233, 0.3); }
 .nc-dw-map__node[data-tone="ai"] .nc-dw-map__plate { stroke: rgba(182, 255, 0, 0.3); }
+/* Work is the plate the department actually produces, so it is the one the eye
+   should land on first — a touch brighter than the roles that carry it. */
+.nc-dw-map__node[data-tone="work"] .nc-dw-map__plate { stroke: rgba(45, 212, 191, 0.34); }
 .nc-dw-map__node[data-tone="cap"] .nc-dw-map__plate { stroke: rgba(167, 139, 250, 0.32); }
 .nc-dw-map__node[data-tone="system"] .nc-dw-map__plate { stroke: color-mix(in srgb, var(--nc-dw-accent) 34%, transparent); }
 
+/* The leading bar carries the TONE, and — for the one state that needs a human —
+   the ATTENTION instead. Identity is the background fact; "needs you" outranks
+   it, which is the same priority the rest of the product uses. */
 .nc-dw-map__bar { fill: var(--nc-text-3); }
 .nc-dw-map__node[data-tone="human"] .nc-dw-map__bar { fill: var(--nc-human); }
 .nc-dw-map__node[data-tone="ai"] .nc-dw-map__bar { fill: var(--nc-lime); }
+.nc-dw-map__node[data-tone="work"] .nc-dw-map__bar { fill: var(--nc-operations); }
 .nc-dw-map__node[data-tone="cap"] .nc-dw-map__bar { fill: var(--nc-tone-capability); }
 .nc-dw-map__node[data-tone="system"] .nc-dw-map__bar { fill: var(--nc-dw-accent); }
+.nc-dw-map__node[data-state="attention"] .nc-dw-map__bar { fill: var(--nc-approval); }
 
 .nc-dw-map__dot { fill: var(--nc-text-3); }
 .nc-dw-map__node[data-tone="human"] .nc-dw-map__dot { fill: var(--nc-human); }
 .nc-dw-map__node[data-tone="ai"] .nc-dw-map__dot { fill: var(--nc-lime); }
+.nc-dw-map__node[data-tone="work"] .nc-dw-map__dot { fill: var(--nc-operations); }
 .nc-dw-map__node[data-tone="cap"] .nc-dw-map__dot { fill: var(--nc-tone-capability); }
 .nc-dw-map__node[data-tone="system"] .nc-dw-map__dot { fill: var(--nc-dw-accent); }
 
@@ -506,8 +528,63 @@
 .nc-dw-map__legend span::before { content: ""; width: 8px; height: 8px; border-radius: 3px; background: var(--nc-text-3); }
 .nc-dw-map__legend [data-tone="human"]::before { background: var(--nc-human); }
 .nc-dw-map__legend [data-tone="ai"]::before { background: var(--nc-lime); }
+.nc-dw-map__legend [data-tone="work"]::before { background: var(--nc-operations); }
 .nc-dw-map__legend [data-tone="cap"]::before { background: var(--nc-tone-capability); }
 .nc-dw-map__legend [data-tone="system"]::before { background: var(--nc-dw-accent); }
+
+/* ── The relationship readout ───────────────────────────────────────────────
+   Dimming says what a node does NOT touch; this says what it does, in words and
+   with the verb — including, deliberately, when the answer is "nothing". */
+.nc-dw-map__read {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 13px;
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-2);
+  background: rgba(255, 255, 255, 0.018);
+  animation: nc-rise var(--nc-dur-quick) var(--nc-ease-out) both;
+}
+.nc-dw-map__read-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.nc-dw-map__read-node { font-size: 12.5px; font-weight: 650; color: var(--nc-text); }
+.nc-dw-map__read-empty { margin: 0; font-size: 12px; color: var(--nc-text-4); }
+
+.nc-dw-map__rels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nc-dw-map__rel {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 4px 10px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-1);
+  font-size: 11.5px;
+  min-width: 0;
+}
+/* The relationship VERB is the quieter half of the pair; the node it points at is
+   what a reader is looking for, so the target carries the weight. */
+.nc-dw-map__rel-word { color: var(--nc-text-4); }
+.nc-dw-map__rel-target { color: var(--nc-text); font-weight: 620; }
+.nc-dw-map__rel::before {
+  content: "";
+  align-self: center;
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--nc-text-3);
+}
+.nc-dw-map__rel[data-tone="human"]::before { background: var(--nc-human); }
+.nc-dw-map__rel[data-tone="ai"]::before { background: var(--nc-lime); }
+.nc-dw-map__rel[data-tone="work"]::before { background: var(--nc-operations); }
+.nc-dw-map__rel[data-tone="cap"]::before { background: var(--nc-tone-capability); }
+.nc-dw-map__rel[data-tone="system"]::before { background: var(--nc-dw-accent); }
 
 /* The mobile recomposition renders only at ≤760px (see the responsive block). */
 .nc-dw-map__stack { display: none; }
@@ -702,7 +779,35 @@
 
   /* Tighter identity block so status and facts clear the fold. */
   .nc-dw__head { padding: 14px 14px; }
-  .nc-dw__name { font-size: 19px; }
+  .nc-dw__name { font-size: 19px; line-height: 1.2; }
+
+  /* ── THE 390px HEADER, CORRECTED (visual-direction slice) ────────────────
+     Measured at 390px: the identity row was ONE flex line — back link, mark,
+     titles, status chip — and the fixed controls took ~282px of a ~332px card,
+     leaving the title column about 50px. Three things followed, all of them
+     visible in the review's phone shot:
+
+       · "Creative & Production" wrapped to three lines ("Creative" / "&" /
+         "Production"), because 50px fits one short word;
+       · the kicker ("Studio floor · Department workspace") could not fit its
+         column at all, so it overflowed its box and ran UNDER the status chip;
+       · a single "·" was left stranded on a line of its own.
+
+     So the row WRAPS at phone width instead of squeezing: the controls keep the
+     first line and the identity takes the second, at full card width. Nothing is
+     made smaller, nothing is hidden, and no word is rewritten — the sentence the
+     product already had simply gets room to be read. `order` moves the VISUAL
+     block only; the one focusable element here is the back link, which keeps its
+     position in the DOM, so tab order is unchanged. */
+  .nc-dw__head-top { flex-wrap: wrap; gap: 12px; row-gap: 10px; }
+  .nc-dw__back { order: 1; }
+  .nc-dw__mark { order: 1; }
+  .nc-dw__state { order: 1; margin-left: auto; }
+  .nc-dw__titles { order: 2; flex: 1 1 100%; }
+  /* A long department name must break INSIDE a word rather than overflow the
+     card, and the kicker must be allowed to wrap at any point. */
+  .nc-dw__kicker { overflow-wrap: anywhere; }
+  .nc-dw__name { overflow-wrap: anywhere; }
   .nc-dw__purpose { margin-top: 8px; font-size: 14px; }
   .nc-dw__facts { margin-top: 10px; gap: 8px; }
   .nc-dw__fact { padding: 7px 10px; }
@@ -727,13 +832,22 @@
 
   /* Map — the wide diagram stands down and the vertical chain takes over. */
   .nc-dw-map { padding: 13px; }
-  .nc-dw-map__canvas { display: none; }
-  .nc-dw-map__stack { display: flex; flex-direction: column; }
+  /* The canvas went with the diagram, so the inline readout that belongs to
+     the DIAGRAM goes too: on a phone the identical sentences are read in the
+     sheet the chips open (see `MapMode`). One explanation, two places — never
+     two explanations, or the same one printed twice. */
+  .nc-dw-map__canvas,
+  .nc-dw-map__read { display: none; }
+  .nc-dw-map__stack { display: flex; flex-direction: column; gap: 10px; }
+  .nc-dw-map__stack-hint { margin: 0; font-size: 11px; color: var(--nc-text-4); }
   .nc-dw-map__layer { display: flex; flex-direction: column; gap: 8px; }
   .nc-dw-map__spine { width: 100%; height: 24px; }
   .nc-dw-map__layer-head { display: flex; flex-direction: column; gap: 2px; }
   .nc-dw-map__layer-note { font-size: 10.5px; color: var(--nc-text-4); }
   .nc-dw-map__layer-nodes { display: flex; flex-wrap: wrap; gap: 7px; }
+  /* A chip is a BUTTON on the phone: the same node, as a control that opens its
+     explanation. The type, family and alignment are reset so it keeps the chip's
+     look rather than a form control's. */
   .nc-dw-map__chip {
     display: inline-flex;
     align-items: center;
@@ -742,8 +856,15 @@
     border-radius: var(--nc-r-pill);
     border: 1px solid var(--nc-hairline-2);
     background: var(--nc-glass-1);
+    font: inherit;
     font-size: 12px;
     color: var(--nc-text-2);
+    cursor: pointer;
+  }
+  .nc-dw-map__chip:focus-visible { outline: 2px solid var(--nc-dw-accent); outline-offset: 2px; }
+  .nc-dw-map__chip[data-active="true"] {
+    border-color: var(--nc-lime-line);
+    color: var(--nc-text);
   }
   .nc-dw-map__chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--nc-text-3); }
   .nc-dw-map__chip[data-tone="human"] i { background: var(--nc-human); }

@@ -1,0 +1,311 @@
+{
+  "generatedAt": "2026-10-26T20:13:46.474Z",
+  "probe": "eighth review ownership reproductions on disposable clusters",
+  "scratch": "D:\\scripts 6.26\\tmp\\nexup-ownership-proof-ATRy95",
+  "aborted": false,
+  "error": null,
+  "checks": 46,
+  "checksPassed": 46,
+  "checksFailed": 0,
+  "results": [
+    {
+      "label": "B (…/owner's data) is a live postmaster that answers",
+      "ok": true,
+      "detail": "pid 4432"
+    },
+    {
+      "label": "down of A REFUSED (non-zero)",
+      "ok": true,
+      "detail": "exit 1"
+    },
+    {
+      "label": "the refusal is the argument-vector test",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "B's postmaster is STILL ALIVE",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "B still ANSWERS on its port",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "A's lock file is byte-identical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "destroy of A REFUSED (non-zero)",
+      "ok": true,
+      "detail": "exit 1"
+    },
+    {
+      "label": "destroy said it refused to delete",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "A's data directory is PRESERVED",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "B survived destroy as well",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "A's lock file is still byte-identical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "C and D were started inside the same two-second window",
+      "ok": true,
+      "detail": "C 1793044703, D 1793044703"
+    },
+    {
+      "label": "both clusters answer",
+      "ok": true,
+      "detail": "pids 17864/9160"
+    },
+    {
+      "label": "down of C REFUSED (non-zero)",
+      "ok": true,
+      "detail": "exit 1"
+    },
+    {
+      "label": "the refusal names the argument-vector test",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "D (the pid C's lock named) is STILL ALIVE",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "C's OWN postmaster is STILL ALIVE",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "C still ANSWERS (it was not stopped)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "D still ANSWERS",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "C's lock file is byte-identical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "the probe restored the lock file it planted",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "C can still be stopped normally once its own lock file is back",
+      "ok": true,
+      "detail": "exit 0"
+    },
+    {
+      "label": "C's postmaster is gone after the normal stop",
+      "ok": true,
+      "detail": "pid 17864"
+    },
+    {
+      "label": "down of …/owner's lifecycle SUCCEEDS",
+      "ok": true,
+      "detail": "exit 0"
+    },
+    {
+      "label": "its postmaster is gone",
+      "ok": true,
+      "detail": "pid 11468"
+    },
+    {
+      "label": "start on a DIFFERENT port succeeded",
+      "ok": true,
+      "detail": "exit 0\n{\n  \"running\": true,\n  \"dataDirectory\": \"D:\\\\scripts 6.26\\\\tmp\\\\nexup-ownership-proof-ATRy95\\\\space owner\\\\force dir\",\n  \"port\": \"53037\",\n  \"listenAddresses\": \"127.0.0.1\"\n}"
+    },
+    {
+      "label": "the old postmaster is GONE (termination was verified)",
+      "ok": true,
+      "detail": "pid 25944"
+    },
+    {
+      "label": "a replacement lock file exists",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "the replacement is a DIFFERENT pid",
+      "ok": true,
+      "detail": "25944 → 14880"
+    },
+    {
+      "label": "the replacement ANSWERS on the new port",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "the force path was taken (not a silent reuse)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "the replacement can be stopped normally",
+      "ok": true,
+      "detail": "exit 0"
+    },
+    {
+      "label": "its postmaster is gone",
+      "ok": true,
+      "detail": "pid 14880"
+    },
+    {
+      "label": "the first postmaster of G is gone (immediate stop)",
+      "ok": true,
+      "detail": "pid 24844"
+    },
+    {
+      "label": "G was restarted on the same data directory",
+      "ok": true,
+      "detail": "exit 0"
+    },
+    {
+      "label": "the replacement is a DIFFERENT live pid",
+      "ok": true,
+      "detail": "24844 → 4568"
+    },
+    {
+      "label": "the replacement answers",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "the cleaner REFUSED to stop the directory it no longer owns",
+      "ok": true,
+      "detail": "the lock file changed since this probe started: it names pid 4568, a LIVE postmaster of this data directory that this probe did NOT start (it started pid 24844). Restoring the saved lock would overwrite a valid replacement's evidence, and reporting a stop because the OLD pid is gone is exactly the false success the tenth review found — the replacement is PRESERVED and the file is untouched"
+    },
+    {
+      "label": "the refusal names the replacement it did not start",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "the replacement is STILL ALIVE",
+      "ok": true,
+      "detail": "pid 4568"
+    },
+    {
+      "label": "the replacement still ANSWERS",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "the replacement's lock file is byte-identical",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "the OLD pid was not re-adopted by the refusal",
+      "ok": true,
+      "detail": "lock names 4568"
+    },
+    {
+      "label": "the refused resource stayed in the cleanup inventory",
+      "ok": true,
+      "detail": "D:\\scripts 6.26\\tmp\\nexup-ownership-proof-ATRy95\\space owner\\owner's data, D:\\scripts 6.26\\tmp\\nexup-ownership-proof-ATRy95\\space owner\\cluster c, D:\\scripts 6.26\\tmp\\nexup-ownership-proof-ATRy95\\space owner\\cluster d, D:\\scripts 6.26\\tmp\\nexup-ownership-proof-ATRy95\\space owner\\owner's lifecycle, D:\\scripts 6.26\\tmp\\nexup-ownership-proof-ATRy95\\space owner\\force dir, D:\\scripts 6.26\\tmp\\nexup-ownership-proof-ATRy95\\space owner\\replacement dir"
+    },
+    {
+      "label": "the replacement can then be stopped normally",
+      "ok": true,
+      "detail": "exit 0"
+    },
+    {
+      "label": "the replacement's postmaster is gone",
+      "ok": true,
+      "detail": "pid 4568"
+    }
+  ],
+  "cleanup": {
+    "state": "verified",
+    "clustersStarted": 6,
+    "clustersStopped": 6,
+    "preserved": [],
+    "refusals": [],
+    "inventoryRetained": [],
+    "scratchRemoved": true
+  },
+  "state": "ok",
+  "stateReasons": [],
+  "manifest": {
+    "format": "nexup-evidence-manifest/1",
+    "hashAlgorithm": "sha256",
+    "digestAlgorithm": "sha256",
+    "canonicalForm": "one line per file, sorted by `path` (ascending byte order, `/` separators): \"<sha256>  <bytes>  <path>\\n\" — two spaces as the separator, size in bytes as decimal, LF line endings, no trailing blank line — hashed with sha256",
+    "files": [
+      {
+        "path": "scripts/dev-db.mjs",
+        "present": true,
+        "sha256": "d1d8f5b19ff4ba7c6e92a2ce2efd52d074fc80b3b35615625173416c28030015",
+        "bytes": 58750,
+        "tracked": true
+      },
+      {
+        "path": "scripts/dev-db-ownership.mjs",
+        "present": true,
+        "sha256": "2726030f747ea4240bc7ffa541e8c785e21262c70edd90ec8502cccf07271c18",
+        "bytes": 48171,
+        "tracked": false
+      },
+      {
+        "path": "scripts/dev-db-ownership-proof.mjs",
+        "present": true,
+        "sha256": "1af7565182cc40e99181b85e74c0c74369b5ade4ca3a3f5b89666d9f2ef4b581",
+        "bytes": 39612,
+        "tracked": false
+      },
+      {
+        "path": "scripts/run-http-proof-safety.sh",
+        "present": true,
+        "sha256": "041f67e810bf9ab01397f2c8ebdf823d2a371bcd5d1a4e17fcd354c8caeb4638",
+        "bytes": 49899,
+        "tracked": false
+      },
+      {
+        "path": "tests/dev-db-ownership.test.ts",
+        "present": true,
+        "sha256": "a0bec48010a1cdc188a34328bbb1e6172e490e8629b469e951aadfe36ba3d00a",
+        "bytes": 36976,
+        "tracked": false
+      },
+      {
+        "path": "scripts/evidence-manifest.mjs",
+        "present": true,
+        "sha256": "d9c942ceceb13a9e64fb0a4f31ab0f88d1048cc0e0b82727a191b90d44ba6ad9",
+        "bytes": 6128,
+        "tracked": false
+      },
+      {
+        "path": "scripts/verify-evidence-manifest.mjs",
+        "present": true,
+        "sha256": "f835892fbdcbe8c57093b9884b38275bb1ca1274b75f8d242e7ec1728841294a",
+        "bytes": 2527,
+        "tracked": false
+      }
+    ],
+    "digest": "fedb86e8f889067bc45dc9b8360ccc393f19948283b26ca924f05cfdf8b325f1"
+  }
+}

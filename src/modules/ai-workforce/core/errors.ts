@@ -26,6 +26,15 @@ export const AI_WORKFORCE_ERROR_CODES = [
   "APPROVAL_WRONG_TOOL",
   "CRITICAL_AUTONOMY_FORBIDDEN",
   "MONEY_SAFETY_VIOLATION",
+  /**
+   * The Budget Governor REFUSED an execution. A dedicated code (Step 5A-4
+   * correction) so a durable reader — and a caller — can tell "you may not
+   * SPEND" from "you may not". A budget refusal was previously typed
+   * `PERMISSION_DENIED` with the governor's reason buried in the message, which
+   * made the single invariant this boundary exists for unreadable from the
+   * ledger.
+   */
+  "BUDGET_POLICY_DENIED",
   // job engine
   "INVALID_JOB_TRANSITION",
   "JOB_NOT_FOUND",
@@ -92,6 +101,20 @@ export const AI_WORKFORCE_ERROR_CODES = [
    * internally it keeps this typed reason.
    */
   "BUSINESS_SCOPE_DENIED",
+  // ── Step 5A-4 correction — authoritative execution identity + cancellation ──
+  /**
+   * The caller's request does not match the AUTHORITATIVE durable task
+   * (mission, actor, capability, version, attempt or canonical input). The
+   * execution service re-reads the task and refuses a substituted identity
+   * rather than trusting caller assertions.
+   */
+  "EXECUTION_TASK_MISMATCH",
+  /**
+   * A mission cannot be terminalised while an attempt holds an unresolved
+   * dispatch reservation (its claim is `CLAIMED` or `DISPATCHING`). Cancelling
+   * would orphan an external run that may still be starting.
+   */
+  "EXECUTION_RESERVATION_UNRESOLVED",
 ] as const;
 
 export type AiWorkforceErrorCode = (typeof AI_WORKFORCE_ERROR_CODES)[number];

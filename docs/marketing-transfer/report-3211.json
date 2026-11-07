@@ -1,0 +1,190 @@
+{
+  "app": "http://localhost:3211",
+  "steps": {
+    "login": {
+      "status": 200,
+      "path": "/command"
+    },
+    "plate": {
+      "path": "/command/sales",
+      "pressedOnce": true
+    },
+    "gateway": {
+      "doors": [
+        {
+          "href": "/command/sales/room",
+          "title": "المبيعات",
+          "cta": "ادخل القسم"
+        },
+        {
+          "href": "/command/marketing",
+          "title": "التسويق",
+          "cta": "ادخل القسم"
+        }
+      ],
+      "summaries": [
+        "3المحطات5الخطواتالفريق · مدير المبيعات · مستكشف الفرص · وكيل المتابعة · مدير العرض",
+        "3المحطات4الأدوارالفريق · الاستراتيجية · المحتوى · مراجعة النشر"
+      ],
+      "limb": true,
+      "stageUsesHomeAsset": true,
+      "rings": 3,
+      "doorsLeftToRight": [
+        {
+          "dept": "sales",
+          "order": "0",
+          "x": 113
+        },
+        {
+          "dept": "marketing",
+          "order": "-1",
+          "x": 699
+        }
+      ],
+      "marksAreDrawings": 2,
+      "backdrop": "blur(10px) saturate(1.3)",
+      "doorBackground": "linear-gradient(rgba(20, 26, 22, 0.2), rgba(5, 7, 6, 0.44) 54%, rgba(6, 8, 7, 0.66)), radial-gradient(96% 56% at 50% -6%",
+      "stationCardGone": true
+    },
+    "frame_panel": {
+      "viewport": [
+        723,
+        900
+      ],
+      "noHorizontalScroll": true,
+      "scrollWidth": 723,
+      "allFit": true,
+      "boxes": {
+        ".nxs-head__title": [
+          {
+            "x": 168,
+            "y": 233,
+            "w": 440,
+            "h": 24,
+            "inside": true
+          }
+        ],
+        ".nxs-hero": [
+          {
+            "x": 56,
+            "y": 380,
+            "w": 616,
+            "h": 400,
+            "inside": true
+          }
+        ],
+        "a.nxs-door": [
+          {
+            "x": 64,
+            "y": 396,
+            "w": 295,
+            "h": 238,
+            "inside": true
+          },
+          {
+            "x": 369,
+            "y": 396,
+            "w": 295,
+            "h": 232,
+            "inside": true
+          }
+        ]
+      }
+    },
+    "frame_desktop": {
+      "viewport": [
+        1440,
+        900
+      ],
+      "noHorizontalScroll": true,
+      "scrollWidth": 1440,
+      "allFit": true,
+      "boxes": {
+        ".nxs-head__title": [
+          {
+            "x": 857,
+            "y": 206,
+            "w": 458,
+            "h": 29,
+            "inside": true
+          }
+        ],
+        ".nxs-hero": [
+          {
+            "x": 204,
+            "y": 311,
+            "w": 1180,
+            "h": 483,
+            "inside": true
+          }
+        ],
+        "a.nxs-door": [
+          {
+            "x": 216,
+            "y": 335,
+            "w": 570,
+            "h": 304,
+            "inside": true
+          },
+          {
+            "x": 802,
+            "y": 335,
+            "w": 570,
+            "h": 300,
+            "inside": true
+          }
+        ]
+      }
+    },
+    "frame_phone": {
+      "viewport": [
+        390,
+        844
+      ],
+      "noHorizontalScroll": true,
+      "scrollWidth": 390,
+      "allFit": false,
+      "boxes": {
+        ".nxs-head__title": [
+          {
+            "x": 81,
+            "y": 233,
+            "w": 244,
+            "h": 24,
+            "inside": true
+          }
+        ],
+        ".nxs-hero": [
+          {
+            "x": 68,
+            "y": 400,
+            "w": 322,
+            "h": 781,
+            "inside": false
+          }
+        ],
+        "a.nxs-door": [
+          {
+            "x": 76,
+            "y": 767,
+            "w": 306,
+            "h": 268,
+            "inside": false
+          },
+          {
+            "x": 76,
+            "y": 414,
+            "w": 306,
+            "h": 249,
+            "inside": true
+          }
+        ]
+      }
+    },
+    "refusal": {
+      "skipped": "TimeoutError: page.click: Timeout 30000ms exceeded."
+    }
+  },
+  "consoleErrors": [],
+  "pageErrors": []
+}

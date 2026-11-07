@@ -28,6 +28,7 @@ import {
   IconWorkflow,
   type IconProps,
 } from "../ui/icons";
+import { useLocale } from "../i18n/command-locale";
 import { ActorModeBody } from "./actor-modes";
 
 /**
@@ -64,16 +65,18 @@ const MODE_ICONS: Record<ActorModeId, ComponentType<IconProps>> = {
 
 export function ActorWorkspace({ actor }: { actor: ActorConfig }) {
   const { notify, setExecOpen } = useCommand();
+  const { t, tc } = useLocale();
   const [mode, setMode] = useState<ActorModeId>("overview");
   const [instruction, setInstruction] = useState("");
 
   const isAI = actor.type === "ai-agent";
   const TypeIcon = isAI ? IconAgent : IconHuman;
+  const actorName = tc(actor.name);
 
   const send = () => {
     const text = instruction.trim();
     if (!text) return;
-    notify(`Instruction queued for ${actor.name} (mock): “${text}”`);
+    notify(t("aw.instructionQueued", { name: actorName, text }));
     setInstruction("");
   };
 
@@ -87,7 +90,7 @@ export function ActorWorkspace({ actor }: { actor: ActorConfig }) {
         <div className="nc-aw__head-top">
           <Link className="nc-aw__back" href={departmentHrefForActor(actor)}>
             <IconArrowLeft size={14} />
-            {actor.departmentName}
+            {tc(actor.departmentName)}
           </Link>
 
           <span className="nc-aw__avatar" aria-hidden="true">
@@ -96,39 +99,39 @@ export function ActorWorkspace({ actor }: { actor: ActorConfig }) {
 
           <div className="nc-aw__titles">
             <span className="nc-aw__kicker">
-              {actor.role} · {actor.departmentName}
+              {tc(actor.role)} · {tc(actor.departmentName)}
             </span>
-            <h1 className="nc-aw__name">{actor.name}</h1>
+            <h1 className="nc-aw__name">{actorName}</h1>
           </div>
 
           <span className="nc-aw__type" data-type={actor.type}>
             <TypeIcon size={14} />
-            {actorTypeLabel(actor.type)}
+            {tc(actorTypeLabel(actor.type))}
           </span>
 
           <span className="nc-aw__state">
             <i aria-hidden="true" />
-            {actor.status}
+            {tc(actor.status)}
           </span>
         </div>
 
-        <p className="nc-aw__responsibility">{actor.responsibility}</p>
+        <p className="nc-aw__responsibility">{tc(actor.responsibility)}</p>
 
         <dl className="nc-aw__facts">
           <div className="nc-aw__fact">
-            <dt>Current mission</dt>
-            <dd>{actor.mission}</dd>
+            <dt>{t("aw.factCurrentMission")}</dt>
+            <dd>{tc(actor.mission)}</dd>
           </div>
           <div className="nc-aw__fact">
-            <dt>Reports to</dt>
-            <dd>{actor.reportsTo}</dd>
+            <dt>{t("aw.factReportsTo")}</dt>
+            <dd>{tc(actor.reportsTo)}</dd>
           </div>
           <div className="nc-aw__fact">
-            <dt>Skills</dt>
+            <dt>{t("aw.factSkills")}</dt>
             <dd>{actor.skills.length}</dd>
           </div>
           <div className="nc-aw__fact" data-attention={actor.attention.length > 0}>
-            <dt>Needs attention</dt>
+            <dt>{t("aw.factAttention")}</dt>
             <dd>{actor.attention.length}</dd>
           </div>
         </dl>
@@ -136,24 +139,24 @@ export function ActorWorkspace({ actor }: { actor: ActorConfig }) {
 
       {/* Persistent Actor Command Surface. Mock interaction only — nothing is
           sent to a model or a tool. */}
-      <div className="nc-aw__cmd" role="group" aria-label={`Command ${actor.name}`}>
+      <div className="nc-aw__cmd" role="group" aria-label={t("aw.commandAria", { name: actorName })}>
         <span className="nc-aw__cmd-lead">
           <span className="nc-aw__cmd-orb" aria-hidden="true" />
-          <span className="nc-aw__cmd-label">Direct command</span>
+          <span className="nc-aw__cmd-label">{t("aw.commandLabel")}</span>
         </span>
 
         <span className="nc-aw__cmd-inputwrap">
           <input
             className="nc-aw__cmd-input"
             value={instruction}
-            placeholder={`Speak directly to ${actor.name}…`}
-            aria-label={`Instruction for ${actor.name}`}
+            placeholder={t("aw.commandPlaceholder", { name: actorName })}
+            aria-label={t("aw.commandInputAria", { name: actorName })}
             onChange={(event) => setInstruction(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter") send();
             }}
           />
-          <button type="button" className="nc-aw__cmd-send" onClick={send} aria-label="Send instruction">
+          <button type="button" className="nc-aw__cmd-send" onClick={send} aria-label={t("aw.sendAria")}>
             <IconSend size={14} />
           </button>
         </span>
@@ -162,30 +165,30 @@ export function ActorWorkspace({ actor }: { actor: ActorConfig }) {
           <button
             type="button"
             className="nc-aw__cmd-btn"
-            onClick={() => notify(`${actor.name} — a mock conversation opens here in a later phase.`)}
+            onClick={() => notify(t("aw.talkToast", { name: actorName }))}
           >
-            Talk
+            {t("aw.talk")}
           </button>
           <button
             type="button"
             className="nc-aw__cmd-btn"
-            onClick={() => notify(`Warned ${actor.name} (mock).`) }
+            onClick={() => notify(t("aw.warnToast", { name: actorName }))}
           >
-            Warn
+            {t("aw.warn")}
           </button>
           <button
             type="button"
             className="nc-aw__cmd-btn"
-            onClick={() => notify(`Context added for ${actor.name} (mock).`)}
+            onClick={() => notify(t("aw.addContextToast", { name: actorName }))}
           >
-            Add context
+            {t("aw.addContext")}
           </button>
           <button
             type="button"
             className="nc-aw__cmd-btn"
-            onClick={() => notify(`Mission assigned to ${actor.name} (mock).`)}
+            onClick={() => notify(t("aw.assignToast", { name: actorName }))}
           >
-            Assign mission
+            {t("aw.assignMission")}
           </button>
           <button
             type="button"
@@ -193,14 +196,14 @@ export function ActorWorkspace({ actor }: { actor: ActorConfig }) {
             onClick={() => setExecOpen(true)}
           >
             <IconWarRoom size={14} />
-            Escalate to EXEC
+            {t("aw.escalateToExec")}
           </button>
         </div>
 
-        <span className="nc-aw__cmd-note">No AI provider · mock</span>
+        <span className="nc-aw__cmd-note">{t("aw.mockNote")}</span>
       </div>
 
-      <nav className="nc-aw__modes" aria-label={`${actor.name} workspace modes`}>
+      <nav className="nc-aw__modes" aria-label={t("aw.modesAria", { name: actorName })}>
         {ACTOR_MODES.map((item) => {
           const ModeIcon = MODE_ICONS[item.id];
           const current = item.id === mode;
@@ -211,11 +214,11 @@ export function ActorWorkspace({ actor }: { actor: ActorConfig }) {
               className="nc-aw__mode"
               data-current={current}
               aria-pressed={current}
-              title={item.hint}
+              title={tc(item.hint)}
               onClick={() => setMode(item.id)}
             >
               <ModeIcon size={15} />
-              {item.label}
+              {tc(item.label)}
             </button>
           );
         })}
@@ -223,8 +226,8 @@ export function ActorWorkspace({ actor }: { actor: ActorConfig }) {
 
       <div className="nc-aw__body">
         <div className="nc-aw__modehead">
-          <span className="nc-aw__modehead-title">{ACTOR_MODES.find((item) => item.id === mode)?.label}</span>
-          <span className="nc-aw__modehead-hint">{ACTOR_MODES.find((item) => item.id === mode)?.hint}</span>
+          <span className="nc-aw__modehead-title">{tc(ACTOR_MODES.find((item) => item.id === mode)?.label ?? "")}</span>
+          <span className="nc-aw__modehead-hint">{tc(ACTOR_MODES.find((item) => item.id === mode)?.hint ?? "")}</span>
         </div>
 
         <ActorModeBody mode={mode} actor={actor} />

@@ -2700,7 +2700,22 @@ nc-surface__cell[data-primary="true"] .nc-surface__cell-icon {
    platform in a room. No rule below names a department: a sixth renders
    identically. */
 
-.nc-root { --nc-module-w: clamp(196px, 15vw, 268px); --nc-module-h: 140px; }
+/* The module carries a name, a capability, a state, one insight and three
+   figures. At 15vw on a 1440px stage that was 216px, of which 32px is padding:
+   the name column came out at 97px, so every department name wrapped past its
+   two allowed lines and got cut ("Operatio…"), the capability was truncated on
+   every node in both languages, and the state chip sat outside the plate's right
+   edge. The node is one uniform module, so the BUDGET is what changes: 19vw and
+   a 320px ceiling give the header row ~156px for the name and ~140px for the
+   capability, which is what those strings actually need.
+
+   The budget is a FLOOR, not a starting point. 260px is the smallest module at
+   which the header row still clears "Operations & People" and the longest
+   capability in either language; the narrow-stage overrides below used to shrink
+   it to 206px and then 186px, which re-created the clipping this rule exists to
+   remove, on every laptop between 1000 and 1300px. A viewport is allowed to give
+   the module LESS room, and is not allowed to give it less budget. */
+.nc-root { --nc-module-w: clamp(260px, 19vw, 320px); --nc-module-h: 140px; }
 
 .nc-pod {
   width: var(--nc-module-w);
@@ -2910,16 +2925,21 @@ nc-surface__cell[data-primary="true"] .nc-surface__cell-icon {
 /* ── 13.7 · NARROW STAGES ─────────────────────────────────────────────── */
 
 @media (max-width: 1240px) {
-  .nc-root { --nc-module-w: 206px; --nc-module-h: 134px; }
+  .nc-root { --nc-module-w: 260px; }
   .nc-sysnode,
   .nc-sysnode[data-role="base"] { width: 122px; }
 }
 @media (max-width: 1000px) {
-  .nc-root { --nc-module-w: 186px; }
+  .nc-root { --nc-module-w: 260px; }
   .nc-sysnode,
   .nc-sysnode[data-role="base"] { width: 112px; }
 }
 @media (max-height: 860px) {
-  .nc-root { --nc-module-h: 128px; --nc-hub-size: 152px; }
+  /* The height is a FLOOR too. A short viewport used to shrink the module to
+     128px, which is 7px less than the row/badge/insight/stats stack actually
+     measures: the three figures were pushed past the plate's own bottom padding
+     and sat under the meter on all six nodes, at every width, in both
+     languages. The hub may get smaller on a short screen; the node may not. */
+  .nc-root { --nc-hub-size: 152px; }
 }
 

@@ -28,7 +28,7 @@ it("re-adopts an execution another process started, without resubmitting it", as
   if (!handleId) throw new Error("APP_PROOF_HANDLE_ID must be set");
 
   // The provider's view: this run finished successfully while we were away.
-  const { application, transport, disconnect } = await bootProcess("procC", {
+  const { application, transport, authority, disconnect } = await bootProcess("procC", {
     knownRuns: [
       {
         executionId: handleId,
@@ -46,7 +46,7 @@ it("re-adopts an execution another process started, without resubmitting it", as
   const statusBefore = rehydrated.executions[0]!.status;
 
   // The resumption driver: adopt → settle → advance. No special path.
-  const advanced = await application.commands.drain(missionId as never);
+  const advanced = await application.commands.drain(missionId as never, { authority });
 
   const after = await application.commands.snapshot(missionId as never);
   const counts = transport.counts();

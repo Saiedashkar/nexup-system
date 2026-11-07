@@ -1,0 +1,939 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEXUP COMMAND — FOUNDATION · "Champagne Orbit"
+   ───────────────────────────────────────────────────────────────────────────
+   The reusable visual foundation for every Product-owned Command surface. This
+   file is imported LAST by `src/app/command/layout.tsx`, which makes it the last
+   word on two things and two things only:
+
+     1. TOKENS      — the palette, surfaces, type, space, radius and motion the
+                      whole environment reads. The layers beneath it
+                      (`command.css` … `operate.css`) already speak in these
+                      token names, so re-pointing them here restyles every
+                      surface at once instead of one page at a time.
+     2. PRIMITIVES  — surfaces, buttons, inputs, navigation states, badges,
+                      cards, sheets, typography and motion, in ONE place, so a
+                      new surface composes the system instead of re-deciding it.
+
+   It is NOT a page. Nothing here knows what a department, a mission or the home
+   is; the home's own composition lives in `orbit.css`, which is imported after
+   this file and scoped to the home surface.
+
+   WHERE THE NUMBERS COME FROM
+   Every colour below was measured out of the owner-approved references with
+   `.demo/ref-colors.py` and `.demo/ref-regions.py` (region fill / brightest
+   text / warmest edge / greenest accent), not chosen by eye. The measurements
+   and the mapping are written down in `docs/COMMAND_CHAMPAGNE_TOKENS.md`:
+
+     · page + smoked plate   #0d0e0d / #181917 / icon disc #201e19
+     · ivory text            #fcfcfa
+     · champagne edge        #f6dbad, mid #d0ad89, glow #f3ad49 / #fcb959
+     · mint primary action   #90dfb7  (the send button, in two independent images)
+     · EXEC blue             #2785e3, glow #4cabdd
+
+   THE ONE PALETTE RULE
+   Champagne is the material and the edge; mint is the one ACTION colour; ivory
+   is the text; and BLUE BELONGS TO EXEC'S IDENTITY ONLY — it is not an
+   interface accent anywhere in this file. That is why the six department
+   identities below are one restrained warm family rather than six hues: in the
+   approved references all six department plates carry the same treatment, and
+   they are told apart by their icon and their name, not by a colour code.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1 · TOKENS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root {
+  /* ── Base: warm charcoal, never a blue-black ──────────────────────────── */
+  --nc-base: #080807;
+  --nc-bg: #0d0e0d;
+  --nc-bg-2: #101110;
+  --nc-surface: rgba(24, 25, 23, 0.76);
+  --nc-surface-2: rgba(31, 32, 30, 0.7);
+  --nc-surface-3: rgba(40, 40, 37, 0.62);
+  --nc-raise: rgba(49, 47, 42, 0.52);
+
+  /* ── Champagne: the edge, the rim light and the invitation ─────────────
+     A hairline is champagne at low alpha rather than grey at low alpha. That
+     single substitution is most of what makes the smoked glass read as glass
+     rather than as a flat panel. */
+  --nc-champagne: #d0ad89;
+  --nc-champagne-pale: #f6dbad;
+  --nc-champagne-deep: #7c6544;
+  --nc-champagne-soft: rgba(208, 173, 137, 0.13);
+  --nc-champagne-line: rgba(246, 219, 173, 0.26);
+  --nc-champagne-glow: rgba(243, 173, 73, 0.2);
+
+  --nc-border: rgba(246, 219, 173, 0.1);
+  --nc-border-2: rgba(246, 219, 173, 0.17);
+  --nc-border-3: rgba(246, 219, 173, 0.28);
+
+  /* ── Typography: ivory, and three steps down from it ──────────────────── */
+  --nc-text: #fcfcfa;
+  --nc-text-2: #cdc9be;
+  --nc-text-3: #96928a;
+  --nc-text-4: #69655d;
+
+  /* ── Mint: THE primary action colour, and nothing else ────────────────── */
+  --nc-mint: #90dfb7;
+  --nc-mint-pale: #d5fdf4;
+  --nc-mint-soft: rgba(144, 223, 183, 0.14);
+  --nc-mint-line: rgba(144, 223, 183, 0.38);
+  --nc-mint-glow: rgba(144, 223, 183, 0.26);
+  /* Ink for text ON a mint fill. Measured against #90dfb7: 12.6:1. */
+  --nc-mint-ink: #07130d;
+
+  /* ── EXEC blue: identity, never interface ─────────────────────────────── */
+  --nc-exec-blue: #2785e3;
+  --nc-exec-glow: #4cabdd;
+  --nc-exec-soft: rgba(39, 133, 227, 0.16);
+  --nc-exec-line: rgba(76, 171, 221, 0.34);
+
+  /* ── The primary/command accent, kept under its old name ───────────────
+     Every earlier layer calls the accent `--nc-lime`, so the accent is
+     re-pointed here rather than renamed: renaming would have needed an edit in
+     a hundred places, and the name was only ever a colour. */
+  --nc-lime: var(--nc-mint);
+  --nc-lime-soft: var(--nc-mint-soft);
+  --nc-lime-line: var(--nc-mint-line);
+  --nc-lime-glow: var(--nc-mint-glow);
+
+  /* ── Department identities: ONE warm family ─────────────────────────────
+     Six spaces, six plates, and in the reference all six are the same
+     champagne glass with a mint status dot. So these are six *warm* tones
+     within a hair of each other — enough to keep a dense row list scannable,
+     never enough to become a second palette. Identity is carried by the icon
+     and the name; these merely tint. */
+  --nc-operations: #d9b98c;
+  --nc-growth: #cfc39f;
+  --nc-client: #e3c9a2;
+  --nc-creative: #d6ab8c;
+  --nc-product: #c6bda6;
+  --nc-finance: #c1ab7c;
+
+  /* The names the earlier layers use for the same six. */
+  --nc-network: var(--nc-champagne);
+  --nc-cyan: var(--nc-champagne-pale);
+  --nc-blue: var(--nc-exec-blue);
+  /* There is no violet in this direction. Anything still asking for it gets
+     champagne, so a stale rule cannot smuggle the old palette back in. */
+  --nc-violet: var(--nc-champagne);
+  --nc-human: var(--nc-text);
+  --nc-executive: var(--nc-exec-blue);
+
+  /* ── Runtime status vocabulary — the nine states, retuned ─────────────── */
+  --nc-idle: #6c6960;
+  --nc-thinking: var(--nc-champagne);
+  --nc-active: var(--nc-mint);
+  --nc-handoff: #e8cda4;
+  --nc-waiting: #9a968b;
+  --nc-approval: #e9b45c;
+  --nc-blocked: #ef8b7a;
+  --nc-completed: var(--nc-mint);
+  --nc-error: #f2705f;
+
+  /* ── Smoked glass ─────────────────────────────────────────────────────── */
+  --nc-glass: linear-gradient(180deg, rgba(32, 33, 30, 0.68), rgba(13, 14, 13, 0.54));
+  --nc-glass-strong: linear-gradient(180deg, rgba(38, 38, 34, 0.8), rgba(15, 16, 15, 0.66));
+  --nc-glass-1: rgba(246, 232, 208, 0.035);
+  --nc-glass-2: rgba(246, 232, 208, 0.06);
+  --nc-glass-3: rgba(246, 232, 208, 0.095);
+  --nc-glass-plate: var(--nc-glass);
+  --nc-glass-plate-strong: var(--nc-glass-strong);
+  --nc-hairline: rgba(246, 219, 173, 0.09);
+  --nc-hairline-2: rgba(246, 219, 173, 0.17);
+  --nc-inner-light: inset 0 1px 0 rgba(255, 244, 226, 0.06);
+
+  --nc-blur-1: 10px;
+  --nc-blur-2: 18px;
+  --nc-blur-3: 28px;
+
+  /* ── Depth ────────────────────────────────────────────────────────────── */
+  --nc-shadow-1: 0 1px 0 rgba(255, 244, 226, 0.03), 0 2px 6px rgba(0, 0, 0, 0.46);
+  --nc-shadow-2: 0 14px 34px -14px rgba(0, 0, 0, 0.7);
+  --nc-shadow-3: 0 30px 70px -26px rgba(0, 0, 0, 0.82);
+  --nc-shadow-4: 0 44px 96px -32px rgba(0, 0, 0, 0.9);
+
+  /* ── Radius: the references are generously rounded, not boxy ──────────── */
+  --nc-r-1: 12px;
+  --nc-r-2: 16px;
+  --nc-r-3: 22px;
+  --nc-r-4: 30px;
+  --nc-r-pill: 999px;
+
+  /* ── SPACE — one 4px ramp, so padding is a decision and not a guess ───── */
+  --nc-s-1: 4px;
+  --nc-s-2: 8px;
+  --nc-s-3: 12px;
+  --nc-s-4: 16px;
+  --nc-s-5: 22px;
+  --nc-s-6: 28px;
+  --nc-s-7: 36px;
+  --nc-s-8: 48px;
+
+  /* ── Type ─────────────────────────────────────────────────────────────── */
+  --nc-font: var(--font-inter, "Inter"), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Arabic gets a stack that is actually designed for Arabic script, so the
+     RTL interface is not Latin letterforms with Arabic in a fallback. */
+  --nc-font-ar: "Segoe UI", "Noto Sans Arabic", "Tahoma", "Geeza Pro", system-ui, sans-serif;
+  --nc-font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, monospace;
+  --nc-track-wide: 0.2em;
+  --nc-track-mid: 0.1em;
+
+  /* ── THE SOFT KEYBOARD, AS A DISTANCE ───────────────────────────────────
+     Zero by default, and zero on every surface that has no keyboard. The phone
+     shell sets it from `window.visualViewport` (`state/use-keyboard-inset.ts`)
+     so the bottom bar, the toast lane and the sheet can sit ABOVE the keyboard
+     instead of behind it. It is a length, not a boolean, because the keyboard's
+     height is the only thing the layout needs to know. */
+  --nc-kb: 0px;
+
+  /* ── MOTION — restrained, and every primitive is pausable ─────────────── */
+  --nc-dur-orbit: calc(64000ms * var(--nc-speed));   /* ring rotation        */
+  --nc-dur-light: calc(21000ms * var(--nc-speed));   /* travelling light     */
+  --nc-dur-sheen: calc(15000ms * var(--nc-speed));   /* glass sheen          */
+  --nc-dur-bloom: calc(1900ms * var(--nc-speed));    /* selection bloom      */
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2 · PRIMITIVES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Surfaces ──────────────────────────────────────────────────────────────
+   One material, four levels. `nc-surface` is the reusable name; the existing
+   container classes are re-pointed at the same material so the whole product
+   is on one surface system without a rename pass. */
+.nc-root .nc-surface,
+.nc-root .nc-glass,
+.nc-root .nc-card,
+.nc-root .nl-panel,
+.nc-root .nc-op-panel,
+.nc-root .nc-dw-card,
+.nc-root .nc-aw-card,
+.nc-root .nc-project,
+.nc-root .nc-shared__item,
+.nc-root .nc-lab__panel {
+  background: var(--nc-glass-plate);
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-3);
+  box-shadow: var(--nc-shadow-2), var(--nc-inner-light);
+  backdrop-filter: blur(var(--nc-blur-2));
+}
+
+.nc-root .nc-surface--raised,
+.nc-root .nl-hero,
+.nc-root .nc-op-panel--action {
+  background: var(--nc-glass-plate-strong);
+  border-color: var(--nc-hairline-2);
+  box-shadow: var(--nc-shadow-3), var(--nc-inner-light);
+}
+
+/* The quiet level: rows and inner cells. No border of their own — they are
+   inside a surface, and a frame inside a frame is what makes dense working
+   views look noisy. */
+.nc-root .nc-surface--quiet,
+.nc-root .nc-op-row,
+.nc-root .nc-dw-row,
+.nc-root .nc-aw-item,
+.nc-root .nl-line,
+.nc-root .nl-cell,
+.nc-root .nl-turn {
+  background: var(--nc-glass-1);
+  border: 1px solid transparent;
+  border-radius: var(--nc-r-2);
+}
+.nc-root .nc-op-row:hover,
+.nc-root .nc-dw-row:hover,
+.nc-root .nc-aw-item:hover,
+.nc-root .nl-line:hover,
+.nc-root .nl-cell:hover,
+.nc-root .nl-turn:hover {
+  background: var(--nc-glass-2);
+  border-color: var(--nc-hairline);
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────────
+   One control, three weights. `--lime` is the product's existing name for the
+   PRIMARY weight and keeps working; it is now the measured mint. */
+.nc-root .nc-btn,
+.nc-root .nl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nc-s-2);
+  height: 38px;
+  padding: 0 var(--nc-s-4);
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-hairline-2);
+  background: var(--nc-glass-2);
+  color: var(--nc-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 560;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--nc-dur-micro) var(--nc-ease-standard),
+    border-color var(--nc-dur-micro) var(--nc-ease-standard),
+    color var(--nc-dur-micro) var(--nc-ease-standard),
+    transform var(--nc-dur-micro) var(--nc-ease-standard);
+}
+.nc-root .nc-btn:hover,
+.nc-root .nl-btn:hover {
+  background: var(--nc-glass-3);
+  border-color: var(--nc-border-3);
+  color: var(--nc-text);
+}
+.nc-root .nc-btn:active,
+.nc-root .nl-btn:active { transform: translateY(1px); }
+
+.nc-root .nc-btn--sm,
+.nc-root .nl-btn--sm { height: 32px; padding: 0 var(--nc-s-3); font-size: 12px; }
+
+/* PRIMARY — the pale mint plate. The only saturated control in the system. */
+.nc-root .nc-btn--lime,
+.nc-root .nc-btn[data-variant="primary"],
+.nc-root .nl-btn--primary {
+  background: linear-gradient(180deg, var(--nc-mint-pale) 0%, var(--nc-mint) 100%);
+  border-color: rgba(255, 255, 255, 0.34);
+  color: var(--nc-mint-ink);
+  font-weight: 640;
+  box-shadow: 0 6px 18px -10px var(--nc-mint-glow);
+}
+.nc-root .nc-btn--lime:hover,
+.nc-root .nc-btn[data-variant="primary"]:hover,
+.nc-root .nl-btn--primary:hover {
+  background: linear-gradient(180deg, #e9fff4 0%, var(--nc-mint) 100%);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* GHOST — an edge and nothing else, for the secondary action beside a primary. */
+.nc-root .nc-btn--ghost,
+.nc-root .nc-btn[data-variant="ghost"],
+.nc-root .nl-btn--ghost {
+  background: transparent;
+  border-color: var(--nc-hairline-2);
+  color: var(--nc-text-2);
+}
+.nc-root .nc-btn--ghost:hover,
+.nc-root .nc-btn[data-variant="ghost"]:hover { color: var(--nc-text); border-color: var(--nc-champagne-line); }
+
+.nc-root .nc-btn[disabled],
+.nc-root .nl-btn[disabled] { opacity: 0.42; cursor: not-allowed; }
+
+/* Focus is ONE ring, champagne, and never a colour change. */
+.nc-root :where(.nc-btn, .nl-btn, .nc-input, input, textarea, select, a, button):focus-visible {
+  outline: 2px solid var(--nc-champagne-pale);
+  outline-offset: 2px;
+}
+/* …with ONE deliberate exception: the field INSIDE the composer. The composer is
+   a single control — a pill you type into — so its focus is drawn on the SHELL.
+   Ringing the bare input instead drew a rectangle around part of the pill's own
+   contents and over the model chip beside it, which is what the keyboard-open
+   capture showed. The ring is not removed, it is moved to the object the reader
+   thinks they are focused on. */
+.nc-root .nc-cmdbar__input:focus-visible { outline: none; }
+.nc-root .nc-cmdbar__shell:focus-within {
+  border-color: var(--nc-champagne-line);
+  box-shadow: var(--nc-shadow-3), 0 0 0 4px var(--nc-champagne-soft), var(--nc-inner-light);
+}
+
+/* ── Inputs ────────────────────────────────────────────────────────────────
+   The field is the CONTAINER (a pill you type into); a field inside a pill
+   composer carries no frame of its own. */
+.nc-root .nc-input,
+.nc-root .nc-field,
+.nc-root .nl-conv__input,
+.nc-root .nc-dw-search {
+  background: rgba(9, 10, 9, 0.62);
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-2);
+  color: var(--nc-text);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color var(--nc-dur-micro) var(--nc-ease-standard),
+              box-shadow var(--nc-dur-micro) var(--nc-ease-standard);
+}
+.nc-root .nc-input:focus,
+.nc-root .nl-conv__input:focus { border-color: var(--nc-mint-line); box-shadow: 0 0 0 3px var(--nc-mint-soft); }
+.nc-root ::placeholder { color: var(--nc-text-4); }
+
+/* ── Navigation states: one item, four states, all champagne ─────────────── */
+.nc-root .nc-nav-item {
+  position: relative;
+  border: 1px solid transparent;
+  border-radius: var(--nc-r-2);
+  background: transparent;
+  color: var(--nc-text-2);
+  transition: background var(--nc-dur-micro) var(--nc-ease-standard),
+              color var(--nc-dur-micro) var(--nc-ease-standard),
+              border-color var(--nc-dur-micro) var(--nc-ease-standard);
+}
+.nc-root .nc-nav-item:hover { background: var(--nc-glass-1); color: var(--nc-text); }
+.nc-root .nc-nav-item[data-active="true"],
+.nc-root .nc-nav-item[aria-current="page"] {
+  background: var(--nc-glass-2);
+  border-color: var(--nc-champagne-line);
+  color: var(--nc-text);
+  box-shadow: var(--nc-inner-light);
+}
+/* The marker is a short champagne bar on the leading edge — the one piece of
+   chrome that says "you are here" without a second colour. */
+.nc-root .nc-nav-item[data-active="true"]::before,
+.nc-root .nc-nav-item[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 50%;
+  width: 2px;
+  height: 18px;
+  margin-top: -9px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--nc-champagne-pale), var(--nc-champagne));
+}
+
+/* ── Badges, chips, tags ─────────────────────────────────────────────────── */
+.nc-root .nc-badge,
+.nc-root .nl-tag,
+.nc-root .nl-chip,
+.nc-root .nc-op-tag,
+.nc-root .nc-cmdbar__tag,
+.nc-root .nc-aw-chip,
+.nc-root .nc-shared__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nc-s-1);
+  height: 24px;
+  padding: 0 var(--nc-s-3);
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-1);
+  color: var(--nc-text-2);
+  font-size: 11px;
+  font-weight: 560;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.nc-root .nc-badge[data-tone="mint"] { border-color: var(--nc-mint-line); background: var(--nc-mint-soft); color: var(--nc-mint-pale); }
+
+/* ── Status: always a dot AND a word, never colour alone ─────────────────── */
+.nc-root .nc-status,
+.nc-root .nc-op-status,
+.nc-root .nc-pod__state,
+.nc-root .nc-mo__dept-status,
+.nc-root .nc-dw-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nc-s-2);
+  color: var(--nc-text-2);
+  font-size: 11.5px;
+}
+/* The dot reads the runtime STATUS first (`--nc-status-color`, which the node
+   sets from its own `data-status`) and only falls back to the surface's own
+   accent. A status is a fact about work; an accent is an identity. */
+.nc-root .nc-status > i,
+.nc-root .nc-op-status > i,
+.nc-root .nc-pod__led,
+.nc-root .nc-mo__dept-status > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--nc-status-color, var(--nc-accent, var(--nc-idle)));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nc-status-color, var(--nc-accent, var(--nc-idle))) 18%, transparent);
+  flex: none;
+}
+
+/* ── Meters ──────────────────────────────────────────────────────────────── */
+.nc-root .nc-meter,
+.nc-root .nl-meter,
+.nc-root .nc-op-meter,
+.nc-root .nc-mo__row-meter,
+.nc-root .nc-dw-meter {
+  background: rgba(255, 244, 226, 0.09);
+  border-radius: var(--nc-r-pill);
+  overflow: hidden;
+}
+.nc-root .nc-meter > i,
+.nc-root .nl-meter > i,
+.nc-root .nc-op-meter > i,
+.nc-root .nc-mo__row-meter > i,
+.nc-root .nc-dw-meter > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--nc-champagne-deep), var(--nc-mint));
+}
+
+/* ── Sheets ────────────────────────────────────────────────────────────────
+   One sheet, used by the phone's More menu and by every detail disclosure that
+   a thumb opens. It carries the safe-area inset so it is usable over a home
+   indicator, and it is a real dialog in the markup (see `mobile-nav.tsx`). */
+.nc-root .nc-sheet__scrim {
+  background: rgba(4, 4, 4, 0.68);
+  backdrop-filter: blur(3px);
+}
+.nc-root .nc-sheet__panel {
+  /* A sheet is MODAL, so its own glass is smoked dense rather than transparent:
+     a translucent panel let the phone bar's icons show through the sheet's last
+     row (visible in the keyboard capture). The material is the same one every
+     other plate uses, at the opacity a surface that owns the whole screen needs. */
+  background: linear-gradient(180deg, rgba(25, 26, 23, 0.985), rgba(11, 12, 11, 0.995));
+  border: 1px solid var(--nc-hairline-2);
+  border-radius: var(--nc-r-4) var(--nc-r-4) 0 0;
+  box-shadow: var(--nc-shadow-4), var(--nc-inner-light);
+  padding-bottom: calc(var(--nc-s-5) + env(safe-area-inset-bottom, 0px));
+}
+.nc-root .nc-sheet__head { border-bottom: 1px solid var(--nc-hairline); }
+.nc-root .nc-sheet__title {
+  font-size: 11px;
+  font-weight: 620;
+  letter-spacing: var(--nc-track-wide);
+  text-transform: uppercase;
+  color: var(--nc-champagne);
+}
+.nc-root .nc-sheet__link,
+.nc-root .nc-sheet__exec {
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-2);
+  background: var(--nc-glass-1);
+  color: var(--nc-text-2);
+}
+.nc-root .nc-sheet__link:hover,
+.nc-root .nc-sheet__exec:hover { background: var(--nc-glass-2); color: var(--nc-text); }
+
+/* ── Typography primitives ───────────────────────────────────────────────── */
+.nc-root .nc-display,
+.nc-root .nc-rail__wordmark,
+.nc-root .nc-mo__brand-name {
+  font-weight: 500;
+  letter-spacing: var(--nc-track-wide);
+  text-transform: uppercase;
+  color: var(--nc-text);
+}
+.nc-root .nc-h1,
+.nc-root .nl-head__title,
+.nc-root .nc-op-head__title,
+.nc-root .nc-ov__title,
+.nc-root .nc-dw__name {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--nc-text);
+}
+.nc-root .nc-h2,
+.nc-root .nl-panel__title,
+.nc-root .nc-op-panel__title,
+.nc-root .nc-op-spaces__title,
+.nc-root .nc-dw-card__title {
+  font-size: 14px;
+  font-weight: 620;
+  letter-spacing: -0.005em;
+  color: var(--nc-text);
+}
+.nc-root .nc-h3 {
+  font-size: 12.5px;
+  font-weight: 620;
+  color: var(--nc-text);
+}
+.nc-root .nc-eyebrow,
+.nc-root .nl-head__kicker,
+.nc-root .nc-op-head__kicker,
+.nc-root .nl-eyebrow {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: var(--nc-track-mid);
+  text-transform: uppercase;
+  color: var(--nc-champagne);
+}
+.nc-root .nc-meta,
+.nc-root .nl-figure__label,
+.nc-root .nc-op-metric__label {
+  font-size: 11.5px;
+  color: var(--nc-text-3);
+}
+.nc-root .nc-sub {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--nc-text-2);
+}
+/* Arabic is set in the Arabic stack with slightly looser leading: Arabic needs
+   the vertical room, and the same size as Latin looks smaller. */
+.nc-root[lang="ar"] {
+  font-family: var(--nc-font-ar);
+}
+.nc-root[lang="ar"] .nc-h1,
+.nc-root[lang="ar"] .nl-head__title,
+.nc-root[lang="ar"] .nc-op-head__title { font-size: 23px; line-height: 1.35; }
+.nc-root[lang="ar"] .nc-sub,
+.nc-root[lang="ar"] .nl-head__lead { line-height: 1.7; }
+
+/* Numbers, ids and code stay monospaced and direction-neutral in both
+   languages, so a count never renders as a mirrored Latin run inside Arabic. */
+.nc-root .nc-mono,
+.nc-root .nc-op-metric__value,
+.nc-root .nl-figure__value {
+  font-family: var(--nc-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3 · CHROME — the shell's own surfaces, in the same material
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The rail is quiet: no fill of its own, one champagne hairline on the inside
+   edge, and brand type that is letterspaced like the reference's wordmark. */
+.nc-root .nc-rail {
+  background: linear-gradient(180deg, rgba(20, 21, 19, 0.5), rgba(10, 11, 10, 0.4));
+  border-inline-end: 1px solid var(--nc-hairline);
+  backdrop-filter: blur(var(--nc-blur-2));
+}
+.nc-root .nc-rail__sub,
+.nc-root .nc-rail__user-role { color: var(--nc-text-3); letter-spacing: var(--nc-track-mid); }
+
+/* The one rail entry that is not an area: EXEC, in EXEC's own blue, because
+   that is the only place blue is allowed to mean anything. */
+.nc-root .nc-rail__exec {
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-2);
+  background: var(--nc-glass-1);
+  color: var(--nc-text);
+}
+.nc-root .nc-rail__exec:hover { border-color: var(--nc-exec-line); background: var(--nc-glass-2); }
+.nc-root .nc-rail__exec-glyph { color: var(--nc-exec-glow); filter: drop-shadow(0 0 6px var(--nc-exec-soft)); }
+.nc-root .nc-rail__exec[aria-current="page"] { border-color: var(--nc-exec-line); background: var(--nc-exec-soft); }
+
+.nc-root .nc-rail__create {
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-2);
+  background: var(--nc-glass-1);
+  color: var(--nc-text-2);
+}
+.nc-root .nc-rail__create:hover { background: var(--nc-glass-2); color: var(--nc-text); }
+
+/* The command bar: a smoked glass pill with the mint send plate. */
+.nc-root .nc-cmdbar__shell {
+  background: var(--nc-glass-plate-strong);
+  border: 1px solid var(--nc-hairline-2);
+  border-radius: var(--nc-r-pill);
+  box-shadow: var(--nc-shadow-3), var(--nc-inner-light);
+  backdrop-filter: blur(var(--nc-blur-3));
+}
+.nc-root .nc-cmdbar__shell[data-listening="true"] { border-color: var(--nc-mint-line); box-shadow: 0 0 0 3px var(--nc-mint-soft); }
+.nc-root .nc-cmdbar__glyph { color: var(--nc-champagne); }
+.nc-root .nc-cmdbar__input { color: var(--nc-text); }
+.nc-root .nc-cmdbar__chip,
+.nc-root .nc-cmdbar__scope {
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-pill);
+  background: var(--nc-glass-1);
+  color: var(--nc-text-2);
+}
+.nc-root .nc-cmdbar__chip--mode,
+.nc-root .nc-cmdbar__voice {
+  border: 1px solid var(--nc-hairline-2);
+  background: var(--nc-glass-2);
+  color: var(--nc-text-2);
+}
+.nc-root .nc-cmdbar__chip--mode b { color: var(--nc-champagne-pale); font-weight: 620; }
+.nc-root .nc-cmdbar__voice[data-listening="true"] { color: var(--nc-mint); border-color: var(--nc-mint-line); }
+/* The send control is the measured mint plate — the same object as the
+   reference's send button, and the only saturated control in the shell. */
+.nc-root .nc-cmdbar__send {
+  background: linear-gradient(180deg, var(--nc-mint-pale) 0%, var(--nc-mint) 100%);
+  color: var(--nc-mint-ink);
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 50%;
+  box-shadow: 0 8px 20px -10px var(--nc-mint-glow);
+}
+.nc-root .nc-cmdbar__send:hover { filter: brightness(1.06); }
+.nc-root .nc-cmdbar__send[disabled] { background: var(--nc-glass-2); color: var(--nc-text-4); box-shadow: none; }
+.nc-root .nc-cmdbar__result { border-radius: var(--nc-r-2); }
+.nc-root .nc-cmdbar__quote { color: var(--nc-text); }
+
+/* The scope's limitation, printed under the bar instead of announced in a
+   toast. It is a caption, not a warning: quiet type, aligned to the scope chip
+   at the inline end, and present on every surface the selector is present on.
+   The phone composition has its own copy under its own control. */
+.nc-root .nc-cmdbar__scope-note {
+  margin: 7px 4px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  /* `text-3`, not `text-4`: this is a limitation, not a footnote, and small
+     text needs the contrast. */
+  color: var(--nc-text-3);
+  text-align: end;
+}
+
+/* The context column: a quiet panel, not a second page. */
+.nc-root .nc-context {
+  border-inline-start: 1px solid var(--nc-hairline);
+  background: linear-gradient(180deg, rgba(18, 19, 17, 0.42), rgba(10, 11, 10, 0.34));
+}
+.nc-root .nc-context__topbar { border-bottom: 1px solid var(--nc-hairline); }
+.nc-root .nc-context__link,
+.nc-root .nc-context__viewall { color: var(--nc-champagne); }
+
+/* Phone bar: the same material as the sheet, and it respects the home bar. */
+.nc-root .nc-mobilebar {
+  background: linear-gradient(180deg, rgba(16, 17, 15, 0.92), rgba(8, 8, 7, 0.98));
+  border-top: 1px solid var(--nc-hairline);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.nc-root .nc-mobilebar__item { color: var(--nc-text-3); }
+.nc-root .nc-mobilebar__item[data-active="true"],
+.nc-root .nc-mobilebar__item[aria-current="page"] { color: var(--nc-text); }
+.nc-root .nc-mobilebar__item[data-active="true"]::after {
+  background: linear-gradient(90deg, transparent, var(--nc-mint), transparent);
+}
+
+/* Toasts are ONE surface, in the same glass. */
+.nc-root .nc-toast {
+  background: var(--nc-glass-plate-strong);
+  border: 1px solid var(--nc-hairline-2);
+  border-radius: var(--nc-r-pill);
+  box-shadow: var(--nc-shadow-3), var(--nc-inner-light);
+  color: var(--nc-text);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3b · PHONE CHROME — the composer, the bar, and the keyboard between them
+   ───────────────────────────────────────────────────────────────────────────
+   Two defects are fixed here, and both were MEASURED before they were styled:
+
+     1. THE BAR WENT UNDER THE KEYBOARD. `.nc-root` carries `min-height: 640px`
+        (a sensible guard for a desktop window), so on a 390 × 460 keyboard-sized
+        viewport the shell stayed 640 tall while the bar — `position: absolute;
+        bottom: 0` — was pinned to the bottom of the SHELL, i.e. 180px below the
+        visible screen. It was not merely covered; it was not there. The guard is
+        therefore lifted on the phone (the phone composition scrolls inside
+        `.nc-main__scroll`, so it does not need a minimum), and the bar is
+        `position: fixed` so its reference is the viewport, offset by `--nc-kb`.
+
+     2. THE COMPOSER CLIPPED AT 360px. One row had to hold a glyph, the input,
+        a waveform, a voice button, the model chip, the scope chip and the send
+        plate. At 390 the placeholder was cut to "Ask the c…"; at 360 the send
+        plate itself was off the edge. A phone does not have a narrower desktop
+        toolbar — it gets its own composition: the INPUT takes a row of its own,
+        and the controls sit under it in one line, exactly as the approved
+        reference's phone composer is laid out. Nothing is hidden: every control
+        that was in the bar is still in the bar.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 760px) {
+  /* The desktop minimum stops being a minimum: on a phone the shell is the
+     viewport, and its content scrolls inside it. */
+  .nc-root { min-height: 0; }
+
+  /* ── The composer: input first, controls under it ─────────────────────── */  .nc-root .nc-cmdbar {
+    min-width: 0;
+  }
+  /* The phone header carries the scope control and its own limitation line, so
+     the desktop caption would be a second copy of the same sentence. */
+  .nc-root .nc-cmdbar__scope-note {
+    display: none;
+  }
+  .nc-root .nc-cmdbar__shell {
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: var(--nc-s-2);
+    padding: var(--nc-s-3) var(--nc-s-3) var(--nc-s-3) var(--nc-s-4);
+    border-radius: var(--nc-r-3);
+  }
+  .nc-root .nc-cmdbar__input {
+    flex: 1 1 100%;
+    order: -1;
+    min-width: 0;
+    min-height: 26px;
+    padding-inline: 2px;
+    font-size: 15px;
+  }
+  /* The glyph keeps its place at the start of the second row; the send plate is
+     pushed to the far end so the row reads "act here, send there" rather than
+     five controls of equal weight. */
+  .nc-root .nc-cmdbar__glyph { width: 36px; height: 36px; border-radius: 11px; }
+  .nc-root .nc-cmdbar__send { margin-inline-start: auto; }
+
+  /* ── The bottom chrome: fixed to the viewport, above the keyboard ─────── */
+  .nc-root .nc-mobilebar {
+    position: fixed;
+    inset-inline: 0;
+    bottom: var(--nc-kb);
+    /* 68 rather than 62: at 62 the four cells' labels sat on the viewport's last
+       pixel row and read as clipped. Nothing is made smaller — the bar simply
+       has the room its own content needs, and the scroller's bottom padding is
+       raised by the same six pixels below. */
+    height: calc(68px + env(safe-area-inset-bottom, 0px));
+    padding-block: var(--nc-s-1);
+    padding-bottom: calc(var(--nc-s-2) + env(safe-area-inset-bottom, 0px));
+  }
+  .nc-root .nc-main__scroll { padding-bottom: calc(94px + env(safe-area-inset-bottom, 0px)); }
+  .nc-root .nc-toast { bottom: calc(90px + var(--nc-kb)); }
+  .nc-root .nc-sheet {
+    position: fixed;
+    inset-block: 0;
+    inset-inline: 0;
+    bottom: var(--nc-kb);
+  }
+  .nc-root .nc-exec-surface { bottom: calc(78px + var(--nc-kb)); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4 · LEGACY ACCENT RE-POINTS
+   ───────────────────────────────────────────────────────────────────────────
+   The layers beneath this file were written against the previous direction and
+   a handful of their rules carry a hard-coded hue instead of a token — blue
+   tints and a lime/amber accent. A token retune cannot reach those, so they are
+   named here ONE BY ONE and re-pointed at the foundation. This is deliberately
+   the smallest section in the file: it exists to close the gap, not to grow.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* lab.css — the blue-tinted fills and grids */
+.nc-root .nl-topbar,
+.nc-root .nl-sticky {
+  background: linear-gradient(180deg, rgba(13, 14, 13, 0.92) 42%, rgba(13, 14, 13, 0));
+}
+.nc-root .nl-hero {
+  background:
+    radial-gradient(120% 160% at 0% -40%, var(--nc-champagne-soft), transparent 62%),
+    var(--nc-glass-strong);
+}
+.nc-root .nl-demo__seg { background: rgba(9, 10, 9, 0.6); }
+.nc-root .nl-timeline__dot { box-shadow: 0 0 0 3px rgba(13, 14, 13, 0.9); }
+.nc-root .nl-skel {
+  background: linear-gradient(100deg, rgba(246, 232, 208, 0.04) 30%, rgba(246, 232, 208, 0.09) 50%, rgba(246, 232, 208, 0.04) 70%);
+  background-size: 220% 100%;
+}
+.nc-root .nl-map__canvas {
+  background:
+    radial-gradient(90% 70% at 50% 40%, var(--nc-champagne-soft), transparent 70%),
+    rgba(9, 10, 9, 0.5);
+}
+.nc-root .nl-map__grid {
+  background-image:
+    linear-gradient(to right, rgba(246, 219, 173, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(246, 219, 173, 0.06) 1px, transparent 1px);
+}
+.nc-root .nl-map__wire { stroke: rgba(246, 219, 173, 0.22); }
+.nc-root .nl-map__node[data-selected="true"] { box-shadow: 0 0 0 3px var(--nc-champagne-soft); }
+.nc-root .nl-note,
+.nc-root .nl-conv__input { background: rgba(9, 10, 9, 0.62); }
+
+/* operate.css — the lime/amber accents of the previous home */
+.nc-root .nc-op-views { background: rgba(9, 10, 9, 0.5); }
+.nc-root .nc-actions .nc-exec-lead {
+  border-color: var(--nc-mint-line);
+  background: linear-gradient(180deg, var(--nc-mint-soft), rgba(255, 244, 226, 0.02) 64%);
+}
+.nc-root .nc-op-panel--action { border-color: var(--nc-champagne-line); }
+.nc-root .nc-op-panel--action .nc-op-panel__mark {
+  color: var(--nc-champagne-pale);
+  border-color: var(--nc-champagne-line);
+  background: var(--nc-champagne-soft);
+}
+.nc-root .nc-op-panel__action {
+  border: 1px solid var(--nc-mint-line);
+  background: var(--nc-mint-soft);
+  color: var(--nc-mint-pale);
+}
+.nc-root .nc-op-panel__action:hover { background: color-mix(in srgb, var(--nc-mint) 26%, transparent); }
+.nc-root .nc-mo__exec {
+  border-color: var(--nc-mint-line);
+  background: linear-gradient(180deg, var(--nc-mint-soft), rgba(255, 244, 226, 0.02) 62%);
+}
+.nc-root .nc-mo__exec:active { background: color-mix(in srgb, var(--nc-mint) 20%, transparent); }
+.nc-root .nc-mo__row[data-tone="attention"] { border-color: var(--nc-champagne-line); }
+.nc-root .nc-mo__row-tag {
+  border: 1px solid var(--nc-champagne-line);
+  background: var(--nc-champagne-soft);
+  color: var(--nc-champagne-pale);
+}
+.nc-root .nc-shared__link { background: transparent; }
+.nc-root .nc-shared__link:hover { background: var(--nc-glass-2); }
+.nc-root .nc-sheet__scrim { background: rgba(4, 4, 4, 0.68); }
+
+/* exec.css — EXEC's surfaces stay Product-owned here; the conversation itself
+   is Agent Studio's. This only says: EXEC's mark is blue, its chrome is not. */
+.nc-root .nc-ex-accent { color: var(--nc-exec-glow); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5 · AMBIENT — decorative space, kept quiet behind readable content
+   ───────────────────────────────────────────────────────────────────────────
+   The references sit the interface on a champagne nebula with a few stars. That
+   imagery is decoration: it never carries meaning, it never animates faster than
+   a slow drift, and it is held at low enough opacity that body text keeps its
+   measured contrast on top of it.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nc-ambient__window {
+  background:
+    radial-gradient(120% 90% at 12% -14%, rgba(243, 173, 73, 0.09), transparent 58%),
+    radial-gradient(90% 70% at 88% 6%, var(--nc-exec-soft), transparent 62%),
+    linear-gradient(180deg, rgba(16, 16, 15, 0.6), rgba(8, 8, 7, 0.9));
+}
+.nc-root .nc-ambient__bokeh i {
+  filter: blur(52px);
+  opacity: 0.4;
+}
+.nc-root .nc-ambient__bokeh i:nth-child(1) { background: rgba(243, 173, 73, 0.16); }
+.nc-root .nc-ambient__bokeh i:nth-child(2) { background: rgba(208, 173, 137, 0.12); }
+.nc-root .nc-ambient__bokeh i:nth-child(3) { background: rgba(246, 219, 173, 0.07); }
+.nc-root .nc-ambient__bokeh i:nth-child(4) { background: rgba(76, 171, 221, 0.07); }
+.nc-root .nc-ambient__bokeh i:nth-child(5) { background: rgba(124, 101, 68, 0.16); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6 · MOTION — one primitive, three gates
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Panel entry: the restrained reveal a surface uses when it opens. */
+@keyframes nc-fnd-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes nc-fnd-bloom {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.nc-root .nc-rise { animation: nc-fnd-rise var(--nc-dur-spatial) var(--nc-ease-out) both; }
+.nc-root .nc-bloom { animation: nc-fnd-bloom var(--nc-dur-quick) var(--nc-ease-out) both; }
+
+/* GATE 1 — nothing off screen animates. `data-live` is set by an
+   IntersectionObserver (`state/use-on-screen.ts`); this is the rule that reads
+   it, and it is why a scrolled-away scene costs nothing. */
+.nc-root [data-live="false"] :where(.nc-anim, .nc-orbit, .nc-orbit__pearl, .nc-travel, .nc-sheen, .nc-bloom) {
+  animation-play-state: paused;
+}
+
+/* GATE 2 — the OS preference. Not a reduced version of the motion: no motion. */
+@media (prefers-reduced-motion: reduce) {
+  .nc-root .nc-anim,
+  .nc-root .nc-orbit,
+  .nc-root .nc-orbit__pearl,
+  .nc-root .nc-travel,
+  .nc-root .nc-sheen,
+  .nc-root .nc-rise,
+  .nc-root .nc-bloom,
+  .nc-root [data-live] * {
+    animation: none !important;
+  }
+  .nc-root * { transition-duration: 1ms !important; }
+}
+
+/* GATE 3 — the in-product motion mode, which the review tool and the store both
+   drive (`data-motion="reduced"`). Same truth as the OS gate, expressed in the
+   product's own vocabulary. */
+.nc-root[data-motion="reduced"] .nc-anim,
+.nc-root[data-motion="reduced"] .nc-orbit,
+.nc-root[data-motion="reduced"] .nc-orbit__pearl,
+.nc-root[data-motion="reduced"] .nc-travel,
+.nc-root[data-motion="reduced"] .nc-sheen,
+.nc-root[data-motion="reduced"] .nc-rise,
+.nc-root[data-motion="reduced"] .nc-bloom { animation: none !important; }
+
+/* FALLBACK — where `mask-image` is unsupported the decorative layers that
+   depend on it simply do not paint, and every one of them is non-essential, so
+   the surface behind them is already correct. */
+@supports not (mask-image: radial-gradient(black, transparent)) {
+  .nc-root .nc-orbit__veil { display: none; }
+}

@@ -1,0 +1,1500 @@
+{
+  "artifact": "EXEC integration copy — overlay manifest",
+  "generatedFor": "Step 5A-4 / EXEC conversation lab, review checkpoint 1 + Marketing & Sales gateway and sales room + missions glass + marketing room delivered from the product tree",
+  "worktree": "nexup-exec-integration",
+  "branch": "feature/exec-integration-lab",
+  "baseCommit": "4ecc1a7fd1a28f2a45d2dfbd32a878914133356f",
+  "baseCommitSubject": "feat(workforce): scope the mission lifecycle to the authenticated authority",
+  "digestRecipe": "Per path: sha256 of the raw file bytes. Layer digest: sha256 of the UTF-8 string formed by the path-sorted rows `<sha256>  <path>` joined with \\n and terminated by \\n. Reproducible with scripts/… not required: see EXEC_INTEGRATION_OVERLAY.md for the one-liner.",
+  "counts": {
+    "coreLayer": 74,
+    "coreTrackedModified": 41,
+    "coreUntracked": 33,
+    "execLayer": 32,
+    "authored": 11,
+    "overlapBetweenLayers": 0,
+    "totalPathsWritten": 221,
+    "productLayer": 85,
+    "productTrackedModified": 39,
+    "productUntracked": 46,
+    "overlapProductWithExec": 1,
+    "deletions": 1,
+    "note": "Product layer: 79 source paths (39 tracked-modified + 40 untracked) + 4 public assets + 2 tests = 85 rows; 1 deliberate deletion.",
+    "overlapNote": "Core<->EXEC = 0 distinct paths. Product shares exactly one path with EXEC (public/exec-lab/exec-head.png, byte-identical), which is why the layers remain additive.",
+    "salesLayer": 9,
+    "salesNote": "Marketing & Sales layer: gateway route, sales room route, their one CSS layer, copy + journey state, and one test. No overlap with core/exec/authored/product beyond the two product files edited above.",
+    "missionsGlassLayer": 1,
+    "marketingLayer": 10,
+    "marketingNote": "Marketing room layer: the delivered tree copied verbatim from nexup-command-product per docs/COMMAND_MARKETING_ROOM.md (route + stylesheet + six modules + its test + that doc). No shared file was edited for it; enabling its door is a sales-layer row. campaign-notice.ts (the outcome-to-notice mapping extracted out of marketing-room.tsx so the Arabic refusal can be tested without React) was added on 2026-11-07 and is recorded here; the room's copy, model, panel and test rows were re-hashed the same day after the approval-line, request-guard, breadcrumb and notice repairs."
+  },
+  "digests": {
+    "core73_excludingReport": {
+      "count": 73,
+      "value": "02c0b9119456245b18d971aac949a26f4151aaad4740d36c391a8dc88b23acad"
+    },
+    "reviewReport": {
+      "path": "docs/evidence/step5a4-tenth-review-corrections-2026-10-24.md",
+      "value": "8ecece1ee4b19c4c8f2fc983ff7c0ac7a8f1fa94540fc7f55d293dfba88f426e"
+    },
+    "core74_full": {
+      "count": 74,
+      "value": "b440aaeddfbc4fbd3f133fa28de35a12fb05e98ed60708ce261b93035af09b3c"
+    },
+    "execLayer32": {
+      "count": 32,
+      "value": "2a9024a90e0e522908b327aa8e21dfa2f67d4ada009214382b08a703acd35820"
+    },
+    "authored11": {
+      "count": 11,
+      "value": "e570f66bd85d79ed33fa1c86dc977e0cfc6eb4627b5b3b45afcdf00511348873"
+    },
+    "product85": {
+      "count": 85,
+      "value": "d4c20371d42a3b36e46922d50a605b195a58291cedb7ad612920f28a80c81737"
+    },
+    "execLayer32AsCopied": {
+      "count": 32,
+      "value": "c1130edcb66e8955703760d81e5ff83ae89042e401523920e33e443af23a4de7"
+    },
+    "execLayer32CurrentNote": "7 EXEC paths were edited by NEXUP AGENT after the layer was copied (and again by later integration passes). Their CURRENT bytes are recorded here, reconciled 2026-11-02, and the as-copied hash stays under sha256AsCopied where one was recorded. engine.ts and tests/exec-experience.test.ts entered the layer without an as-copied hash, so none was invented for them.",
+    "product85AsCopied": {
+      "count": 85,
+      "value": "6931b00c1a3ff07c551b3a4d6caa1ed28ed9717dced3549a65efa076dc88efcb"
+    },
+    "salesLayer": {
+      "count": 9,
+      "value": "ec9feaca0f1c6d5425326d3328dfe6c6fef39769991fc3e913e015a1684e30fb"
+    },
+    "missionsGlassLayer": {
+      "count": 1,
+      "value": "67f37959efcc4241b15f6866a07dcc372b3d13f2f2144bbe0edba12cb2e55ae5"
+    },
+    "marketingLayer": {
+      "count": 9,
+      "value": "2bb0b6e53149c9ff3910cf2bdee191c898895f1d7a4d950160f81ffa0d9f23bb"
+    }
+  },
+  "reviewerReferenceValues": {
+    "note": "Values quoted by the reviewer for the same path sets. The per-file hashes the reviewer published and the review-report hash match byte for byte; the aggregate values were produced by the reviewer's tooling, whose row recipe is not published, so they are recorded verbatim and NOT claimed as reproduced.",
+    "core73_excludingReport": "180849023147c84ae2681dd5361106ace03d4c902e1cd0cc4f8ee6ede74e1173",
+    "reviewReport": "8ecece1ee4b19c4c8f2fc983ff7c0ac7a8f1fa94540fc7f55d293dfba88f426e",
+    "core74_full": "8781d341ba1d8fd5ac9455f8db84066ca0d503074ea82616b306553ca3a6fc6c",
+    "execLayer32": "b0b60205ad826afbe4ef35a74f414adda44c4c3ce5ef0a59a42673d1c1004d16",
+    "execPerFile": {
+      "src/app/command/exec/page.tsx": "3fe33bdfdcb65e3e4110959522210723dbf6a751e62133f4f178c55d7f6f6a9c",
+      "tests/exec-experience.test.ts": "88e5670b436ad41d0524d9635a2ae2014e9b9452db95d1c95df118dc18f3c98f"
+    }
+  },
+  "verification": {
+    "byteEqualitySourceToCopy": {
+      "method": "sha256 of every copied path compared against its source worktree",
+      "corePathsChecked": 74,
+      "execPathsChecked": 32,
+      "mismatches": 0
+    },
+    "reviewerPerFileHashesMatch": true,
+    "reviewerReportHashMatches": true,
+    "aggregateReproduction": "not reproduced (unknown row recipe); see reviewerReferenceValues.note",
+    "productByteEqualityToSource": {
+      "method": "sha256 of every copied path compared against nexup-command-product",
+      "productPathsChecked": 85,
+      "mismatches": 0
+    },
+    "productOverlapWithExec": [
+      "public/exec-lab/exec-head.png"
+    ],
+    "execChangesAfterCopy": [
+      "src/app/command/exec-lab.css",
+      "src/components/command/exec-lab/chrome.tsx",
+      "src/components/command/exec-lab/exec-experience.tsx",
+      "src/components/command/exec-lab/exec-nav.tsx",
+      "src/components/command/exec-lab/i18n.ts",
+      "src/components/command/exec-lab/engine.ts",
+      "tests/exec-experience.test.ts"
+    ],
+    "execDigestReprocessed": "2026-10-29",
+    "productChangesAfterCopy": [
+      {
+        "path": "src/app/command/home.css",
+        "reason": "visual polish pass in the integration copy (home.css §10) — Product source untouched"
+      },
+      {
+        "path": "src/app/command/layout.tsx",
+        "reason": "sales layer import appended (gateway + room CSS) — Product source untouched"
+      },
+      {
+        "path": "src/components/command/state/department-workspace.ts",
+        "reason": "workspaceHref(\"growth\") now opens the Marketing & Sales gateway — Product source untouched"
+      },
+      {
+        "path": "src/app/command/missions/page.tsx",
+        "reason": "missions glass pass (.nlm-stage wrapper + air layers)"
+      },
+      {
+        "path": "src/components/command/scene/command-scene.tsx",
+        "reason": "the Marketing & Sales plate opens /command/sales on one press (router.push(workspaceHref)) — every other plate keeps selection; Product source untouched"
+      }
+    ]
+  },
+  "layers": {
+    "core": [
+      {
+        "path": "docs/AI_WORKFORCE_ADR_0002_ENGINEERING_PLANE_AND_BUDGET_BOUNDARY.md",
+        "sha256": "6e1ced5fb567f1462b22e6e9782e28c3c33770b27dea35f32909ebfbcb9b9492",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "docs/evidence/step5-app-acceptance-2026-10-07.json",
+        "sha256": "7c179c4fc7a981dad62e1a1cef81264533e0e5d18579c130cc934a237f61babf",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "docs/evidence/step5a4-eighth-review-corrections-2026-10-19.md",
+        "sha256": "c0b3d60a4f68ecb0910ec2997b16173e7f6560f10485d497ad22342df46c1371",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "docs/evidence/step5a4-eighth-review-ownership-2026-10-19.json",
+        "sha256": "10c061fd83f556436ccb18d42661a63afb67507b16be9f41f6929898c1e43892",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "docs/evidence/step5a4-http-boundary-2026-10-10.json",
+        "sha256": "6037d70cfc36b8f8fb63bff2e657916d48a79cfc154b5e66eb43c6a74e23da8a",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "docs/evidence/step5a4-http-proof-safety-2026-10-13.json",
+        "sha256": "56d21cb646088453d33989d48e717b008868455b9579258cce50a93666c60a4f",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "docs/evidence/step5a4-ninth-review-corrections-2026-10-20.md",
+        "sha256": "ff3f8dd07902b69196eef46f2d4851de30ffa3c9a9e3eac5c7b56a9551c8300f",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "docs/evidence/step5a4-p1-corrections-2026-10-11.md",
+        "sha256": "d7035af9531c7726062f9e07227b565115f56c25aafd991d57457a425d1c2aec",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "docs/evidence/step5a4-recovery-round5-2026-10-13.json",
+        "sha256": "116811c8a498c8df2939c2ceeccc9d6a8bf04810386fa2b552f95add50b23dea",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "docs/evidence/step5a4-sixth-review-corrections-2026-10-15.md",
+        "sha256": "1a897fb7c13e71b34cb94deafe37add2a4606870b988ca6f63655fe3df7067a8",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "docs/evidence/step5a4-tenth-review-corrections-2026-10-24.md",
+        "sha256": "8ecece1ee4b19c4c8f2fc983ff7c0ac7a8f1fa94540fc7f55d293dfba88f426e",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "prisma/proposed-migrations/AI_WORKFORCE_PHASE_5/migration.sql",
+        "sha256": "cfe87e36da0f0f8f5666f067768ecdf3753f4bd1c92044c1127bff20c6f12b9c",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "prisma/schema.prisma",
+        "sha256": "79a0c35806f4825ee4518d5bdb4a0975a00ad8b96c387788c4a3530f57b540b4",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "scripts/dev-db-ownership-proof.mjs",
+        "sha256": "1af7565182cc40e99181b85e74c0c74369b5ade4ca3a3f5b89666d9f2ef4b581",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "scripts/dev-db-ownership.mjs",
+        "sha256": "d8f94c922170cde6f56f353458f712656f91ba3ad9b7117d4e0c33b9bb12d6b0",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "scripts/dev-db.mjs",
+        "sha256": "d1d8f5b19ff4ba7c6e92a2ce2efd52d074fc80b3b35615625173416c28030015",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "scripts/evidence-manifest.mjs",
+        "sha256": "d9c942ceceb13a9e64fb0a4f31ab0f88d1048cc0e0b82727a191b90d44ba6ad9",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "scripts/process-lineage.mjs",
+        "sha256": "b056d6f87284b78a672e6fe166fded25c8c1997c8fb02d4ac140030b235b313e",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "scripts/run-api-http-proof.sh",
+        "sha256": "dbd60f83429101afc72b112b6100c61d4c79390f85df615893de1c7b2ca3f71f",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "scripts/run-app-proof.sh",
+        "sha256": "87285394d739d5d65d1392a92486feb994cd6b0e202335b4850662492cb9faa5",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "scripts/run-http-proof-safety.sh",
+        "sha256": "041f67e810bf9ab01397f2c8ebdf823d2a371bcd5d1a4e17fcd354c8caeb4638",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "scripts/run-persistence-proof.sh",
+        "sha256": "e9fbf6d581b553abd4285fddad93e96543999f2de1ee0d33bd157ac1276de3f1",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "scripts/run-recovery-proof.sh",
+        "sha256": "f6b66c90a76740f10daa01f7835e9f470b22a973172bf4e9ebc3702081669f9d",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "scripts/verify-evidence-manifest.mjs",
+        "sha256": "f835892fbdcbe8c57093b9884b38275bb1ca1274b75f8d242e7ec1728841294a",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "scripts/write-app-proof-evidence.mjs",
+        "sha256": "ad5e34911bf44d05c3c888e108bc4f80e0970074c758e62d5b953540a9c22606",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "scripts/write-recovery-proof-evidence.mjs",
+        "sha256": "61bdcfaa3b54f535732fbddb0fa5e62bd49dd100559389401c43c4480163b509",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "src/app/api/ai-workforce/decisions/route.ts",
+        "sha256": "6a132eb1d496e769d554f2f901de39a7b234c78a94b06f20d6cbd39ec454c251",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/app/api/ai-workforce/missions/[id]/route.ts",
+        "sha256": "36560cd76d142c9859e8d5a2427f2f31b8ae41bd8de7899c5d58b306a21240aa",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/app/api/ai-workforce/missions/route.ts",
+        "sha256": "2beddcb3194b39b3f23ad568e56494499fc1814805d055a90e1fb6a6403c4367",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/ai-workforce/core/errors.ts",
+        "sha256": "c25674ecd1c27f28a29642e8d74b6d62206167c3cd953b51867f47bed977040b",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/ai-workforce/registry/capability-lookup.ts",
+        "sha256": "196b88d787d73d152a55a7f1efa490e658aa02e8e56465f4046527def8ea9058",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/application/command-service.ts",
+        "sha256": "698ff3bfcbc743d477968f48da1ab372895bcae09a39431e69434f9823620438",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/application/composition.ts",
+        "sha256": "78e8f2b6d69ff7f9c235d58f9a52a238cc0ed225dac01b282ae06c7b2210a959",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/application/runtime.ts",
+        "sha256": "35cb6b29ca6b312dfe3a58eb17fd2c513a4ddd612e4af48a5807f60338d3f828",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/execution/capability-execution-contracts.ts",
+        "sha256": "0f9f46f32d1839a0c97bbe53f4fd857ac76faed795ddd2ce900510e35236748e",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/execution/capability-execution-service.ts",
+        "sha256": "f895de0745ab7c8ffe21423b9baf68d5e156b74c0a8e6dad23e50f268e63e857",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/execution/execution-authority.ts",
+        "sha256": "6072819e37a1bcd90b4540cdb60322c79009fbb5599475aa58021fa59a9a6f99",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/execution/execution-claim-receipt.ts",
+        "sha256": "cf5d2a4ce25c8ee5f5721db32f932463fe909eb476208e010b3f5705fedd4e92",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/execution/execution-claim.ts",
+        "sha256": "6bfea466f4b4ad89e11d11ba1d0ef40bbc497a3d88cf1e2f087a1e8e66c00b8b",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/execution/execution-reconciler.ts",
+        "sha256": "5707d3f474c5cea31f148cb76295a86c590e9a4757258320220140584bf234a2",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/execution/execution-record.ts",
+        "sha256": "cd8f642f0a5ced1d63da4bbc51d7c7ba7ee127ba70560ee1c55122976d9db702",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/execution/governed-deterministic-invoker.ts",
+        "sha256": "c6bbd77cd8e3861ad6105091dc3943a90595ebefd381287af6779af8f556e698",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/execution/workforce-read-only-capabilities.ts",
+        "sha256": "51824085582c85fc918f2a80247bc6c88d5b37c7d55bd704a8a3323f75146794",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/index.ts",
+        "sha256": "d588be923bbc69f8904df54a1a8f7e19ce5dc8ab52d3abd2eee13ee0f6672335",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/orchestration/create-mission-orchestrator.ts",
+        "sha256": "11db1ead23de445863a8640ee237f8e34623766822c382512f872c564b75e908",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/orchestration/mission-orchestrator.ts",
+        "sha256": "a2f528d7731489fd2fb2738ca8c45d9bee53c9757f42cdf68ac5f216c2270975",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/persistence/index.ts",
+        "sha256": "65f4251619de9bc3420938ff99d26fc197d7b9aab5747939a3b2a50f56249996",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/persistence/prisma-execution-attempt-committer.ts",
+        "sha256": "4ebbd81462a4a7cdb3c194ddeba7cb70a078dc02587e2316ca79ee213561dd80",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/persistence/prisma-execution-claim-repository.ts",
+        "sha256": "2a04b67d7e24fe587b50be410fe598b66a8403aebf34a4e1e410cd61a1ec2fb8",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/persistence/prisma-lifecycle-repositories.ts",
+        "sha256": "bfd80a22ae0385b6c90915a15441f17234c4ebdbdae804f32e4480959398e766",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "src/modules/workforce/runtimes/agent-runtime.ts",
+        "sha256": "e9850b9519c9c23a58a70a20b5b42cce9e0503ae411c4d4b2aa77722c0ff90b9",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "tests/dev-db-ownership-proof.test.ts",
+        "sha256": "faee11fe970257538dad80830086d7e615ac55b87e99ae225875df640b576eb6",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "tests/dev-db-ownership.test.ts",
+        "sha256": "7dfc4b91bcebd85f91b2c2a1faceec7d824a8bf72951a4e47a2124113c5993cd",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "tests/process/app-process-a.test.ts",
+        "sha256": "8d4527630978b9816da4d8ab5769ba60e09206bfb5b1363103f8fa8b5c7acd48",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "tests/process/app-process-b.test.ts",
+        "sha256": "7634cb96da147dc3f7f0a9ebd2764e7dc717f36e0e7549cc92995083e577e4ca",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "tests/process/app-process-c.test.ts",
+        "sha256": "d1f6a373fb6045a89968b28a304152ceb31ca2a875e1b2707df8fffa3d35d35d",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "tests/process/app-process-e.test.ts",
+        "sha256": "c59963562977534e1f68eaf921528783893853c9f4945680396ebf9c81c9ce44",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "tests/process/support.ts",
+        "sha256": "c8a93ddb07feb9d70fc91d17812e69647a2fadfa535c1940d1d0681de6077dd9",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "tests/run-http-proof-safety-cleanup.test.ts",
+        "sha256": "95a86a8e86a544c8817b1cd254fcac89d2219ef2fdf5362c50e056e338c2ff58",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "tests/workforce-api-http.test.ts",
+        "sha256": "3927d07994f08ed58b17eb5c1a1ce361a0e703b293a0393251db716605f43884",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "tests/workforce-boundary-budget-guard.test.ts",
+        "sha256": "9d570a224e2b56cf8d9ca9fe2679c8c9c275d94516091322e1cb7c0963a2c0e3",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "tests/workforce-command-center-queries.test.ts",
+        "sha256": "198dfc03a2e08c539a69eee35266d646b324ffe2ab12493a770763f72a502cca",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "tests/workforce-step5-adoption.test.ts",
+        "sha256": "5ce534f16e284d381db1721682fe20a754d0b507d80b5bf9d2f39636dc4e210b",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "tests/workforce-step5-app-integration.test.ts",
+        "sha256": "ac65e7f5f9bd08f00e055d293a3e3ad25d542d6b83e5ed0d3b0e22f030ebb8f6",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "tests/workforce-step5-app-restart.test.ts",
+        "sha256": "33ff67d1a9c1f09e181524938da9ecdc553d3c0644c673867cbd3ffa3aa8a867",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "tests/workforce-step5-live-durability.test.ts",
+        "sha256": "3e295c1d529e3387b03778cf1d33033020af8f5323a4a4283936583e34267cf2",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "tests/workforce-step5-mission.test.ts",
+        "sha256": "57b2a27cc484ef9233183811564de1b20e7137365ae75076afe3c3abfc9999b0",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "tests/workforce-step5-persistence.test.ts",
+        "sha256": "37927a51357cdd8766560d9bb773dc27c19b003e36feefc2cec204d97704db7e",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "tests/workforce-step5a-claim.test.ts",
+        "sha256": "97067f3a47422f180f593b4a0d3afb30942573e839f4d280c06790928a1d2992",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "tests/workforce-step5a-durable-claim.test.ts",
+        "sha256": "ea2c8cb1ce79ba96833fb78ca48d48468649ddd481f5ad33336ac89e7f986fef",
+        "git": "M",
+        "layer": "core"
+      },
+      {
+        "path": "tests/workforce-step5a4-authority-correction.test.ts",
+        "sha256": "07d236f6ea36c68e31f7791cb578e8c2eadc1d10e54c45f0b6a8b8d39adccc99",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "tests/workforce-step5a4-correction-p1.test.ts",
+        "sha256": "3e0c180e9dfcb694a4c72f636c35930c66c0f13a5ea9e9e342dc7033e09ee404",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "tests/workforce-step5a4-execution-cutover.test.ts",
+        "sha256": "85ca6a2b7d085c114909d3c3ca9170d36be01d0701a003224b326a917068cf9d",
+        "git": "??",
+        "layer": "core"
+      },
+      {
+        "path": "tests/workforce-step5a4-recovery-evidence.test.ts",
+        "sha256": "b4ed20d9bcd4ff235135c39ce8f3531ce33ddf4b3f64410f47867053f366350a",
+        "git": "??",
+        "layer": "core"
+      }
+    ],
+    "exec": [
+      {
+        "path": "public/exec-lab/exec-character-board.png",
+        "sha256": "a8277373450e4722d0963d71b720a44b470f942edbb6b7c6986e451fa8f8093d",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "public/exec-lab/exec-head.png",
+        "sha256": "e9da5a821e73ca138f90e2c9f543bedede7ec97b57efdc768cc40f3e9bc1930c",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "public/exec-lab/exec-portrait.png",
+        "sha256": "1bf3f74ac5cd2da477eea3312f4cb2ce9c04c5a13fb68a020a984ebde8bea64f",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "public/exec-lab/exec-team-board.png",
+        "sha256": "24cd689a455aa9c9689a63f24d4f39d59328764ba4a58c90699f379bbd9b4a8b",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "public/exec-lab/fonts/OFL.txt",
+        "sha256": "7e6b2818edbd8f6a01ae80641cc8f16a51080d08fb4e532be3a0b6f74adb07da",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "public/exec-lab/fonts/SOURCE.txt",
+        "sha256": "8d2f0ad9eccd2050db8a56dbf1a63b348d657cf770e5b8e66499ec06722db702",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "public/exec-lab/fonts/ibm-plex-sans-arabic-400.woff2",
+        "sha256": "6010e7fd0dce5d527583951750728cbe3c895efbd16aa0f809ab8c824878c9d8",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "public/exec-lab/fonts/ibm-plex-sans-arabic-500.woff2",
+        "sha256": "90aef64fea9794f232332e907d45810ab268d1a11721340025eba2a2cdb36d5c",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "public/exec-lab/fonts/ibm-plex-sans-arabic-600.woff2",
+        "sha256": "16734a5adb27b0f363e566cbbeacec480da0dc0baa19c8f0053251c2e2bc0eac",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "public/exec-lab/fonts/ibm-plex-sans-arabic-700.woff2",
+        "sha256": "04c730b4292731ccedadd5bd80756124364ae4923895145d9cd7b1f28e443de1",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "src/app/command/exec-lab.css",
+        "sha256": "3804ba6811898e4adc4e0b3a669c3079564dc73234085860930de7a53ff41c3d",
+        "git": "??",
+        "layer": "exec",
+        "sha256AsCopied": "8b2061424706c7a6734eac953059febba208fef9dfc0761ac990bd8475cb14ff",
+        "changedBy": "NEXUP AGENT — documented UI wiring (checkpoint §9–11), not this assembly"
+      },
+      {
+        "path": "src/app/command/exec/console/page.tsx",
+        "sha256": "162776e54d39f7afe188983573d8db34723a235f8cefe24bcb132e483ee4fd6f",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "src/app/command/exec/lab/page.tsx",
+        "sha256": "98e78dbd3331dbb65cc812e905b0ecfc9717023b2687e539240ee7b08849d0fc",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "src/app/command/exec/page.tsx",
+        "sha256": "3fe33bdfdcb65e3e4110959522210723dbf6a751e62133f4f178c55d7f6f6a9c",
+        "git": "M",
+        "layer": "exec"
+      },
+      {
+        "path": "src/components/command/exec-lab/cards.tsx",
+        "sha256": "084b854abcbbfe4b333cf91e1cec8d10660a872ec4c21b641546baf59ee915c2",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "src/components/command/exec-lab/catalog.ts",
+        "sha256": "db5d11dac0d1b2765e7c4a3e8d94c49935f364f0290a813631bb4fea868a7f96",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "src/components/command/exec-lab/chrome.tsx",
+        "sha256": "2b46e6f795aacdafab1616bd3b08dae00d42981c6dbfe5b0e36c98b60e1d3872",
+        "git": "??",
+        "layer": "exec",
+        "sha256AsCopied": "c31ad64e1f7a49a9db8c343e7669da978981b2fd296ec55ef8ed7e5b745726f9",
+        "changedBy": "NEXUP AGENT — documented UI wiring (checkpoint §9–11), not this assembly"
+      },
+      {
+        "path": "src/components/command/exec-lab/effects-preference.ts",
+        "sha256": "67000eb0ff0921136f225ad32a987573ddce68f39f14383a66748c44fed159bb",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "src/components/command/exec-lab/engine.ts",
+        "sha256": "56ccd3015eee6345939be8485c2adf57cd9f39bfd3fccecd2ee90e19bb3872f9",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "src/components/command/exec-lab/exec-experience.tsx",
+        "sha256": "336b949b2c76b3106f22f547c6d0df704947a2b979d1b778d1671ad9c019ae19",
+        "git": "??",
+        "layer": "exec",
+        "sha256AsCopied": "9e5124388db8f025423e46d29f9028865e654267fe2c24573f60afdb968698da",
+        "changedBy": "NEXUP AGENT — documented UI wiring (checkpoint §9–11), not this assembly"
+      },
+      {
+        "path": "src/components/command/exec-lab/exec-nav.tsx",
+        "sha256": "f1eecd0a90ba33d7218c915ac2308769d26fa005418a089754be98b2c6b7adc1",
+        "git": "??",
+        "layer": "exec",
+        "sha256AsCopied": "264b6da2453ba9dd84ffbb98397bdcb606788adf840298e80247a2d0a511a699",
+        "changedBy": "NEXUP AGENT — documented UI wiring (checkpoint §9–11), not this assembly"
+      },
+      {
+        "path": "src/components/command/exec-lab/fixtures.ts",
+        "sha256": "f9010e3360a6d92ad43630998aa5b8f88136f98913712865294134cff0cbb0ba",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "src/components/command/exec-lab/i18n.ts",
+        "sha256": "0268c2bc85f6adafb88e1681e113e7245011717f3f045428adb170d0cc6b2d6a",
+        "git": "??",
+        "layer": "exec",
+        "sha256AsCopied": "90cf332af60977b15e3755c790fc6e025edc6f8d364dcef53329b14df43f41c9",
+        "changedBy": "NEXUP AGENT — documented UI wiring (checkpoint §9–11), not this assembly"
+      },
+      {
+        "path": "src/components/command/exec-lab/icons.tsx",
+        "sha256": "f9eadecc13aaf9dd4c61183e3771ebb1ad90f5c41a8016bcdb6fd90d9b7bfbd3",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "src/components/command/exec-lab/live-work.tsx",
+        "sha256": "120899c81d9a03771be5090de694f4a2767fe3b890a19237ff96eb11f087bfd3",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "src/components/command/exec-lab/panels.tsx",
+        "sha256": "b5b9822c99ac255296ae2d06d92842717a5966bd911e84628f27fa00bb19731a",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "src/components/command/exec-lab/review-handoff.ts",
+        "sha256": "45a4e2a1b875c3c628a6c71df24f806642af748b935fa8462f7b74c3f2263cd1",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "src/components/command/exec-lab/review-tools.tsx",
+        "sha256": "adad3b81528ba639418bc44fc5c81cab9ef2c4deca780d1a137b7d50d3318aae",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "src/components/command/exec-lab/scenarios.ts",
+        "sha256": "d36266e1951f63e040d55d491f54a30b9939b3baae23e251d3d25e632cc84237",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "src/components/command/exec-lab/thread.tsx",
+        "sha256": "f7992fb2867682c0a7b3861e47dd8b52588cfa17c88ff167f118bc2981b7e552",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "src/components/command/exec-lab/types.ts",
+        "sha256": "97376a099a7a22dad4cceed58abc63bce4320ffd6a0e6dbbe5d514c304147254",
+        "git": "??",
+        "layer": "exec"
+      },
+      {
+        "path": "tests/exec-experience.test.ts",
+        "sha256": "a9c3a43e76d77fa9bc0e7417ef098d00483a514a98a8b1a3abff1020883321ec",
+        "git": "??",
+        "layer": "exec"
+      }
+    ],
+    "authored": [
+      {
+        "path": "src/modules/exec-conversation/contracts.ts",
+        "sha256": "0bdbc757817183e7c8ef10632cf1e945f8a5646df4ea624894f7169690581063",
+        "layer": "authored"
+      },
+      {
+        "path": "src/modules/exec-conversation/connector.ts",
+        "sha256": "b91b7778a12eb78e286ac608cd3c47fadddce0acc453e8eac865eed786657499",
+        "layer": "authored"
+      },
+      {
+        "path": "src/modules/exec-conversation/dummy-connector.ts",
+        "sha256": "35ab7c161da14a02ebdb8388a517380a087dfb1cab13735016c4372e2bd84be2",
+        "layer": "authored"
+      },
+      {
+        "path": "src/modules/exec-conversation/composition.ts",
+        "sha256": "af6d6ef82922f1b02059ed92610e9070d3ff23d2bd0cb8579c9c48c96a2971f8",
+        "layer": "authored"
+      },
+      {
+        "path": "src/modules/exec-conversation/http-guard.ts",
+        "sha256": "4397409d765db1433d40227a89e405e2adb1194c0b6d0da6e7bc18542dc951d1",
+        "layer": "authored"
+      },
+      {
+        "path": "src/app/api/exec/turn/route.ts",
+        "sha256": "1b3abf6ce5b05db923bc8824e7eccf687596ee5937f3dd49b83f912b27f08d40",
+        "layer": "authored"
+      },
+      {
+        "path": "src/middleware.ts",
+        "sha256": "f05e12c8907a701711e0b98b03199e9ee50b750e9abd5991cc38a71ecab99b10",
+        "layer": "authored"
+      },
+      {
+        "path": "tests/exec-conversation-turn.test.ts",
+        "sha256": "fae567eafa25fe85db653e7c0844a7220984fd6d273ff8768c8ce32adb087399",
+        "layer": "authored"
+      },
+      {
+        "path": "tests/exec-conversation-timeout.test.ts",
+        "sha256": "10b19d67fc5dc67de352bd71c44aaaa6028b4d5862d777b5ec62c3c765c17fe7",
+        "layer": "authored"
+      },
+      {
+        "path": "tests/exec-review-session.test.ts",
+        "sha256": "6cba63906961b313a33ce7a048eb906e851830ca2fd79d8e5681f8f17dafdca5",
+        "layer": "authored"
+      },
+      {
+        "path": "scripts/exec-review-session.mjs",
+        "sha256": "170c157688ea58cab487032f4d786ddc848c17f6709324ccce2b54ffa118c2bd",
+        "layer": "authored"
+      }
+    ],
+    "product": [
+      {
+        "path": "public/exec-lab/README.md",
+        "sha256": "67da448dd3e426dfab035cad0b63dea80e03013f2223d95f0d4d42815c352fe2",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "public/exec-lab/exec-body.webp",
+        "sha256": "483db2610211cae34155453f50027a89033e90d3cd69b0bf37e618e86dbb57ba",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "public/exec-lab/exec-head.png",
+        "sha256": "e9da5a821e73ca138f90e2c9f543bedede7ec97b57efdc768cc40f3e9bc1930c",
+        "git": "shared-with-exec",
+        "layer": "product"
+      },
+      {
+        "path": "public/exec-lab/space-home.webp",
+        "sha256": "c8ce79454aa9e30f090bfde40f20a6a375a77d370af5bf1f35919405826061ac",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/activity/page.tsx",
+        "sha256": "9d2616947406d18ac79e4c81464860b9cd43c4fc44789eda39de6036e9f66d36",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/clients/page.tsx",
+        "sha256": "3bc2c1024f5a104f246512fd583bc1b00cf6b72e46c3d912b734a70b21a31033",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/command.css",
+        "sha256": "99288195590ac9cd9ab65c4263d14e42a453e5a11acdccf07310624dd3bb27e2",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/decisions/page.tsx",
+        "sha256": "0f76a8e656205cecb07888118d0b8dbbeaaa2853d7986dcc2756f241e2b99f0b",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/exec/talk/page.tsx",
+        "sha256": "9af97e6784fc5ec661d514f4efbfbe0837e8935b1bd24501ece6164a7f6a859b",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/finance/page.tsx",
+        "sha256": "1daea871fff0d7fcc159efff6fe44f6f1b1b405f5644429b2fb5df6992699f74",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/foundation.css",
+        "sha256": "eb6e110e0972e8c0d30d24c1ab76be7df5fd67ce70d468214e0e8db4c0f03ce3",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/home.css",
+        "sha256": "ce5e14cc9efb9cbdabadaa2bca3110b40fb3f4de36ebc439f6b04c2f7d213ce6",
+        "git": "copied-from-product",
+        "layer": "product",
+        "sha256AsCopied": "8886bf414c0813fad43311a45aad726fc2b7b544ec6c71a700d60a7be7d3876c",
+        "changedBy": "visual polish pass in the integration copy (home.css §10) — Product source untouched"
+      },
+      {
+        "path": "src/app/command/lab.css",
+        "sha256": "38c2158df706d1ca01badc06a44014b20944587f8ba1dc04fce23b908ab949e4",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/layout.tsx",
+        "sha256": "dcabbd41b0aa22c2e4c34e0acc9e3b31354b39f8c151c5e1d08eaf60f830c166",
+        "git": "copied-from-product",
+        "layer": "product",
+        "sha256AsCopied": "aaced3244af2dfe8c2ed492398365c05e1a652e41fa14d0e8e8ab868533c50ac",
+        "changedBy": "NEXUP AGENT — sales layer import appended (gateway + room CSS) — Product source untouched"
+      },
+      {
+        "path": "src/app/command/locale.css",
+        "sha256": "56db866bdc068290437f120c61a10cd4203a8020961f1e1ba8c363c2ca326222",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/missions/[missionId]/page.tsx",
+        "sha256": "c9fad8df386795e9236a0dab6a3855c1b78019c4ba616bf4023f286a7fb3d8c7",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/missions/page.tsx",
+        "sha256": "1285e7e8b1ed5bf276160fedab12e9b7029c5d52bf9b75153e78484f08e0fd49",
+        "git": "copied-from-product",
+        "layer": "product",
+        "sha256AsCopied": "53ee4521d0d60a4a05597ec5d3a9aac67b51841316702cdc6c0974b949659b97",
+        "changedBy": "NEXUP AGENT — missions glass pass (.nlm-stage wrapper + air layers); Product source untouched"
+      },
+      {
+        "path": "src/app/command/models/page.tsx",
+        "sha256": "d8bb23a94c4f05ecfb53de5f95dd5c8ddf0aecc4236e5fcfe2fd8afd627425c1",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/operate.css",
+        "sha256": "a8cdc89b66ceed24dd7e5f743f3088ee9ecaf97770380a60f33694cbb4fb8d8c",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/orbit.css",
+        "sha256": "b7780629390757c9849133e6a0c47e89e0bf430ad076ec5e9ed5897c83f013a8",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/page.tsx",
+        "sha256": "954af0e1e75ef01e25b11abe0cdd226141e65d04e0c5cb9bb6c396f6a9affcc7",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/projects/page.tsx",
+        "sha256": "0d671646dd0101cd837491aca88a01d356bd1a518d0609c5504382adbcf7b5a0",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/reference.css",
+        "sha256": "f125fd337b2bcae99bf39519fa56c35c1a4bb4f48d4d5fb85cb41351993041f5",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/spatial.css",
+        "sha256": "d9a32d093dec098df363b38be5763dccb39499c9b8a5728b41e41b09a9e1e8e8",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/systems/page.tsx",
+        "sha256": "de5bb4eb293b83b999511b6ef645bb0f53165ace8aaa1ef983fcbceceaa1fb4f",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/workforce/[agentId]/page.tsx",
+        "sha256": "83f01367cded9ffaa8fe574254656e57f5d580a4543111e12cc9572b8f0403d2",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/workforce/page.tsx",
+        "sha256": "0129a2e7e18f68480839929015d9d7ce81621000fe0667508933ad40b20c6b5e",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/app/command/workspace.css",
+        "sha256": "ae32fc4b07695c42ce9adc5ac3395ffb14cef541a84cbd9966bc1547c6ab38a2",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/command-actions.tsx",
+        "sha256": "d3601abb256c27ab10f67e4d1ba3c756d4509719e4b2d70cdf60b63449e65809",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/command-shell.tsx",
+        "sha256": "eb0e59402426ac1149a232c08e28e9decae35437e54c173b3066c4896293db94",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/context-rail.tsx",
+        "sha256": "68b38e10f90ee6cb1d2320cc6be8d7068982bfc3532a7f2b11e953866268f9e3",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/executive-dock.tsx",
+        "sha256": "5d10b61a1c80e90aa53af169b537c4ce66e04d811feec48baff49a83d87112b8",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/global-command-bar.tsx",
+        "sha256": "bfaf294016243d2c7f6af7b5aef4c1804e96a6ff7aa22cc7d9a5ee01d6bc9cd8",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/global-nav.tsx",
+        "sha256": "63d785fdd986fa1d59c116ae543f598e9739806ef23c10dae82ffb634cb0c789",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/i18n/command-locale.tsx",
+        "sha256": "1921c8e394b61bbc1d909939091c0947d76f195771080793df939d5e0e6e3473",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/i18n/content.ts",
+        "sha256": "3a1c27068c390b22302a11fc48c2253bf9ff0c9eea7578b8c685ed1d3aedfb07",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/i18n/locale-switch.tsx",
+        "sha256": "edc7cd92f18ee8be9c82a985332380abeb1ec8174024accdce4a82c16d37917f",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/i18n/locale.ts",
+        "sha256": "0fb7c59d93b44b0cabda5c27604d156161154266894d3d55ea435f1fe8914ade",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/i18n/messages.ts",
+        "sha256": "1ae4e273b51ee42219446faeeeb49226a002ddae9b85852281370790fc4fe3b6",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/lab/areas.ts",
+        "sha256": "67256d58f534af14fcb115edb6d0fa9772d7e23003a650e1c137b7a2532e9f01",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/lab/command-center-band.tsx",
+        "sha256": "f9612de075e96cc2df37d38080e943aab036b2c1997d7fd02d743900a9c66973",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/lab/kit.tsx",
+        "sha256": "d1bbc406890001d468c48bc8dd38a30cc18f0ef4a357f07ae9eebc9a29004894",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/mobile-nav.tsx",
+        "sha256": "addca4271dd622d3ad4e59cb32ff9d601776d3f1e468701bc718b4df7964929c",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/motion-demo-controller.tsx",
+        "sha256": "6b363d5574d989bd211caf9c2a7cf6b6a3a0ee1e06f9e10610192ee3c0bb31e8",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/organization/command-center.tsx",
+        "sha256": "78cce519ff526277cca135eaacaeffc17a66acc124942289de3bfaa91a7b1380",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/organization/command-mobile-overview.tsx",
+        "sha256": "5fa37513f19230d201f3435be94c8a101dbfcac1b747e7d455cc360aee2d6fe8",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/organization/demo-handoff.tsx",
+        "sha256": "14d36ac552cddc1ccd4cf214b4ce4aec6dae9e1b387214fcc43401830cf7ab4b",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/organization/home-header.tsx",
+        "sha256": "ed31ac5f2a09b4064987a441ade3eaf52825c6d75109ab468e5c04cdcb415ba0",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/organization/living-organization.tsx",
+        "sha256": "876ab19a5fc411d2e217ee015891c370109d663efd2c5c383d01b902a2025646",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/organization/organization-cards-view.tsx",
+        "sha256": "1c7c15a036e730ba4a2ed44ebca026ee8a2d135489e914eea8cbe874a01ddf7e",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/organization/organization-list-view.tsx",
+        "sha256": "2d29024e337a905f0d52f4968492d20bf4e5f4dc224ef5d9625d67b0c7f1e2de",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/organization/shared-services-band.tsx",
+        "sha256": "42cbe80e73dc89ed2f59e40e44787fc7e01a591aa9cb09f2b52519245d583cc9",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/room-identity.tsx",
+        "sha256": "e4c88eaba7cd72bf53ebd7e55c7f1f1e3c2fdfeeea8da5bc2167cdd8321da922",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/scene/actor-presence.tsx",
+        "sha256": "55a9c50d1f201f1d571e82361bbb1de7d41c5c04effd920c107916064fb2e2e5",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/scene/command-scene.tsx",
+        "sha256": "636aa913fcb9cbc6a6564ac65f9ddcdde5f6adf75504571f16e983c5fd435644",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/scene/connection-field.tsx",
+        "sha256": "a74d757b620038d2132acda7712c3e60eeecb349711330a5773e620e67e6a8ed",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/scene/department-pod.tsx",
+        "sha256": "d678bdc96ecb4dc26786b8cec52249da00ca199c614d57f877890fef5cb44bb6",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/scene/exec-core.tsx",
+        "sha256": "3d13ef8f43f498461c9e870173ebb18ff43e184256c0ecfbc833deca860e82ac",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/scene/focus-header.tsx",
+        "sha256": "353846c18232a1b741c0ab5071f012b2b4c91597d5864b548424849b99e914a3",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/scene/systems-layer.tsx",
+        "sha256": "deb0a0c3621aed9c93a993356e67968546b276448bbd5e44f9897dfbbb1e6932",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/state/actor-workspace.ts",
+        "sha256": "9540978bf1a10e8209dace97661a0dda6778fc49697350407cdb619c30122f2d",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/state/actors.ts",
+        "sha256": "031b65cc0a031ef7111934b151dad64981b19d9efb7ccbcdb9e6b97904214e12",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/state/business-scope.ts",
+        "sha256": "b29a4bedd6ebaf62e680e022869ab35273cebd9cc6729e7963692f5b95809ad4",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/state/command-store.tsx",
+        "sha256": "c3adae508c9f0945eab306b248dce2063fc4a7077ed68d9d1a0169b3856b1f25",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/state/demo-scenarios.ts",
+        "sha256": "a2bb6a46ce187803567985810784e8e12fa17e8c558b97f31095957d3043efac",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/state/demo/adapter.ts",
+        "sha256": "60e9d1a8cc37a8b0df807ffb1c4f6a95d0bcc3bc6b1e3bd28d10202ad29c6cf6",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/state/demo/command-data-store.tsx",
+        "sha256": "ad695c8a36280972e3ac4c3d05080a0a271784748868259d64961cce5abd8b27",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/state/demo/dataset.ts",
+        "sha256": "5737c752419b73f4f1b694f4d5279d3f60f125cc3edcc5301df800208aab9a09",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/state/demo/selectors.ts",
+        "sha256": "89bf1a1a4fccd30749a5be5d2f93cd4463aaef5f1f413b001e59e4b9914f5c0e",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/state/demo/types.ts",
+        "sha256": "c455a71e016a9ce580d7cd8b2a11e936bbbbb15e54e7eb360e23715e54b5c729",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/state/department-workspace.ts",
+        "sha256": "5e4d2e97c0d760d014988f5cbda175f5b14639cc158ca158559403f99005a9c7",
+        "git": "copied-from-product",
+        "layer": "product",
+        "sha256AsCopied": "82c334d496689f7b1a370b1b9cd9c85aa7d3fc697ae2979cddfa9f45ff564f03",
+        "changedBy": "NEXUP AGENT — workspaceHref(\"growth\") now opens the Marketing & Sales gateway — Product source untouched"
+      },
+      {
+        "path": "src/components/command/state/exec-character.ts",
+        "sha256": "24db4aaa9531a6efb8ee3b6d5504048ed626dd33c9762aa80149351be31aa1ba",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/state/mock-intent.ts",
+        "sha256": "91e96a8eed449a05c94cf82c9aaac59c1ef45474219c2ac4e543cf44a3a16255",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/state/organization-model.ts",
+        "sha256": "db6cdcb84ad00351273794519db7f99affc440b8aaa54af054a852bb5895b29c",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/state/spatial-camera.ts",
+        "sha256": "42c25c49935a6f11a95e9b0737e021b74124d0f636d8fb4d8947ddcb69266522",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/state/use-keyboard-inset.ts",
+        "sha256": "b8400d108bebc081ec7facdaae1b952a2f848999c7f7108bdffbcfd1eee78e7c",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/state/use-on-screen.ts",
+        "sha256": "02bf9fa0e7298838c5a2980560d552e25c14519bc8c0e9509ca4a656f3a1e2b1",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/ui/icons.tsx",
+        "sha256": "c1be626a95cb47455ccd6ff1fde4f30e993b0c6876a2c58a11d6d91d6a0fb8e1",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/workspace/actor-modes.tsx",
+        "sha256": "22e28424f97545d57dcb1613017ea372681ed284fa1448f5b45658dfa441332e",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/workspace/actor-workspace.tsx",
+        "sha256": "de2c74eb17a18d6c99302839737d01f97956faa99852993138c13d6ae11999c8",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/workspace/department-workspace.tsx",
+        "sha256": "d1f0931e2d9697e0b9bf8273d7c37c014459da9e5b20acd017fc5839826e44fb",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/workspace/exec-workspace.tsx",
+        "sha256": "55adfcf496502548e30a14cd887264f155a807684c01218ec3cebe414bb91781",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "src/components/command/workspace/workspace-modes.tsx",
+        "sha256": "b27024fc51cf94a24633688ef45d6ec01417ff9b18ae9ce19f9c373c5fb5f08d",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "tests/command-locale.test.ts",
+        "sha256": "a24477b73e6e2cb899139599046621e9630e0e17d3cbb07184061ff2af9353f8",
+        "git": "copied-from-product",
+        "layer": "product"
+      },
+      {
+        "path": "tests/command-product-lab.test.ts",
+        "sha256": "2272e219c4eb175ee3f8c6b608e2ef28b104139400c396a460d12e1aaca2abd1",
+        "git": "copied-from-product",
+        "layer": "product"
+      }
+    ],
+    "sales": [
+      {
+        "path": "src/app/command/sales.css",
+        "sha256": "a1c5244d21c05de15bd54401a44df40c259b52eca8e5f568762dc7fa99527590",
+        "git": "??",
+        "layer": "sales"
+      },
+      {
+        "path": "src/app/command/sales/page.tsx",
+        "sha256": "ad3916e820ff716ccab232010471900794fc6df4dbf0e7defc4809f43892703f",
+        "git": "??",
+        "layer": "sales"
+      },
+      {
+        "path": "src/app/command/sales/room/page.tsx",
+        "sha256": "20cddd599438a9cb8674a453dcbf7540107e19a41a060a2bf2b2bf4925439bb0",
+        "git": "??",
+        "layer": "sales"
+      },
+      {
+        "path": "src/components/command/sales/copy.ts",
+        "sha256": "10db1f9fb268fc5e3d0b7276f3ccf4afcb5edd9745e5ecaedd33909c65752e0f",
+        "git": "??",
+        "layer": "sales"
+      },
+      {
+        "path": "src/components/command/sales/journey.ts",
+        "sha256": "9db44a1568fbb6ee52d96f9acded2542bab1c867325f628deca6d5c3de78b6b1",
+        "git": "??",
+        "layer": "sales"
+      },
+      {
+        "path": "src/components/command/sales/sales-gateway.tsx",
+        "sha256": "1a411ee8a11d30aa2d02c1c7224d195d4be941c48e8e8b149cda1fd16ad7859e",
+        "git": "??",
+        "layer": "sales"
+      },
+      {
+        "path": "src/components/command/sales/sales-room.tsx",
+        "sha256": "93fa51e918890464431826051c37127349bba51789d8d6f56fa7fbe1127636b5",
+        "git": "??",
+        "layer": "sales"
+      },
+      {
+        "path": "src/components/command/sales/use-sales-copy.ts",
+        "sha256": "272d5e7264c98721d34c8ab6ed386821725beae613293f2c14225acb4fb4943e",
+        "git": "??",
+        "layer": "sales"
+      },
+      {
+        "path": "tests/sales-journey.test.ts",
+        "sha256": "d29a751056251abaa6a18e2aa34c8bf757394ca30cc25ef31bacca0ea141a04c",
+        "git": "??",
+        "layer": "sales"
+      }
+    ],
+    "missionsGlass": [
+      {
+        "path": "src/app/command/missions-glass.css",
+        "sha256": "2a94225599866e8c61a2faae5b8313f163558b8e3faec57292be2d9f7472d316",
+        "git": "??",
+        "layer": "missionsGlass"
+      }
+    ],
+    "marketing": [
+      {
+        "path": "src/app/command/marketing/page.tsx",
+        "sha256": "3c43e56386ebd9c251d6385d2f795a1667c34433c7e74440999a8da88758a9f5",
+        "git": "??",
+        "layer": "marketing"
+      },
+      {
+        "path": "src/app/command/marketing/marketing.css",
+        "sha256": "27226d7a9c58d0edb2d9ca971520827af6974f57d17dab8076173347790d3de8",
+        "git": "??",
+        "layer": "marketing"
+      },
+      {
+        "path": "src/components/command/marketing/marketing-room.tsx",
+        "sha256": "4bbdd930bc614a578ae93cbd0a9df799804aabea8c9def22cb359460b775fbe9",
+        "git": "??",
+        "layer": "marketing"
+      },
+      {
+        "path": "src/components/command/marketing/station-work.tsx",
+        "sha256": "07692819bd79dbaac274265fb4f1ccdc9990aebb77393a3f3c1b9cdf449a46a1",
+        "git": "??",
+        "layer": "marketing"
+      },
+      {
+        "path": "src/components/command/marketing/campaign-model.ts",
+        "sha256": "7a5f9a59ec93baae12f194898dc7e6c075646a84e4cff9be611d143157c04584",
+        "git": "??",
+        "layer": "marketing"
+      },
+      {
+        "path": "src/components/command/marketing/schedule-connector.ts",
+        "sha256": "282e666b52635ac3e73eb08b4240d11cfdccaa2371accde9d201e5bcce3d33ab",
+        "git": "??",
+        "layer": "marketing"
+      },
+      {
+        "path": "src/components/command/marketing/campaign-copy.ts",
+        "sha256": "bd7d5ac685d2bce1dd0ad20228835e2f805079667bf1a891696855672dabb7a9",
+        "git": "??",
+        "layer": "marketing"
+      },
+      {
+        "path": "src/components/command/marketing/campaign-notice.ts",
+        "sha256": "3502c9bf7e4004f903ed6181bb22779b28dddd74f31bd3f379976c4ee35a7196",
+        "git": "??",
+        "layer": "marketing"
+      },
+      {
+        "path": "tests/command-marketing-room.test.ts",
+        "sha256": "b328c43788116dafc8a3c23f9c12bcf4d495d0abaac7c852bd3de78330f5303d",
+        "git": "??",
+        "layer": "marketing"
+      },
+      {
+        "path": "docs/COMMAND_MARKETING_ROOM.md",
+        "sha256": "d7966ae60165e0ee3dd26bff97a0572936a998f73fa306bf8fda1012bed65548",
+        "git": "??",
+        "layer": "marketing"
+      }
+    ]
+  },
+  "deletions": [
+    {
+      "path": "src/components/command/adaptive-command-deck.tsx",
+      "reason": "Product replaced the permanent bottom deck with command-actions.tsx; the base-commit file must be absent or the old toolbar returns."
+    }
+  ]
+}

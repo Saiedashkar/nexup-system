@@ -1,127 +1,217 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useCommand } from "../state/command-store";
-import { DEPARTMENTS, FOUNDER, type DepartmentId } from "../state/organization-model";
-import { departmentAttention, totalAttention, workspaceHref } from "../state/department-workspace";
-import { DEPARTMENT_ICONS, IconExec, IconMission, IconRun, IconWarRoom } from "../ui/icons";
+import { useLocale } from "../i18n/command-locale";
+import { useCommandData } from "../state/demo/command-data-store";
+import { useOnScreen } from "../state/use-on-screen";
+import { DEPARTMENTS } from "../state/organization-model";
+import { departmentStanding, NODE_STATUS_TONE } from "../state/demo/selectors";
+import { workspaceHref } from "../state/department-workspace";
+import { DEPARTMENT_ICONS, IconChevronRight } from "../ui/icons";
+import { greetingKeyForHour } from "../room-identity";
+import { CommandSummaries } from "./command-center";
+import { GlobalCommandBar } from "../global-command-bar";
+import { DemoHandoffDialog, DemoHandoffPill } from "./demo-handoff";
+import { MobileHomeHeader } from "./home-header";
+import { cssVars } from "../ui/css-vars";
+import {
+  EXEC_CHARACTER_BODY,
+  EXEC_CHARACTER_BODY_SIZE,
+  EXEC_CHARACTER_FALLBACK_LABEL,
+  EXEC_CHARACTER_HEAD,
+  EXEC_CHARACTER_HEAD_SIZE,
+} from "../state/exec-character";
+
+/** The same six, in the composition's reading order: top row first, then left. */
+const HOME_DEPARTMENTS = [...DEPARTMENTS].sort((a, b) => a.y - b.y || a.x - b.x);
 
 /**
- * MOBILE COMMAND OVERVIEW (Phase UI-05)
- * ─────────────────────────────────────
- * The desktop Command is a room you look INTO. A phone cannot hold that room,
- * so rather than shrink it, mobile gets its own deliberate composition: EXEC
- * first, then the things you actually reach for with a thumb — start a mission,
- * see what needs you, open a department, call the team. `system.css` shows this
- * only at ≤760px and stands the room down, so neither composition is a
- * compromise of the other.
+ * MOBILE COMMAND HOME — the approved phone composition
+ * ────────────────────────────────────────────────────
+ * The phone is not the desktop canvas shrunk down. It is its own reading of the
+ * same organization, in the order the approved reference uses:
+ *
+ *   1. a COMPACT header — brand, company scope, language and the menu;
+ *   2. the GREETING — the same clock-aware line the desktop header states;
+ *   3. the EXEC HERO — the approved character over its orbit, with the six
+ *      departments as a two-column grid of readable, thumb-sized plates around
+ *      it. No horizontal shrink: the page scrolls vertically;
+ *   4. ONE EXPLICIT DEMO HANDOFF — a labelled brief moving from Clients &
+ *      Projects to Creative & Production;
+ *   5. the TWO SUMMARIES — side by side, each a link to the rows that act on it;
+ *   6. the COMPOSER — addressed to EXEC, above the fixed bottom bar.
+ *
+ * The page reads the SAME dataset through the SAME selectors as the desktop and
+ * the destination pages, so the two compositions cannot disagree. Everything is
+ * local demo data; the provenances line says so in the reader's language.
  */
-const STATUS_TONE: Record<string, string> = {
-  ACTIVE: "var(--nc-active)",
-  THINKING: "var(--nc-thinking)",
-  WAITING: "var(--nc-waiting)",
-  APPROVAL_REQUIRED: "var(--nc-approval)",
-  HANDOFF: "var(--nc-handoff)",
-  BLOCKED: "var(--nc-error)",
-  IDLE: "var(--nc-idle)",
-};
-
 export function CommandMobileOverview() {
-  const { snapshot, setExecOpen, notify } = useCommand();
-  const { visual } = snapshot;
-
-  /* Read from the same shared source as the graph nodes and the List rows, so
-     the mobile summary cannot disagree with a department's own workspace. */
-  const needsYou = DEPARTMENTS.filter((d) => departmentAttention(d.id) > 0);
-  const needsYouItems = totalAttention();
-
-  const actions = [
-    { id: "mission", label: "New mission", Icon: IconMission, run: () => notify("New mission opens in a later phase — mock only.") },
-    { id: "exec", label: "Talk to EXEC", Icon: IconExec, run: () => setExecOpen(true) },
-    { id: "needs", label: "Needs you", Icon: IconWarRoom, run: () => notify(`${needsYouItems} item(s) need you — mock only.`) },
-    { id: "work", label: "Active work", Icon: IconRun, run: () => notify("Active work opens in a later phase — mock only.") },
-  ];
+  const { setExecOpen } = useCommand();
+  const { t, dir } = useLocale();
+  const { dataset } = useCommandData();
+  const { ref: screenRef, onScreen } = useOnScreen<HTMLElement>();
+  const [assetFailed, setAssetFailed] = useState(false);
+  const [handoffOpen, setHandoffOpen] = useState(false);
+  const [greetingKey] = useState(() => greetingKeyForHour(new Date().getHours()));
 
   return (
-    <section className="nc-mobile-command" aria-label="Command overview">
-      <header className="nc-mobile-command__head">
-        <span className="nc-avatar" style={{ width: 34, height: 34, fontSize: 12 }} aria-hidden="true">
-          {FOUNDER.initials}
-        </span>
-        <span className="nc-mobile-command__id">
-          <span className="nc-mobile-command__hi">Good morning, {FOUNDER.name}</span>
-          <span className="nc-mobile-command__meta">Founder · Human authority</span>
-        </span>
-      </header>
+    <section
+      ref={screenRef}
+      className="nc-mobile-command"
+      data-live={onScreen}
+      aria-label={t("mobile.aria")}
+    >
+      <MobileHomeHeader />
 
-      <button
-        type="button"
-        className="nc-mobile-command__exec"
-        onClick={() => setExecOpen(true)}
-      >
-        <span className="nc-mobile-command__exec-orb" aria-hidden="true">
-          <IconExec size={22} />
-        </span>
-        <span className="nc-mobile-command__exec-text">
-          <span className="nc-mobile-command__exec-title">Talk to EXEC</span>
-          {/* Counted, never written down: this line reads the same attention source
-              the "Needs you" list below is built from. */}
-          <span className="nc-mobile-command__exec-hint">
-            {needsYouItems === 0
-              ? "Nothing needs you right now"
-              : `${needsYouItems} item${needsYouItems === 1 ? "" : "s"} need you`}
-          </span>
-        </span>
-      </button>
+      {/* The company selector is a demonstration control: it changes the label,
+          not the records. The limitation is written under the control itself,
+          permanently, in whichever language is active. */}
+      <p className="nc-mhome__scope-note" id="nc-mhome-scope-note">
+        {t("shell.scopeLimitation")}
+      </p>
 
-      <div className="nc-mobile-command__actions">
-        {actions.map(({ id, label, Icon, run }) => (
-          <button key={id} type="button" className="nc-mobile-command__action" onClick={run}>
-            <Icon size={18} />
-            {label}
-          </button>
-        ))}
+      <div className="nc-mhome__greeting">
+        <h1 className="nc-mhome__hello">
+          <span suppressHydrationWarning>{t(greetingKey)}</span>{" "}
+          <span className="nc-mhome__name">{t("shell.founderName")}</span>
+        </h1>
+        <p className="nc-mhome__tagline">{t("room.tagline")}</p>
       </div>
 
-      {needsYou.length > 0 && (
-        <div className="nc-mobile-command__section">
-          <span className="nc-eyebrow">Needs you</span>
-          <div className="nc-mobile-command__needs">
-            {needsYou.map((d) => (
-              <Link key={d.id} className="nc-mobile-command__need" href={workspaceHref(d.id)}>
-                <span className="nc-mobile-command__need-dot" style={{ background: "var(--nc-approval)" }} aria-hidden="true" />
-                <span>{d.name}</span>
-                <span className="nc-mobile-command__need-meta">needs attention</span>
-              </Link>
+      <section className="nc-mhome__hero" aria-label={t("home.heroAria")}>
+        {/* THE FIELD — the orbit, the character and the six plates share one
+            box, so the seat can stand in the lane BETWEEN the two columns. On
+            the phone the reference places the departments AROUND EXEC, not in a
+            grid below it; the plates keep their own order and their own
+            touchable box, and the character is the centre they face. */}
+        <div className="nc-mhome__field">
+        <div className="nc-mhome__orbit" aria-hidden="true">
+          <span data-ring="outer" />
+          <span data-ring="mid" />
+          <span data-ring="inner" />
+          <i data-pearl="1" />
+          <i data-pearl="2" />
+          <i data-pearl="3" />
+        </div>
+
+        <button
+          type="button"
+          className="nc-mhome__seat"
+          onClick={() => setExecOpen(true)}
+          aria-label={t("cc.openConsoleAria")}
+        >
+          <span className="nc-mhome__seat-figure" aria-hidden="true">
+            {assetFailed ? (
+              <span className="nc-mhome__seat-fallback">{EXEC_CHARACTER_FALLBACK_LABEL}</span>
+            ) : (
+              <img
+                src={EXEC_CHARACTER_BODY ?? EXEC_CHARACTER_HEAD}
+                width={(EXEC_CHARACTER_BODY ? EXEC_CHARACTER_BODY_SIZE : EXEC_CHARACTER_HEAD_SIZE).width}
+                height={(EXEC_CHARACTER_BODY ? EXEC_CHARACTER_BODY_SIZE : EXEC_CHARACTER_HEAD_SIZE).height}
+                alt=""
+                draggable={false}
+                decoding="async"
+                onError={() => setAssetFailed(true)}
+              />
+            )}
+          </span>
+          <span className="nc-mhome__seat-name">EXEC</span>
+          <span className="nc-mhome__seat-role">{t("home.execSeat")}</span>
+        </button>
+
+        {!dataset ? (
+          <div className="nc-mhome__depts" aria-hidden="true">
+            {HOME_DEPARTMENTS.map((department) => (
+              <span key={department.id} className="nc-mhome__dept-skeleton" />
             ))}
           </div>
+        ) : (
+          <div className="nc-mhome__depts">
+            {HOME_DEPARTMENTS.map((department) => {
+              const Icon = DEPARTMENT_ICONS[department.id];
+              const standing = departmentStanding(dataset, department.id);
+              const note =
+                standing.held > 0
+                  ? `${t("cc.cardAttention")} · ${standing.held}`
+                  : t(`status.node.${standing.status}`);
+              return (
+                <Link
+                  key={department.id}
+                  className="nc-mhome__dept"
+                  href={workspaceHref(department.id)}
+                  dir={dir}
+                  style={cssVars({ "--nc-accent": `var(${department.accentVar})` })}
+                  title={t("cc.openDepartment", { name: t(`dept.${department.id}.name`) })}
+                >
+                  <span className="nc-mhome__dept-icon" aria-hidden="true">
+                    <Icon size={17} />
+                  </span>
+                  <span className="nc-mhome__dept-copy">
+                    <span className="nc-mhome__dept-name">{t(`dept.${department.id}.name`)}</span>
+                    <span
+                      className="nc-mhome__dept-status"
+                      style={cssVars({
+                        "--nc-accent": `var(${NODE_STATUS_TONE[standing.status]})`,
+                      })}
+                    >
+                      <i aria-hidden="true" />
+                      {note}
+                    </span>
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
         </div>
+
+        <DemoHandoffPill variant="phone" onOpen={() => setHandoffOpen(true)} />
+      </section>
+
+      {dataset ? (
+        <>
+          <CommandSummaries dataset={dataset} />
+
+          <div className="nc-mhome__composer">
+            <GlobalCommandBar home />
+          </div>
+
+          <p className="nc-mhome__provenance">
+            <span aria-hidden="true" />
+            {t("home.provenance")}
+          </p>
+
+          <details className="nc-mhome__detail">
+            <summary>
+              {t("cc.detailsTitle")}
+              <span>{t("cc.detailsNote")}</span>
+            </summary>
+            <div className="nc-mhome__detail-body">
+              <Link href="/command/decisions">
+                {t("cc.needsYourDecision")}
+                <IconChevronRight size={14} />
+              </Link>
+              <Link href="/command/missions">
+                {t("cc.currentWork")}
+                <IconChevronRight size={14} />
+              </Link>
+              <Link href="/command/projects">
+                {t("areas.projects.label")}
+                <IconChevronRight size={14} />
+              </Link>
+            </div>
+          </details>
+        </>
+      ) : (
+        <p className="nc-mo__empty" role="status" aria-live="polite">
+          {t("kit.readingOrganization")}…
+        </p>
       )}
 
-      <div className="nc-mobile-command__section">
-        <span className="nc-eyebrow">Departments</span>
-        <div className="nc-mobile-command__depts">
-          {DEPARTMENTS.map((d) => {
-            const Icon = DEPARTMENT_ICONS[d.id as keyof typeof DEPARTMENT_ICONS];
-            const status = visual.departments[d.id as DepartmentId]?.status ?? "IDLE";
-            return (
-              <Link key={d.id} className="nc-mobile-command__dept" href={workspaceHref(d.id)}>
-                <span className="nc-mobile-command__dept-icon" style={{ color: `var(${d.accentVar})` }} aria-hidden="true">
-                  <Icon size={18} />
-                </span>
-                <span className="nc-mobile-command__dept-text">
-                  <span className="nc-mobile-command__dept-name">{d.name}</span>
-                  <span className="nc-mobile-command__dept-cap">{d.capability}</span>
-                </span>
-                <span className="nc-mobile-command__dept-status" style={{ color: STATUS_TONE[status] ?? "var(--nc-idle)" }}>
-                  <i style={{ background: STATUS_TONE[status] ?? "var(--nc-idle)" }} aria-hidden="true" />
-                  {status.replace(/_/g, " ")}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
+      <DemoHandoffDialog open={handoffOpen} onClose={() => setHandoffOpen(false)} />
     </section>
   );
 }

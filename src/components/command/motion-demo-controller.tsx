@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { IS_DEV, useCommand } from "./state/command-store";
 import { DEMO_SCENARIOS, type DemoScenarioId } from "./state/demo-scenarios";
 
@@ -16,7 +16,73 @@ import { DEMO_SCENARIOS, type DemoScenarioId } from "./state/demo-scenarios";
  * It also exposes the two things you can't review by clicking alone:
  * slow-motion (so a 140ms micro-interaction is actually inspectable) and a
  * reduced-motion override.
+ *
+ * WHY IT NO LONGER SHOWS UP ON ITS OWN
+ * `IS_DEV` is not enough on its own, because the product is REVIEWED on a dev
+ * server: an orange panel parked in the lower right of every screen is chrome the
+ * direction never approved, and it was reported as overlapping the product (the
+ * floating EXEC tab, and the lower department at narrow widths). Compiling it out
+ * of production did not remove it from the only build anyone looks at.
+ *
+ * So it is now REQUESTED, never ambient. It renders only when the review URL asks
+ * for it (`?motion-lab=1`), and the request is remembered for the session so
+ * internal navigation — which drops query strings — cannot make it disappear
+ * mid-review. "Hide" removes the request from the URL and from the session, so
+ * from then on the product is left alone. Nothing about the instrument's
+ * behaviour changed; only who sees it.
+ *
+ * WHY THIS IS A STORE AND NOT AN EFFECT. Whether the lab is wanted lives in the
+ * URL and in session storage — OUTSIDE React — so it is read as external state
+ * with `useSyncExternalStore`: the server is told `false`, the client gets its
+ * real answer, and hydration stays in step without an effect that sets state on
+ * mount (which is what the previous version did, and which React's own lint rule
+ * flags as a cascading render).
  */
+
+/* The opt-in's three keys. The query string is the entry point (a URL can be
+   pasted); the session flag is what survives client-side navigation; the event is
+   how "Hide" tells the store to re-read. */
+const LAB_QUERY_KEY = "motion-lab";
+const LAB_SESSION_KEY = "nc.motion-lab";
+const LAB_EVENT = "nc:motion-lab";
+
+/**
+ * Has the review asked for the lab? A PURE read of the two places that can ask.
+ * The URL wins, so pasting `?motion-lab=1` again always re-opens it in the same
+ * tab; "Hide" strips that parameter, which is what makes the opt-out stick.
+ */
+function labRequested(): boolean {
+  try {
+    if (new URLSearchParams(window.location.search).get(LAB_QUERY_KEY) === "1") return true;
+    return window.sessionStorage.getItem(LAB_SESSION_KEY) === "on";
+  } catch {
+    /* Private modes can throw on storage access; a review instrument is never
+       worth breaking a page for. */
+    return false;
+  }
+}
+
+function subscribeLabRequest(onChange: () => void): () => void {
+  /* The AUTHENTICATED review is a client-side app: the next internal navigation
+     drops the query string, so a request that arrives in the URL is recorded for
+     the session the moment it is first honoured. */
+  try {
+    if (labRequested()) window.sessionStorage.setItem(LAB_SESSION_KEY, "on");
+  } catch {
+    /* see labRequested */
+  }
+  window.addEventListener(LAB_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(LAB_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+/** The lab never renders on the server, so the server's answer is always no. */
+function labRequestedOnServer(): boolean {
+  return false;
+}
 export function MotionDemoController() {
   const {
     scenario,
@@ -37,24 +103,50 @@ export function MotionDemoController() {
      composition, and an open panel sits over the lower-left department. */
   const [open, setOpen] = useState(false);
 
-  if (!IS_DEV) return null;
+  const requested = useSyncExternalStore(subscribeLabRequest, labRequested, labRequestedOnServer);
+
+  /* "Hide" is a real opt-out, not a collapse: the parameter leaves the URL and
+     the session stops remembering it, so the next reload — and every internal
+     navigation after this one — leaves the product alone. */
+  const dismiss = () => {
+    try {
+      window.sessionStorage.setItem(LAB_SESSION_KEY, "off");
+      const url = new URL(window.location.href);
+      url.searchParams.delete(LAB_QUERY_KEY);
+      window.history.replaceState(null, "", url);
+    } catch {
+      /* see labRequested */
+    }
+    setOpen(false);
+    window.dispatchEvent(new Event(LAB_EVENT));
+  };
+
+  if (!IS_DEV || !requested) return null;
 
   return (
     <div className="nc-lab" data-open={open}>
-      <button
-        type="button"
-        className="nc-lab__head"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-label="Toggle motion demo controller"
-      >
-        <span className="nc-lab__dot" />
-        <span className="nc-lab__title">Motion lab · dev only</span>
-        <span style={{ flex: 1 }} />
-        <span className="nc-lab__note" style={{ margin: 0 }}>
-          {open ? "—" : "+"}
-        </span>
-      </button>
+      <div className="nc-lab__bar">
+        <button
+          type="button"
+          className="nc-lab__head"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+        >
+          <span className="nc-lab__dot" />
+          <span className="nc-lab__title">Motion lab · dev only</span>
+          <span className="nc-lab__sign" aria-hidden="true">
+            {open ? "—" : "+"}
+          </span>
+        </button>
+        <button
+          type="button"
+          className="nc-lab__hide"
+          onClick={dismiss}
+          aria-label="Hide the motion lab for this session"
+        >
+          ×
+        </button>
+      </div>
 
       {open && (
         <div className="nc-lab__body">
@@ -109,7 +201,8 @@ export function MotionDemoController() {
             {snapshot.narrative}
             <br />
             <span style={{ color: "var(--nc-text-3)" }}>
-              Not shipped: this panel is compiled out of production builds.
+              Not shipped: this panel is compiled out of production builds, and it is not shown in
+              normal review either — append ?{LAB_QUERY_KEY}=1 to the review URL to open it.
             </span>
           </div>
         </div>

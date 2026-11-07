@@ -119,7 +119,9 @@ export async function POST(request: NextRequest) {
     // Identity comes from the authority; the payload owns only the work.
     const command = buildAuthorizedMissionCommand({ body, authority, business });
 
-    const outcome = await application.commands.issueCommand(command);
+    // The authority travels WITH the command, so the execution service's final
+    // preflight re-checks the SAME authenticated scope the edge already applied.
+    const outcome = await application.commands.issueCommand(command, { authority });
 
     if (outcome.kind === "in-progress") {
       return NextResponse.json(

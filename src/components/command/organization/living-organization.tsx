@@ -2,154 +2,115 @@
 
 import { useState } from "react";
 import { useCommand } from "../state/command-store";
-import { DEPARTMENT_BY_ID } from "../state/organization-model";
-import {
-  IconChevronDown,
-  IconGraph,
-  IconList,
-  IconMap,
-  IconPanel,
-  IconWorkflow,
-} from "../ui/icons";
-import { OrganizationListView, OrganizationMapView } from "./organization-list-view";
+import { useLocale } from "../i18n/command-locale";
+import { SharedServicesBand } from "./shared-services-band";
+import { HomeHeader } from "./home-header";
+import { DemoHandoffDialog } from "./demo-handoff";
 import { CommandScene } from "../scene/command-scene";
-import { CommandHeader, CommandKpis, CommandMissionsPanels } from "./command-center";
+import { CommandActionBar } from "../command-actions";
+import { GlobalCommandBar } from "../global-command-bar";
+import { LabData } from "../lab/kit";
+import {
+  CommandKpis,
+  CommandPriorities,
+  CommandSummaries,
+} from "./command-center";
+import { IconSpark } from "../ui/icons";
 
 /**
- * LIVING ORGANIZATION — the command center (visual-direction pass)
- * ──────────────────────────────────────────────────────────────
- * The room used to be the whole screen, with its instrumentation floating inside
- * it. The approved direction is a calm, spacious operating surface, so the page
- * now composes in reading order:
+ * LIVING ORGANIZATION — the approved company overview
+ * ───────────────────────────────────────────────────
+ * One subject, two answers, one composer, one disclosure. In that order:
  *
- *   · a HEADING BAND with the atlas behind it;
- *   · a row of live FIGURES;
- *   · a quiet TOOLBAR (the Graph / List / Map readings, plus the live filters);
- *   · the GRAPH itself — the spatial organization, now a defined panel rather
- *     than a full-bleed void;
- *   · two OPERATIVE TABLES: active missions and the decision queue.
+ *   1. HOME HEADER — brand, company scope and language at the left; the
+ *      time-aware greeting and the product line at the right;
+ *   2. THE COMPOSITION — six department plates, three a side, around the
+ *      approved EXEC character, with one explicit demo collaboration on the
+ *      route between Clients & Projects and Creative & Production;
+ *   3. THE TWO SUMMARIES — what waits on the founder and what is moving;
+ *   4. THE COMPOSER — the home is addressed to EXEC, so the console sits at the
+ *      end of the composition rather than in a page-wide toolbar above it;
+ *   5. ONE DISCLOSURE — figures, row-level panels, the home's verbs and shared
+ *      services, closed by default.
  *
- * Everything is derived from the same live snapshot as before, so the spatial
- * scene, the list, the rail and the tables can never disagree. The scene stays
- * mounted across readings, so switching to List and back never re-runs the
- * entrance transition or resets the camera.
+ * There is no page title, no subtitle and no view switcher in this composition.
+ * The reference does not have them, and the previous pass read as a dashboard
+ * precisely because it stacked all three above the thing the screen is about.
+ * The cards and list readings still exist as components; they are simply not
+ * competing with the approved composition on its first screen.
+ *
+ * The desktop room is hidden at ≤760px by `system.css`; the phone gets its own
+ * reading in `command-mobile-overview.tsx`.
  */
-
-type ViewMode = "graph" | "list" | "map";
-
-const VIEWS: Array<{ id: ViewMode; label: string; Icon: typeof IconGraph }> = [
-  { id: "graph", label: "Graph", Icon: IconGraph },
-  { id: "list", label: "List", Icon: IconList },
-  { id: "map", label: "Map", Icon: IconMap },
-];
-
-const LEGEND: Array<{ label: string; color: string }> = [
-  { label: "Working", color: "var(--nc-active)" },
-  { label: "Thinking", color: "var(--nc-thinking)" },
-  { label: "Waiting", color: "var(--nc-waiting)" },
-  { label: "Needs you", color: "var(--nc-approval)" },
-  { label: "Error", color: "var(--nc-error)" },
-];
-
-export function LivingOrganization() {
-  const { focus, notify } = useCommand();
-  const [view, setView] = useState<ViewMode>("graph");
-
-  const focusedDepartment = focus ? DEPARTMENT_BY_ID[focus] : null;
-  const inRoom = view === "graph";
+export function LivingOrganization({ children }: { children?: React.ReactNode }) {
+  const { focus, clearFocus } = useCommand();
+  const { t } = useLocale();
+  const [handoffOpen, setHandoffOpen] = useState(false);
 
   return (
-    <section
-      className="nc-room"
-      data-level={focusedDepartment ? "department" : "organization"}
-      data-view={view}
-      aria-label="Living organization"
-    >
-      <CommandHeader />
-      <CommandKpis />
+    <section className="nc-room nc-op" data-reading="overview" aria-label={t("cc.livingOrganization")}>
+      <HomeHeader />
 
-      <div className="nc-cc-toolbar">
-        <div className="nc-cc-tabs" role="group" aria-label="Organization view">
-          {VIEWS.map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              type="button"
-              className="nc-cc-tab"
-              data-active={view === id}
-              aria-pressed={view === id}
-              onClick={() => setView(id)}
-            >
-              <Icon size={14} />
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <div className="nc-cc-tools">
-          <button
-            type="button"
-            className="nc-cc-tool"
-            onClick={() => notify("Local view follows the running scenario — visual only in this phase.")}
-          >
-            <span className="nc-cc-tool__dot" aria-hidden="true" />
-            Local View
-            <IconChevronDown size={13} />
-          </button>
-          <button
-            type="button"
-            className="nc-cc-tool"
-            onClick={() => notify("Mission routing follows the running scenario on the graph — visual only in this phase.")}
-          >
-            <IconWorkflow size={14} />
-            Mission Routing
-          </button>
-          <button
-            type="button"
-            className="nc-cc-tool"
-            onClick={() => notify("Filters arrive with the Work area.")}
-          >
-            <IconPanel size={14} />
-            Filter
+      {/* The selection is reversible from the composition itself, and not only
+          from the contextual panel: a reader who selected a space must be able
+          to let it go without hunting for the panel that opened it. */}
+      {focus && (
+        <div className="nc-ov__selected" role="status">
+          <span className="nc-ov__selected-text">{t("cc.selectedNote")}</span>
+          <button type="button" className="nc-ov__selected-clear" onClick={clearFocus}>
+            {t("cc.clearSelection")}
           </button>
         </div>
-      </div>
+      )}
 
-      <div className="nc-room__stage">
-        <div className="nc-room__view" data-active={inRoom}>
-          <CommandScene />
-        </div>
+      <LabData>
+        {(dataset) => (
+          <>
+            <section className="nc-ov" aria-label={t("cc.viewOrganization")}>
+              <div className="nc-room__stage nc-ov__stage">
+                <div className="nc-room__view" data-active="true">
+                  <CommandScene onDemoHandoff={() => setHandoffOpen(true)} />
+                </div>
+              </div>
+            </section>
 
-        {view !== "graph" && (
-          <div className="nc-room__panel nc-anim-panel">
-            <div className="nc-room__panel-head">
-              <h2 className="nc-room__panel-title">Living Organization</h2>
-              <span className="nc-room__panel-note">
-                {view === "list"
-                  ? "The same organization state, as rows."
-                  : "Not built in this phase — reserved for the organization map."}
-              </span>
+            {/* The two answers. Directly under the composition, above everything
+                else, because they are what a founder opens this screen for. */}
+            <CommandSummaries dataset={dataset} />
+
+            <div className="nc-homecomposer">
+              <GlobalCommandBar home />
             </div>
-            {view === "list" ? <OrganizationListView /> : <OrganizationMapView />}
-          </div>
+
+            <p className="nc-home__provenance">{t("home.provenance")}</p>
+
+            {/* OPERATING DETAIL — one disclosure, closed by default. A native
+                `<details>` is a real disclosure to a screen reader and to the
+                keyboard with no JavaScript, so it is the honest choice here: the
+                content is not hidden from anything, it is folded. */}
+            <details className="nc-detail">
+              <summary className="nc-detail__summary">
+                <IconSpark size={14} />
+                {t("cc.detailsTitle")}
+                <span className="nc-detail__note">{t("cc.detailsNote")}</span>
+              </summary>
+
+              <div className="nc-detail__body">
+                <CommandKpis dataset={dataset} />
+                <CommandActionBar />
+                <CommandPriorities dataset={dataset} />
+                <SharedServicesBand />
+              </div>
+            </details>
+          </>
         )}
+      </LabData>
 
-        {/* The one piece of in-room instrumentation that still belongs on the
-            panel rather than in a band: what the colours mean. */}
-        <div className="nc-room__overlay" data-active={inRoom}>
-          <div className="nc-room__key">
-            <span className="nc-room__legend" aria-hidden="true">
-              {LEGEND.map((item) => (
-                <span key={item.label} className="nc-room__legend-item">
-                  <span className="nc-room__legend-dot" style={{ background: item.color }} />
-                  {item.label}
-                </span>
-              ))}
-            </span>
-          </div>
-        </div>
-      </div>
+      <DemoHandoffDialog open={handoffOpen} onClose={() => setHandoffOpen(false)} />
 
-      <CommandMissionsPanels />
+      {/* The page's own additive band (operating detail), appended INSIDE the
+          room's scroll flow. Nothing above this line changes. */}
+      {children}
     </section>
   );
 }

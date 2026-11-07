@@ -9,6 +9,31 @@ import { createHermesRuntime, type HermesRuntimeConfig } from "@/modules/workfor
 import { createWorkforceApplication, type WorkforceApplication } from "@/modules/workforce/application";
 import { DeterministicHermesTransport } from "@/modules/workforce/runtimes/hermes/testing/deterministic-transport";
 
+import type { BudgetGovernor } from "@/modules/ai-workforce/policies/budget-governor";
+import {
+  createExecutionAuthority,
+  type ExecutionAuthority,
+} from "@/modules/workforce/execution/execution-authority";
+
+/**
+ * The explicit test-only budget governor, per
+ * `docs/AI_WORKFORCE_STEP5A_REMEDIATION_DESIGN.md` §0.2: this proof runs the real
+ * Hermes adapter over a deterministic transport, and a RUNTIME leg is always
+ * `VARIABLE_PROVIDER_COST`, which the shipped DENY governor refuses. The shipped
+ * default is untouched — this proof states its own governor.
+ */
+const adoptionTestGovernor: BudgetGovernor = {
+  policyRef: "test.adoption.allow",
+  async evaluate(input) {
+    return {
+      allowed: true,
+      reason: "ALLOWED_ATTESTED_INCLUDED_ROUTE",
+      policyRef: "test.adoption.allow",
+      spend: input.spend,
+    };
+  },
+};
+
 /**
  * STEP 5/8 — RE-ADOPTION: every remote outcome, on a real database.
  *
@@ -47,6 +72,11 @@ const MIGRATIONS = [
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_1B/migration.sql",
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_2/migration.sql",
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_3/migration.sql",
+  // Step 5A-4: the application owns the DURABLE execution claim now.
+  "prisma/proposed-migrations/AI_WORKFORCE_PHASE_4/migration.sql",
+  // Fifth review: recovery progress lives in the ROWS (`recoverySweptAt`), which
+  // the durable repositories select, so the database carries PHASE_5 as well.
+  "prisma/proposed-migrations/AI_WORKFORCE_PHASE_5/migration.sql",
 ];
 
 const FOUNDER = "actor_founder";
@@ -116,6 +146,8 @@ describeIfDatabase("STEP 5 — re-adoption of in-flight executions, against a re
     application: WorkforceApplication;
     transport: CountingTransport;
     runtimeId: string;
+    /** What the authenticated edge would hand the command service. */
+    authority: ExecutionAuthority;
   };
 
   async function boot(prefix: string, options: TransportOptions = {}, runtimeId?: string): Promise<Booted> {
@@ -130,8 +162,24 @@ describeIfDatabase("STEP 5 — re-adoption of in-flight executions, against a re
       now,
       allowTestTransport: true,
     });
-    const application = await createWorkforceApplication(handle, { ids, now, runtime });
-    return { application, transport, runtimeId: runtime.identity.id };
+    const application = await createWorkforceApplication(handle, {
+      ids,
+      now,
+      runtime,
+      budget: adoptionTestGovernor,
+    });
+    const authority = createExecutionAuthority({
+      userId: "user_operator",
+      actorId: "actor_human_operator",
+      actorSlug: "human-operator",
+      actorType: "HUMAN",
+      permissionTokens: ["aiworkforce.access"],
+      accessibleBusinessSlugs: ["nexup"],
+      isSuperAdmin: false,
+      hasOfficeFinanceFull: false,
+      requestedAt: "2026-08-05T00:00:00.000Z",
+    });
+    return { application, transport, runtimeId: runtime.identity.id, authority };
   }
 
   function command(key: string) {
@@ -157,8 +205,8 @@ describeIfDatabase("STEP 5 — re-adoption of in-flight executions, against a re
    * attempt this process opened and never settled.
    */
   async function inFlight(prefix: string, key: string) {
-    const { application } = await boot(prefix, { holdCompletionMs: 60_000 });
-    const outcome = await application.commands.issueCommand(command(key));
+    const { application, authority } = await boot(prefix, { holdCompletionMs: 60_000 });
+    const outcome = await application.commands.issueCommand(command(key), { authority });
     if (outcome.kind !== "issued") throw new Error(`expected an issued command, got ${outcome.kind}`);
     const snapshot = await application.commands.snapshot(outcome.mission.id);
     const task = snapshot.tasks[0]!;
@@ -190,9 +238,9 @@ describeIfDatabase("STEP 5 — re-adoption of in-flight executions, against a re
     options: TransportOptions,
     runtimeId?: string,
   ) {
-    const { application, transport } = await boot(prefix, options, runtimeId);
+    const { application, transport, authority } = await boot(prefix, options, runtimeId);
     const reconciliations = await application.commands.reconcile(flight.missionId as never);
-    return { application, transport, reconciliations };
+    return { application, transport, reconciliations, authority };
   }
 
   it("still RUNNING abroad: re-adoption reports it and moves nothing", async () => {
@@ -331,7 +379,7 @@ describeIfDatabase("STEP 5 — re-adoption of in-flight executions, against a re
 
   it("is idempotent: a second reconciliation adds no execution, no review and no run", async () => {
     const flight = await inFlight("s8", "idempotent");
-    const { application, transport, reconciliations } = await adopt(
+    const { application, transport, reconciliations, authority } = await adopt(
       "s8b",
       flight,
       { knownRuns: [{ executionId: flight.handleId, status: "succeeded" }] },
@@ -352,7 +400,7 @@ describeIfDatabase("STEP 5 — re-adoption of in-flight executions, against a re
     expect(transport.counts().runsStarted).toBe(0);
 
     // Draining again is also inert: nothing new is started, nothing duplicated.
-    await application.commands.drain(flight.missionId as never);
+    await application.commands.drain(flight.missionId as never, { authority });
     const drained = await application.commands.snapshot(flight.missionId as never);
     expect(drained.executions).toHaveLength(1);
     expect(drained.reviews).toHaveLength(1);

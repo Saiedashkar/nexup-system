@@ -27,6 +27,12 @@ import {
 // own test-support module and declares `provenance: "TEST"`.
 import { DeterministicHermesTransport } from "@/modules/workforce/runtimes/hermes/testing/deterministic-transport";
 
+import type { BudgetGovernor } from "@/modules/ai-workforce/policies/budget-governor";
+import {
+  createExecutionAuthority,
+  type ExecutionAuthority,
+} from "@/modules/workforce/execution/execution-authority";
+
 /**
  * STEP 5/8 — the REAL mission lifecycle.
  *
@@ -50,6 +56,30 @@ import { DeterministicHermesTransport } from "@/modules/workforce/runtimes/herme
 const MARKER = "NEXUP_STEP5_MISSION_OK";
 const INSTRUCTION = `Return exactly: ${MARKER}`;
 const FOUNDER = "actor_founder";
+
+/**
+ * The ONE test-only governor this suite composes, explicitly.
+ *
+ * 5A-4's shipped default is `DenyVariableAiSpendBudgetGovernor`, and a RUNTIME
+ * leg — Hermes included — is always classified `VARIABLE_PROVIDER_COST`. So the
+ * default composition refuses the Hermes mission below, by design. This suite
+ * exists to exercise the LIFECYCLE, so it composes an allow governor the way
+ * `docs/AI_WORKFORCE_STEP5A_REMEDIATION_DESIGN.md` §0.2 permits ("tests may use
+ * an explicit fake/test governor"). Nothing about the shipped default changes:
+ * the governor is named `test.` and lives in a test file, and the budget boundary
+ * itself is proven in `workforce-step5a4-execution-cutover.test.ts`.
+ */
+const step5TestGovernor: BudgetGovernor = {
+  policyRef: "test.step5-mission.allow",
+  async evaluate(input) {
+    return {
+      allowed: true,
+      reason: "ALLOWED_ATTESTED_INCLUDED_ROUTE",
+      policyRef: "test.step5-mission.allow",
+      spend: input.spend,
+    };
+  },
+};
 
 /* ══════════════════════════════════════════════════════
    Fixtures
@@ -96,6 +126,12 @@ type Wired = {
   transport: CountingTransport;
   actorId: string;
   runtimeId: string;
+  /**
+   * The server-created authority every foreground operation now carries. 5A-4
+   * requires it to REACH the execution boundary rather than be rebuilt there, so
+   * the harness hands it to each call exactly as a route would.
+   */
+  authority: ExecutionAuthority;
   orchestrator: ReturnType<typeof createMissionOrchestrator>;
 };
 
@@ -115,8 +151,40 @@ async function wired(options: { holdCompletionMs?: number; failWith?: "UNAVAILAB
   if (!built.enabled) throw new Error(built.reason);
   await domain.actors.register(founderActorRegistration());
 
-  const orchestrator = createMissionOrchestrator(domain, { defaultReviewerActorId: FOUNDER });
-  return { domain, transport, actorId: built.actorId, runtimeId: built.runtimeId, orchestrator };
+  const authority = createExecutionAuthority({
+    userId: "user_operator",
+    actorId: "actor_human_operator",
+    actorSlug: "human-operator",
+    actorType: "HUMAN",
+    permissionTokens: ["aiworkforce.access"],
+    accessibleBusinessSlugs: ["nexup"],
+    isSuperAdmin: false,
+    hasOfficeFinanceFull: false,
+    // The harness clock starts here and advances one second per read, so the
+    // authority stays inside its 15-minute request deadline for the whole case.
+    requestedAt: "2026-06-01T00:00:00.000Z",
+  });
+
+  const orchestrator = createMissionOrchestrator(domain, {
+    defaultReviewerActorId: FOUNDER,
+    budget: step5TestGovernor,
+    // The final preflight re-reads the mission's canonical business, so a
+    // mission that names one needs a resolver — an unverifiable business is a
+    // refusal, never a skipped check.
+    businesses: {
+      async resolve(reference: string) {
+        return reference === "biz_nexup" ? { id: "biz_nexup", slug: "nexup" } : null;
+      },
+    },
+  });
+  return {
+    domain,
+    transport,
+    actorId: built.actorId,
+    runtimeId: built.runtimeId,
+    authority,
+    orchestrator,
+  };
 }
 
 async function stateOf(domain: WorkforceDomain, missionId: string) {
@@ -184,7 +252,7 @@ describe("STEP 5 A — the task state machine", () => {
 
 describe("STEP 5 B — the mission lifecycle, end to end", () => {
   it("plans, dispatches in dependency order, parks for review, and completes on a human's word", async () => {
-    const { domain, orchestrator, actorId, runtimeId } = await wired();
+    const { domain, orchestrator, actorId, runtimeId, authority } = await wired();
 
     const mission = await orchestrator.createMission({
       title: "Internal strategy brief",
@@ -213,7 +281,7 @@ describe("STEP 5 B — the mission lifecycle, end to end", () => {
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
         dependsOn: ["brief-one"],
       },
-    ]);
+    ], { authority });
 
     // Dependency order: one runs, the dependent one waits.
     expect(planned.mission.state).toBe("RUNNING");
@@ -235,7 +303,7 @@ describe("STEP 5 B — the mission lifecycle, end to end", () => {
     expect(firstExecution.taskId).toBe(first.id);
 
     // The agent's success parks the task for a HUMAN — it does not complete it.
-    const settledFirst = await orchestrator.settleTask(mission.id, first.id);
+    const settledFirst = await orchestrator.settleTask(mission.id, first.id, { authority });
     expect(settledFirst.state).toBe("REVIEW");
     const afterFirst = await stateOf(domain, mission.id);
     expect(afterFirst.mission.state).toBe("WAITING");
@@ -252,6 +320,7 @@ describe("STEP 5 B — the mission lifecycle, end to end", () => {
       decision: "APPROVED",
       decidedBy: FOUNDER,
       note: "looks right",
+      authority,
     });
     expect(taskByTitle(approved.tasks, "brief-one").state).toBe("COMPLETED");
     const secondAfterApproval = taskByTitle(approved.tasks, "brief-two");
@@ -260,12 +329,13 @@ describe("STEP 5 B — the mission lifecycle, end to end", () => {
     expect(approved.mission.state).toBe("RUNNING");
 
     // A needs-revision decision sends the task back for ANOTHER attempt.
-    await orchestrator.settleTask(mission.id, secondAfterApproval.id);
+    await orchestrator.settleTask(mission.id, secondAfterApproval.id, { authority });
     const secondReview = (await domain.reviews.forTask(secondAfterApproval.id))[0];
     const revised = await orchestrator.decide(secondReview.id, {
       decision: "NEEDS_REVISION",
       decidedBy: FOUNDER,
       note: "sharpen it",
+      authority,
     });
     const retried = taskByTitle(revised.tasks, "brief-two");
     expect(retried.state).toBe("RUNNING");
@@ -277,9 +347,13 @@ describe("STEP 5 B — the mission lifecycle, end to end", () => {
     expect(new Set(attemptsForSecond.map((record) => record.idempotencyKey)).size).toBe(2);
 
     // Accept the second attempt: the mission completes.
-    await orchestrator.settleTask(mission.id, retried.id);
+    await orchestrator.settleTask(mission.id, retried.id, { authority });
     const finalReview = (await domain.reviews.forTask(retried.id)).find((entry) => entry.state === "PENDING");
-    const completed = await orchestrator.decide(finalReview!.id, { decision: "APPROVED", decidedBy: FOUNDER });
+    const completed = await orchestrator.decide(finalReview!.id, {
+      decision: "APPROVED",
+      decidedBy: FOUNDER,
+      authority,
+    });
     expect(completed.mission.state).toBe("COMPLETED");
     expect(completed.mission.finishedAt).toBeTruthy();
     expect(completed.tasks.every((task) => task.state === "COMPLETED")).toBe(true);
@@ -306,7 +380,7 @@ describe("STEP 5 B — the mission lifecycle, end to end", () => {
   });
 
   it("keeps a task's result attached to the review that accepted it", async () => {
-    const { domain, orchestrator, actorId } = await wired();
+    const { domain, orchestrator, actorId, authority } = await wired();
     const mission = await orchestrator.createMission({
       title: "m",
       goal: "g",
@@ -321,11 +395,11 @@ describe("STEP 5 B — the mission lifecycle, end to end", () => {
         assignedActorId: actorId,
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
       },
-    ]);
+    ], { authority });
     const task = planned.tasks[0];
-    await orchestrator.settleTask(mission.id, task.id);
+    await orchestrator.settleTask(mission.id, task.id, { authority });
     const review = (await domain.reviews.forTask(task.id))[0];
-    await orchestrator.decide(review.id, { decision: "APPROVED", decidedBy: FOUNDER });
+    await orchestrator.decide(review.id, { decision: "APPROVED", decidedBy: FOUNDER, authority });
 
     const stored = (await domain.tasks.listForMission(mission.id))[0];
     expect(stored.result).toMatchObject({ reviewId: review.id, executionRecordId: review.executionRecordId });
@@ -338,7 +412,7 @@ describe("STEP 5 B — the mission lifecycle, end to end", () => {
 
 describe("STEP 5 C — human authority is not optional", () => {
   it("refuses a decision from an AI agent, even the actor that produced the work", async () => {
-    const { domain, orchestrator, actorId } = await wired();
+    const { domain, orchestrator, actorId, authority } = await wired();
     const mission = await orchestrator.createMission({ title: "m", goal: "g", createdBy: FOUNDER, owner: FOUNDER });
     const planned = await orchestrator.plan(mission.id, [
       {
@@ -348,11 +422,13 @@ describe("STEP 5 C — human authority is not optional", () => {
         assignedActorId: actorId,
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
       },
-    ]);
-    await orchestrator.settleTask(mission.id, planned.tasks[0].id);
+    ], { authority });
+    await orchestrator.settleTask(mission.id, planned.tasks[0].id, { authority });
     const review = (await domain.reviews.forTask(planned.tasks[0].id))[0];
 
-    await expect(orchestrator.decide(review.id, { decision: "APPROVED", decidedBy: actorId })).rejects.toMatchObject({
+    await expect(
+      orchestrator.decide(review.id, { decision: "APPROVED", decidedBy: actorId, authority }),
+    ).rejects.toMatchObject({
       code: "APPROVAL_FORBIDDEN",
     });
     // The review is untouched and still pending.
@@ -362,7 +438,7 @@ describe("STEP 5 C — human authority is not optional", () => {
   });
 
   it("permits exactly ONE decision", async () => {
-    const { domain, orchestrator, actorId } = await wired();
+    const { domain, orchestrator, actorId, authority } = await wired();
     const mission = await orchestrator.createMission({ title: "m", goal: "g", createdBy: FOUNDER, owner: FOUNDER });
     const planned = await orchestrator.plan(mission.id, [
       {
@@ -372,18 +448,20 @@ describe("STEP 5 C — human authority is not optional", () => {
         assignedActorId: actorId,
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
       },
-    ]);
-    await orchestrator.settleTask(mission.id, planned.tasks[0].id);
+    ], { authority });
+    await orchestrator.settleTask(mission.id, planned.tasks[0].id, { authority });
     const review = (await domain.reviews.forTask(planned.tasks[0].id))[0];
 
-    await orchestrator.decide(review.id, { decision: "APPROVED", decidedBy: FOUNDER });
-    await expect(orchestrator.decide(review.id, { decision: "REJECTED", decidedBy: FOUNDER })).rejects.toMatchObject({
+    await orchestrator.decide(review.id, { decision: "APPROVED", decidedBy: FOUNDER, authority });
+    await expect(
+      orchestrator.decide(review.id, { decision: "REJECTED", decidedBy: FOUNDER, authority }),
+    ).rejects.toMatchObject({
       code: "APPROVAL_ALREADY_DECIDED",
     });
   });
 
   it("a human rejection fails the task (and the mission) rather than silently completing it", async () => {
-    const { domain, orchestrator, actorId } = await wired();
+    const { domain, orchestrator, actorId, authority } = await wired();
     const mission = await orchestrator.createMission({ title: "m", goal: "g", createdBy: FOUNDER, owner: FOUNDER });
     const planned = await orchestrator.plan(mission.id, [
       {
@@ -394,13 +472,14 @@ describe("STEP 5 C — human authority is not optional", () => {
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
         maxAttempts: 1,
       },
-    ]);
-    await orchestrator.settleTask(mission.id, planned.tasks[0].id);
+    ], { authority });
+    await orchestrator.settleTask(mission.id, planned.tasks[0].id, { authority });
     const review = (await domain.reviews.forTask(planned.tasks[0].id))[0];
     const result = await orchestrator.decide(review.id, {
       decision: "REJECTED",
       decidedBy: FOUNDER,
       note: "wrong brief",
+      authority,
     });
 
     expect(result.mission.state).toBe("FAILED");
@@ -418,7 +497,7 @@ describe("STEP 5 C — human authority is not optional", () => {
 
 describe("STEP 5 D — retry state, and truthful failure", () => {
   it("retries a RETRYABLE transport failure, then fails the task and the mission", async () => {
-    const { domain, orchestrator, actorId, transport } = await wired({ failWith: "UNAVAILABLE" });
+    const { domain, orchestrator, actorId, transport, authority } = await wired({ failWith: "UNAVAILABLE" });
     const mission = await orchestrator.createMission({ title: "m", goal: "g", createdBy: FOUNDER, owner: FOUNDER });
     const planned = await orchestrator.plan(mission.id, [
       {
@@ -429,26 +508,26 @@ describe("STEP 5 D — retry state, and truthful failure", () => {
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
         maxAttempts: 2,
       },
-    ]);
+    ], { authority });
     const task = planned.tasks[0];
     expect(task.state).toBe("RUNNING");
 
     // Attempt 1 fails retryably -> the task goes back to READY.
-    const firstFailure = await orchestrator.settleTask(mission.id, task.id);
+    const firstFailure = await orchestrator.settleTask(mission.id, task.id, { authority });
     expect(firstFailure.state).toBe("READY");
     const once = await domain.tasks.listForMission(mission.id);
     expect(once[0].attempt).toBe(1);
     expect(once[0].error?.retryable).toBe(true);
 
     // The stepper re-dispatches it — a NEW attempt, the SAME task.
-    const advanced = await orchestrator.advance(mission.id);
+    const advanced = await orchestrator.advance(mission.id, { authority });
     const retried = taskByTitle(advanced.tasks, "single");
     expect(retried.state).toBe("RUNNING");
     expect(retried.attempt).toBe(2);
     expect(transport.startCalls).toBe(2);
 
     // Attempt 2 exhausts the allowance -> the task AND the mission fail.
-    const secondFailure = await orchestrator.settleTask(mission.id, retried.id);
+    const secondFailure = await orchestrator.settleTask(mission.id, retried.id, { authority });
     expect(secondFailure.state).toBe("FAILED");
     const final = await stateOf(domain, mission.id);
     expect(final.mission.state).toBe("FAILED");
@@ -459,7 +538,7 @@ describe("STEP 5 D — retry state, and truthful failure", () => {
   });
 
   it("does not touch the transport when the actor is not assigned the capability", async () => {
-    const { domain, orchestrator, actorId, runtimeId, transport } = await wired();
+    const { domain, orchestrator, actorId, runtimeId, transport, authority } = await wired();
 
     // A second AI agent on the SAME runtime, but with NO assignment.
     const stranger = await domain.actors.register({
@@ -490,20 +569,20 @@ describe("STEP 5 D — retry state, and truthful failure", () => {
         assignedActorId: stranger.id,
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
       },
-    ]);
+    ], { authority });
     const task = planned.tasks[0];
     expect(task.state).toBe("READY");
 
     // The stepper refuses, and says why, without completing or failing anything.
-    const advanced = await orchestrator.advance(mission.id);
+    const advanced = await orchestrator.advance(mission.id, { authority });
     expect(taskByTitle(advanced.tasks, "stranger").state).toBe("READY");
     expect(advanced.mission.state).toBe("PLANNING");
     expect(await domain.executionRecords.listForMission(mission.id)).toHaveLength(0);
     expect(transport.startCalls).toBe(0);
 
     // Starting it directly reports the refusal as a BLOCKED outcome.
-    const blocked = await orchestrator.startTask(mission.id, task.id);
-    expect(blocked.blocked).toMatch(/not assigned/i);
+    const blocked = await orchestrator.startTask(mission.id, task.id, { authority });
+    expect(blocked.blocked).toMatch(/holds no ACTIVE assignment/i);
     expect(blocked.state).toBe("READY");
 
     // The assigned actor, by contrast, runs fine.
@@ -518,7 +597,7 @@ describe("STEP 5 D — retry state, and truthful failure", () => {
 
 describe("STEP 5 E — cancelling a mission cancels its executions through the port", () => {
   it("cancels an in-flight execution, its task and the mission", async () => {
-    const { domain, orchestrator, actorId, transport } = await wired({ holdCompletionMs: 400 });
+    const { domain, orchestrator, actorId, transport, authority } = await wired({ holdCompletionMs: 400 });
     const mission = await orchestrator.createMission({ title: "m", goal: "g", createdBy: FOUNDER, owner: FOUNDER });
     const planned = await orchestrator.plan(mission.id, [
       {
@@ -528,11 +607,11 @@ describe("STEP 5 E — cancelling a mission cancels its executions through the p
         assignedActorId: actorId,
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
       },
-    ]);
+    ], { authority });
     const task = planned.tasks[0];
     expect(task.state).toBe("RUNNING");
 
-    const cancelled = await orchestrator.cancelMission(mission.id, "operator cancelled");
+    const cancelled = await orchestrator.cancelMission(mission.id, "operator cancelled", { authority });
     expect(cancelled.mission.state).toBe("CANCELLED");
     expect(taskByTitle(cancelled.tasks, "single").state).toBe("CANCELLED");
     // The cancel went through the AgentRuntime port, not straight to a transport.
@@ -550,7 +629,7 @@ describe("STEP 5 E — cancelling a mission cancels its executions through the p
 
 describe("STEP 5 F — reading state never advances it", () => {
   it("snapshot() is inert", async () => {
-    const { domain, orchestrator, actorId } = await wired();
+    const { domain, orchestrator, actorId, authority } = await wired();
     const mission = await orchestrator.createMission({ title: "m", goal: "g", createdBy: FOUNDER, owner: FOUNDER });
     await orchestrator.plan(mission.id, [
       {
@@ -560,7 +639,7 @@ describe("STEP 5 F — reading state never advances it", () => {
         assignedActorId: actorId,
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
       },
-    ]);
+    ], { authority });
 
     const first = await orchestrator.snapshot(mission.id);
     const second = await orchestrator.snapshot(mission.id);
@@ -591,7 +670,25 @@ describe.skipIf(!liveRequested)("STEP 5 H — a real mission through the real br
       if (!built.enabled) throw new Error(built.reason);
       await domain.actors.register(founderActorRegistration());
 
-      const orchestrator = createMissionOrchestrator(domain, { defaultReviewerActorId: FOUNDER });
+      const orchestrator = createMissionOrchestrator(domain, {
+        defaultReviewerActorId: FOUNDER,
+        // A LIVE Hermes turn is a REAL variable-cost provider call, so the
+        // shipped DENY governor refuses it. This proof is already opt-in
+        // (`NEXUP_BRIDGE_E2E=1`), and an operator who sets that flag has asked
+        // for the spend, so the composed governor says so out loud.
+        budget: step5TestGovernor,
+      });
+      const authority = createExecutionAuthority({
+        userId: "user_live_operator",
+        actorId: "actor_human_operator",
+        actorSlug: "human-operator",
+        actorType: "HUMAN",
+        permissionTokens: ["aiworkforce.access"],
+        accessibleBusinessSlugs: ["nexup"],
+        isSuperAdmin: false,
+        hasOfficeFinanceFull: false,
+        requestedAt: new Date().toISOString(),
+      });
 
       const mission = await orchestrator.createMission({
         title: `Step 5 live mission ${Date.now()}`,
@@ -611,12 +708,12 @@ describe.skipIf(!liveRequested)("STEP 5 H — a real mission through the real br
           requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
           requiredCapabilityVersion: STRATEGY_INTERNAL_BRIEF_CAPABILITY_VERSION,
         },
-      ]);
+      ], { authority });
       const task = planned.tasks[0];
       expect(task.state).toBe("RUNNING");
       const acceptedMs = Date.now() - startedAt;
 
-      const settled = await orchestrator.settleTask(mission.id, task.id);
+      const settled = await orchestrator.settleTask(mission.id, task.id, { authority });
       expect(settled.state).toBe("REVIEW");
 
       const review = (await domain.reviews.forTask(task.id))[0];
@@ -625,6 +722,7 @@ describe.skipIf(!liveRequested)("STEP 5 H — a real mission through the real br
         decision: "APPROVED",
         decidedBy: FOUNDER,
         note: "step5 live acceptance",
+        authority,
       });
 
       const wallMs = Date.now() - startedAt;

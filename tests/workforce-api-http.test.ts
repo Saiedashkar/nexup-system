@@ -131,6 +131,42 @@ function commandBody(key: string, overrides: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * A command whose ONE task names a READ-ONLY DETERMINISTIC capability.
+ *
+ * WHY THIS IS THE DEFAULT FOR ANYTHING THAT MUST ACTUALLY RUN (Step 5A-4
+ * correction, P1-7). The shipped budget governor DENIES every
+ * `VARIABLE_PROVIDER_COST` leg, and the default routing targets the Strategy
+ * Analyst's RUNTIME-bound skill — so an unrouted command is now refused by
+ * budget, by design. The runnable path is the deterministic read-only leg, and
+ * `capital.summary` is the cleanest of the three: `businessScoped:false` and no
+ * input schema, so the case is about the boundary rather than about seeding
+ * client or project rows.
+ */
+function deterministicBody(key: string, overrides: Record<string, unknown> = {}) {
+  return commandBody(key, {
+    tasks: [
+      {
+        title: `${key}-task`,
+        objective: "read the office capital summary",
+        instruction: "Return the capital summary",
+        requiredCapabilityId: "capital.summary",
+        requiredCapabilityVersion: "1.0.0",
+      },
+    ],
+    ...overrides,
+  });
+}
+
+/** How many Phase-1 job-engine rows exist. A mission attempt may create none. */
+function jobEngineCounts(): { jobs: string; runs: string; runEvents: string } {
+  return {
+    jobs: psql(`select count(*) from "ai_jobs"`),
+    runs: psql(`select count(*) from "ai_runs"`),
+    runEvents: psql(`select count(*) from "ai_run_events"`),
+  };
+}
+
 describeIfServer("STEP 5 — the AI Workforce HTTP routes, against a running server", () => {
   const founder: Auth = { label: "founder" };
 
@@ -175,8 +211,21 @@ describeIfServer("STEP 5 — the AI Workforce HTTP routes, against a running ser
     expect(Number(psql(`select count(*) from "ai_missions"`))).toBe(before);
   });
 
-  it("issues a Command over HTTP, and reports the durable mission it created", async () => {
+  /**
+   * CASE A — the default runtime leg is REFUSED BY BUDGET, and no provider
+   * execution is ever attempted (Step 5A-4 correction, P1-7/P1-8).
+   *
+   * This is the product invariant expressed at the HTTP boundary: an unrouted
+   * command routes to the Strategy Analyst's `SKILL`, which requires a runtime
+   * and is therefore `VARIABLE_PROVIDER_COST`; the shipped budget governor
+   * refuses that outright. The assertion is not merely "it says no" — it is that
+   * the refusal happens with ZERO provider execution: the task never starts, no
+   * execution record exists, and the Phase-1 job engine gains no row.
+   */
+  it("CASE A — refuses an unrouted runtime attempt by BUDGET, with zero provider execution", async () => {
     founder.cookie = await mintSession();
+    const before = jobEngineCounts();
+
     const created = await call("/api/ai-workforce/missions", {
       method: "POST",
       body: commandBody("http-1"),
@@ -190,24 +239,103 @@ describeIfServer("STEP 5 — the AI Workforce HTTP routes, against a running ser
       mission: { id: string; state: string; owner: string };
       tasks: Array<{ state: string; assignedActorId: string | null }>;
       routing: { enabled: boolean; actorId?: string };
+      changes: string[];
     };
     expect(body.status).toBe("ISSUED");
     expect(body.replayed).toBe(false);
     expect(body.routing.enabled).toBe(true);
-    expect(body.mission.state).toBe("RUNNING");
-    expect(body.tasks[0]!.state).toBe("RUNNING");
+    // The command is durable and routed — but the attempt is BLOCKED, not started.
     expect(body.tasks[0]!.assignedActorId).toBe(body.routing.actorId);
+    expect(body.tasks[0]!.state).not.toBe("RUNNING");
+    expect(body.tasks[0]!.state).not.toBe("COMPLETED");
+    // The refusal is READABLE from the same result that reported no progress.
+    expect(body.changes.join("\n")).toMatch(/BUDGET_POLICY_DENIED/);
 
     // The row exists in the DATABASE, not just in the response.
-    expect(psql(`select state from "ai_missions" where id = '${body.mission.id}'`)).toBe("RUNNING");
+    const missionId = body.mission.id;
+    expect(psql(`select count(*) from "ai_missions" where id = '${missionId}'`)).toBe("1");
+    expect(psql(`select state from "ai_tasks" where "missionId" = '${missionId}'`)).not.toBe("RUNNING");
+
+    // ZERO provider execution: no execution record, and no Phase-1 job-engine row.
+    expect(psql(`select count(*) from "ai_execution_records" where "missionId" = '${missionId}'`)).toBe("0");
+    // The refusal is DURABLY ACCOUNTED FOR (Step 5A-4 correction, P1-3): a policy
+    // refusal is recorded on the claim and RELEASED, so dispatch was never
+    // entered — `DISPATCHING`/`DISPATCHED` would mean the provider may know about
+    // the attempt, and NEITHER may appear here. (An identity refusal short-circuits
+    // before the claim, so it would leave NO row; a budget refusal is a policy
+    // refusal, decided after the claim, and therefore leaves exactly one RELEASED
+    // row — never a dispatched one.)
+    expect(
+      psql(
+        `select coalesce(string_agg(state, ',' order by attempt), 'NONE') from "ai_execution_claims" where "missionId" = '${missionId}'`,
+      ),
+    ).toBe("RELEASED");
+    const after = jobEngineCounts();
+    expect(after).toEqual(before);
+
     const key = await call("/api/ai-workforce/missions?limit=50", { auth: founder });
     expect(key.status).toBe(200);
+  }, 60_000);
+
+  /**
+   * CASE B — the deterministic READ-ONLY leg executes for real: the output is
+   * persisted and the task settles, with no `AiJob`/`AiRun` row anywhere.
+   *
+   * `capital.summary` is `NO_VARIABLE_COST`, so the default DENY governor permits
+   * it. Execution goes through the Capability Execution Service's own governed
+   * deterministic invoker — NOT the Phase-1 LocalRuntimeAdapter — which is why the
+   * mission's audit spine is the execution record alone.
+   */
+  it("CASE B — executes a read-only deterministic capability, persists its output, and creates no AiJob/AiRun", async () => {
+    founder.cookie = await mintSession();
+    const before = jobEngineCounts();
+
+    const created = await call("/api/ai-workforce/missions", {
+      method: "POST",
+      body: deterministicBody("http-det"),
+      auth: founder,
+    });
+    expect(created.status).toBe(201);
+    const body = created.body as {
+      mission: { id: string; state: string };
+      tasks: Array<{ state: string; requiredCapabilityId: string | null; executionRecordId: string | null }>;
+      changes: string[];
+    };
+    const missionId = body.mission.id;
+    expect(body.tasks[0]!.state).toBe("RUNNING");
+    expect(body.tasks[0]!.requiredCapabilityId).toBe("capital.summary");
+    expect(body.changes.join("\n")).toMatch(/RUNNING/);
+    expect(body.changes.join("\n")).not.toMatch(/BUDGET_POLICY_DENIED/);
+
+    // The attempt is DURABLE and its output is on the record — not on a provider.
+    const record = psql(
+      `select status || '|' || coalesce(output::text,'null') from "ai_execution_records" where "missionId" = '${missionId}'`,
+    );
+    const [status, outputJson] = record.split("|", 2);
+    expect(status).toBe("SUCCEEDED");
+    expect(outputJson).not.toBe("null");
+    expect(JSON.parse(outputJson!)).toMatchObject({ currency: "EGP" });
+
+    // Continue the mission over HTTP: observe → settle → REVIEW.
+    const advanced = await call(`/api/ai-workforce/missions/${missionId}`, { method: "POST", auth: founder });
+    expect(advanced.status).toBe(200);
+    const advancedBody = advanced.body as {
+      tasks: Array<{ state: string }>;
+      reviews: Array<{ id: string; state: string }>;
+    };
+    expect(advancedBody.tasks[0]!.state).toBe("REVIEW");
+    expect(advancedBody.reviews.some((review) => review.state === "PENDING")).toBe(true);
+    expect(psql(`select status from "ai_execution_records" where "missionId" = '${missionId}'`)).toBe("SUCCEEDED");
+
+    // THE ROW-LEVEL PROOF OF P1-7: no second lifecycle was introduced.
+    const after = jobEngineCounts();
+    expect(after).toEqual(before);
   }, 60_000);
 
   it("returns the SAME mission for an idempotent retry, and creates no second execution", async () => {
     const first = await call("/api/ai-workforce/missions", {
       method: "POST",
-      body: commandBody("http-retry"),
+      body: deterministicBody("http-retry"),
       auth: founder,
     });
     expect(first.status).toBe(201);
@@ -216,7 +344,7 @@ describeIfServer("STEP 5 — the AI Workforce HTTP routes, against a running ser
 
     const retry = await call("/api/ai-workforce/missions", {
       method: "POST",
-      body: commandBody("http-retry"),
+      body: deterministicBody("http-retry"),
       auth: founder,
     });
     expect(retry.status).toBe(200);
@@ -276,7 +404,7 @@ describeIfServer("STEP 5 — the AI Workforce HTTP routes, against a running ser
   it("reads a mission, settles it over HTTP, and completes it with a human decision", async () => {
     const created = await call("/api/ai-workforce/missions", {
       method: "POST",
-      body: commandBody("http-lifecycle"),
+      body: deterministicBody("http-lifecycle"),
       auth: founder,
     });
     const missionId = (created.body as { mission: { id: string } }).mission.id;
@@ -376,7 +504,7 @@ describeIfServer("STEP 5 — the AI Workforce HTTP routes, against a running ser
 
       const a = await call("/api/ai-workforce/missions", {
         method: "POST",
-        body: commandBody("xbiz-a", { businessId: "nexup" }),
+        body: deterministicBody("xbiz-a", { businessId: "nexup" }),
         auth: { cookie: cookieA, label: "business-a" },
       });
       if (a.status !== 201) throw new Error(`mission A was not created (${a.status}): ${a.text}`);
@@ -384,7 +512,7 @@ describeIfServer("STEP 5 — the AI Workforce HTTP routes, against a running ser
 
       const b = await call("/api/ai-workforce/missions", {
         method: "POST",
-        body: commandBody("xbiz-b", { businessId: "rebound" }),
+        body: deterministicBody("xbiz-b", { businessId: "rebound" }),
         auth: { cookie: cookieB, label: "business-b" },
       });
       if (b.status !== 201) throw new Error(`mission B was not created (${b.status}): ${b.text}`);

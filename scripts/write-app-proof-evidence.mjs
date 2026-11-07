@@ -28,7 +28,9 @@ function git(args) {
 }
 
 function readResults() {
-  const full = path.join(REPO_ROOT, resultsFile);
+  // An ABSOLUTE path (a per-run report inside the runner's own directory) must not
+  // be re-rooted under the repository, so it is honoured as given.
+  const full = path.isAbsolute(resultsFile) ? resultsFile : path.join(REPO_ROOT, resultsFile);
   if (!fs.existsSync(full)) return null;
   try {
     return JSON.parse(fs.readFileSync(full, "utf8"));

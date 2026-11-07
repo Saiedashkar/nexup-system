@@ -26,6 +26,7 @@ import {
   IconRun,
   type IconProps,
 } from "../ui/icons";
+import { useLocale } from "../i18n/command-locale";
 import { DepartmentModeBody } from "./workspace-modes";
 
 /**
@@ -61,6 +62,7 @@ const MODE_ICONS: Record<WorkspaceModeId, ComponentType<IconProps>> = {
 
 export function DepartmentWorkspace({ departmentId }: { departmentId: string }) {
   const { notify, setExecOpen } = useCommand();
+  const { t, tc } = useLocale();
   const [mode, setMode] = useState<WorkspaceModeId>("overview");
 
   const department = DEPARTMENT_BY_ID[departmentId];
@@ -68,6 +70,10 @@ export function DepartmentWorkspace({ departmentId }: { departmentId: string }) 
 
   const config = workspaceFor(department.id);
   const SpaceIcon = DEPARTMENT_ICONS[department.id];
+  /* Department identity is translated from the id, never from the English
+     configuration name, so every surface agrees on one Arabic name. */
+  const departmentName = t(`dept.${department.id}.name`);
+  const departmentSpace = t(`dept.${department.id}.space`);
   /* The same derived count the graph node, the rail, the panel and the KPI use. */
   const activeMissions = departmentMissions(department.id).length;
 
@@ -80,7 +86,7 @@ export function DepartmentWorkspace({ departmentId }: { departmentId: string }) 
         <div className="nc-dw__head-top">
           <Link className="nc-dw__back" href="/command">
             <IconArrowLeft size={14} />
-            Command
+            {t("dws.backToCommand")}
           </Link>
 
           <span className="nc-dw__mark" aria-hidden="true">
@@ -88,33 +94,33 @@ export function DepartmentWorkspace({ departmentId }: { departmentId: string }) 
           </span>
 
           <div className="nc-dw__titles">
-            <span className="nc-dw__kicker">{department.space} · Department workspace</span>
-            <h1 className="nc-dw__name">{department.name}</h1>
+            <span className="nc-dw__kicker">{t("dws.kicker", { space: departmentSpace })}</span>
+            <h1 className="nc-dw__name">{departmentName}</h1>
           </div>
 
           <span className="nc-dw__state">
             <i aria-hidden="true" />
-            {config.state}
+            {tc(config.state)}
           </span>
         </div>
 
-        <p className="nc-dw__purpose">{config.purpose}</p>
+        <p className="nc-dw__purpose">{tc(config.purpose)}</p>
 
         <dl className="nc-dw__facts">
           <div className="nc-dw__fact">
-            <dt>Ownership</dt>
-            <dd>{config.ownership}</dd>
+            <dt>{t("dws.factOwnership")}</dt>
+            <dd>{tc(config.ownership)}</dd>
           </div>
           <div className="nc-dw__fact">
-            <dt>Active missions</dt>
+            <dt>{t("dws.factActiveMissions")}</dt>
             <dd>{activeMissions}</dd>
           </div>
           <div className="nc-dw__fact" data-attention={departmentAttention(department.id) > 0}>
-            <dt>Needs attention</dt>
+            <dt>{t("dws.factAttention")}</dt>
             <dd>{departmentAttention(department.id)}</dd>
           </div>
           <div className="nc-dw__fact">
-            <dt>Connected systems</dt>
+            <dt>{t("dws.factSystems")}</dt>
             <dd>{config.systems.length}</dd>
           </div>
         </dl>
@@ -122,42 +128,42 @@ export function DepartmentWorkspace({ departmentId }: { departmentId: string }) 
 
       {/* Persistent Executive control. The full console lives in the shell (⌘K);
           these are the department-scoped entry points to it. */}
-      <div className="nc-dw__exec" role="group" aria-label="Executive controls">
+      <div className="nc-dw__exec" role="group" aria-label={t("dws.execGroupAria")}>
         <span className="nc-dw__exec-lead">
           <span className="nc-dw__exec-orb" aria-hidden="true" />
           <span className="nc-dw__exec-label">EXEC</span>
         </span>
 
         <button type="button" className="nc-dw__exec-btn nc-dw__exec-btn--primary" onClick={() => setExecOpen(true)}>
-          Ask EXEC
+          {t("dws.askExec")}
         </button>
         <button
           type="button"
           className="nc-dw__exec-btn"
-          onClick={() => notify(`Direct ${department.name}: the Executive takes a command in a later phase.`)}
+          onClick={() => notify(t("dws.giveCommandToast", { name: departmentName }))}
         >
-          Give command
+          {t("dws.giveCommand")}
         </button>
         <button
           type="button"
           className="nc-dw__exec-btn"
-          onClick={() => notify(`Escalation from ${department.name} — routing arrives with the Executive console.`)}
+          onClick={() => notify(t("dws.escalateToast", { name: departmentName }))}
         >
-          Escalate
+          {t("dws.escalate")}
         </button>
         <button
           type="button"
           className="nc-dw__exec-btn nc-dw__exec-btn--soon"
-          onClick={() => notify("War Room is a later phase — the department workspace keeps the slot.")}
+          onClick={() => notify(t("dws.warRoomToast"))}
         >
           <IconWarRoom size={14} />
-          War Room
+          {t("dws.warRoom")}
         </button>
 
-        <span className="nc-dw__exec-note">No AI provider · mock content</span>
+        <span className="nc-dw__exec-note">{t("dws.execNote")}</span>
       </div>
 
-      <nav className="nc-dw__modes" aria-label={`${department.name} workspace modes`}>
+      <nav className="nc-dw__modes" aria-label={t("dws.modesAria", { name: departmentName })}>
         {WORKSPACE_MODES.map((item) => {
           const ModeIcon = MODE_ICONS[item.id];
           const current = item.id === mode;
@@ -168,11 +174,11 @@ export function DepartmentWorkspace({ departmentId }: { departmentId: string }) 
               className="nc-dw__mode"
               data-current={current}
               aria-pressed={current}
-              title={item.hint}
+              title={tc(item.hint)}
               onClick={() => setMode(item.id)}
             >
               <ModeIcon size={15} />
-              {item.label}
+              {tc(item.label)}
             </button>
           );
         })}
@@ -181,14 +187,14 @@ export function DepartmentWorkspace({ departmentId }: { departmentId: string }) 
       <div className="nc-dw__body">
         <div className="nc-dw__modehead">
           <span className="nc-dw__modehead-title">
-            {WORKSPACE_MODES.find((item) => item.id === mode)?.label}
+            {tc(WORKSPACE_MODES.find((item) => item.id === mode)?.label ?? "")}
           </span>
           <span className="nc-dw__modehead-hint">
-            {WORKSPACE_MODES.find((item) => item.id === mode)?.hint}
+            {tc(WORKSPACE_MODES.find((item) => item.id === mode)?.hint ?? "")}
           </span>
         </div>
 
-        <DepartmentModeBody mode={mode} config={config} departmentName={department.name} />
+        <DepartmentModeBody mode={mode} config={config} departmentName={departmentName} />
       </div>
     </div>
   );

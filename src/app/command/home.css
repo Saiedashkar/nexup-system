@@ -1,0 +1,2064 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEXUP COMMAND — HOME · the approved composition, desktop and phone
+   ───────────────────────────────────────────────────────────────────────────
+   Imported LAST by `src/app/command/layout.tsx`, after `orbit.css`. Every rule
+   is scoped to the home surface (`data-surface="home"`), so no department page,
+   workspace or Agent Studio surface is touched.
+
+   WHAT THIS LAYER OWNS
+     · the home header — brand, scope, language, greeting;
+     · the stage's proportions and the reference's golden horizon;
+     · the six plates' order, size and two-line reading;
+     · the single summary strip, the composer and the provenance line;
+     · the home-only rail placement in RTL, and the contextual panel that opens
+       only when a space is selected;
+     · the phone recomposition: header, EXEC hero, two-column department grid,
+       summaries, composer and safe-area/keyboard clearance;
+     · the explicit demo handoff: route, slow signal, pill and dialog.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1 · DESKTOP CHROME — no page title, no top toolbar
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root[data-surface="home"] .nc-topbar {
+  display: none;
+}
+
+/* The reference's rail is on the reading side: left in English, right in Arabic.
+   The earlier language layer put it on the left in both, because it counted
+   columns from the LTR edge. On the home we count from the reading edge. */
+.nc-root[data-surface="home"] .nc-shell,
+.nc-root[data-surface="home"] .nc-shell[data-right="collapsed"] {
+  --nc-context-w: 0px;
+}
+.nc-root[data-surface="home"] .nc-context {
+  display: none;
+}
+.nc-root[data-surface="home"][data-focus="true"] .nc-shell,
+.nc-root[data-surface="home"][data-focus="true"] .nc-shell[data-right="collapsed"] {
+  --nc-context-w: min(318px, 24vw);
+}
+.nc-root[data-surface="home"][data-focus="true"] .nc-context {
+  display: flex;
+}
+
+.nc-root[data-surface="home"][dir="rtl"] .nc-shell {
+  grid-template-columns: var(--nc-rail-w) minmax(0, 1fr) var(--nc-context-w);
+}
+.nc-root[data-surface="home"][dir="rtl"] .nc-rail {
+  grid-column: 1;
+  grid-row: 1;
+}
+.nc-root[data-surface="home"][dir="rtl"] .nc-main {
+  grid-column: 2;
+  grid-row: 1;
+}
+.nc-root[data-surface="home"][dir="rtl"] .nc-context {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+/* The top language control is permanent chrome on the home, so the rail's copy
+   would be a second control doing the same thing. */
+.nc-root[data-surface="home"] .nc-rail .nc-locale {
+  display: none;
+}
+.nc-root[data-surface="home"] .nc-rail {
+  padding-top: 16px;
+}
+
+/* ── THE ROOM'S SKY ───────────────────────────────────────────────────────
+   The reference does not sit its composition in a panel; the composition is
+   placed IN space. So the home gets one full-bleed coded backdrop behind the
+   shell: deep graphite sky, a warm planet limb on the left, two star layers, a
+   cool wash top-right and a vignette. It is gradients and single-pixel stars,
+   not artwork, so it costs no request and cannot letterbox. The asset spec in
+   `docs/COMMAND_HOME_ASSET_SPEC.md` says what a photographic replacement must
+   contain; this is the closest the code alone can get. */
+.nc-root[data-surface="home"] {
+  background: #05060a;
+}
+.nc-root[data-surface="home"] .nc-ambient { display: none; }
+.nc-root[data-surface="home"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(1.6px 1.6px at 8% 14%, rgba(255, 248, 236, 0.7), transparent),
+    radial-gradient(1.3px 1.3px at 19% 32%, rgba(255, 248, 236, 0.45), transparent),
+    radial-gradient(1.8px 1.8px at 27% 8%, rgba(255, 248, 236, 0.5), transparent),
+    radial-gradient(1.2px 1.2px at 36% 22%, rgba(255, 248, 236, 0.4), transparent),
+    radial-gradient(1.4px 1.4px at 45% 6%, rgba(255, 248, 236, 0.36), transparent),
+    radial-gradient(1.2px 1.2px at 54% 30%, rgba(255, 248, 236, 0.3), transparent),
+    radial-gradient(1.7px 1.7px at 63% 12%, rgba(255, 248, 236, 0.5), transparent),
+    radial-gradient(1.2px 1.2px at 71% 38%, rgba(255, 248, 236, 0.34), transparent),
+    radial-gradient(1.4px 1.4px at 79% 19%, rgba(255, 248, 236, 0.42), transparent),
+    radial-gradient(1.2px 1.2px at 87% 7%, rgba(255, 248, 236, 0.4), transparent),
+    radial-gradient(1.6px 1.6px at 93% 27%, rgba(255, 248, 236, 0.46), transparent),
+    radial-gradient(1.2px 1.2px at 12% 66%, rgba(255, 248, 236, 0.28), transparent),
+    radial-gradient(1.3px 1.3px at 32% 54%, rgba(255, 248, 236, 0.22), transparent),
+    radial-gradient(1.2px 1.2px at 68% 62%, rgba(255, 248, 236, 0.24), transparent),
+    radial-gradient(1.4px 1.4px at 84% 74%, rgba(255, 248, 236, 0.26), transparent),
+    radial-gradient(1.2px 1.2px at 58% 88%, rgba(255, 248, 236, 0.2), transparent),
+    radial-gradient(2px 2px at 5% 44%, rgba(255, 250, 240, 0.6), transparent),
+    radial-gradient(1.3px 1.3px at 15% 86%, rgba(255, 248, 236, 0.36), transparent),
+    radial-gradient(1.2px 1.2px at 23% 58%, rgba(255, 248, 236, 0.3), transparent),
+    radial-gradient(1.5px 1.5px at 40% 38%, rgba(255, 248, 236, 0.4), transparent),
+    radial-gradient(1.2px 1.2px at 47% 72%, rgba(255, 248, 236, 0.28), transparent),
+    radial-gradient(1.4px 1.4px at 58% 48%, rgba(255, 248, 236, 0.34), transparent),
+    radial-gradient(1.2px 1.2px at 66% 78%, rgba(255, 248, 236, 0.26), transparent),
+    radial-gradient(1.6px 1.6px at 74% 52%, rgba(255, 248, 236, 0.42), transparent),
+    radial-gradient(1.2px 1.2px at 81% 88%, rgba(255, 248, 236, 0.24), transparent),
+    radial-gradient(1.8px 1.8px at 89% 44%, rgba(255, 248, 236, 0.5), transparent),
+    radial-gradient(1.3px 1.3px at 96% 62%, rgba(255, 248, 236, 0.34), transparent),
+    radial-gradient(1.2px 1.2px at 34% 92%, rgba(255, 248, 236, 0.22), transparent),
+    radial-gradient(1.4px 1.4px at 52% 18%, rgba(255, 248, 236, 0.38), transparent),
+    radial-gradient(2.2px 2.2px at 96% 88%, rgba(255, 250, 240, 0.52), transparent),
+    radial-gradient(2.6px 2.6px at 18% 8%, rgba(255, 250, 240, 0.6), transparent),
+    radial-gradient(2.4px 2.4px at 44% 26%, rgba(255, 250, 240, 0.52), transparent),
+    radial-gradient(2.2px 2.2px at 68% 4%, rgba(255, 250, 240, 0.5), transparent),
+    radial-gradient(2.4px 2.4px at 90% 15%, rgba(255, 250, 240, 0.56), transparent),
+    linear-gradient(118deg, transparent 30%, rgba(122, 134, 170, 0.07) 43%, rgba(206, 184, 150, 0.06) 52%, transparent 66%),
+    radial-gradient(46% 38% at 74% 6%, rgba(96, 108, 148, 0.16), transparent 70%),
+    radial-gradient(70% 62% at 4% 82%, rgba(243, 173, 73, 0.16), transparent 62%),
+    radial-gradient(58% 64% at 78% 12%, rgba(64, 78, 112, 0.22), transparent 70%),
+    radial-gradient(130% 110% at 50% 46%, transparent 38%, rgba(0, 0, 0, 0.58) 100%),
+    linear-gradient(180deg, #06080d 0%, #05060a 52%, #060607 100%);
+}
+/* The planet: a dark limb with a champagne atmosphere rim, clipped by the
+   viewport. Kept at z-index 0, below the shell, so it never touches content. */
+.nc-root[data-surface="home"]::after {
+  content: "";
+  position: absolute;
+  left: -55vw;
+  bottom: -46vw;
+  width: 86vw;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  z-index: 0;
+  pointer-events: none;
+  /* Nearly black body, a thin warm atmosphere band, a pale rim. The brown wash
+     of a large lit disc was reading as a sepia page rather than as a planet. */
+  background:
+    radial-gradient(circle at 73% 27%, rgba(255, 238, 205, 0.16), transparent 24%),
+    radial-gradient(circle at 68% 34%, #0b0907 0%, #0a0807 56%, #050505 72%);
+  box-shadow:
+    inset 0 0 0 1px rgba(246, 219, 173, 0.55),
+    inset 0 0 0 5px rgba(243, 173, 73, 0.06),
+    inset 14px 0 34px rgba(243, 173, 73, 0.3),
+    inset 0 0 150px 44px rgba(243, 173, 73, 0.16),
+    inset -80px -100px 200px rgba(0, 0, 0, 0.97),
+    0 0 80px 8px rgba(243, 173, 73, 0.24);
+  opacity: 0.95;
+}
+
+/* Supplied clean sky: a decorative layer only. All UI and orbital paths remain
+   DOM/SVG. The dark veil protects text over the planet's bright limb. */
+.nc-root[data-surface="home"]::before {
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.24), rgba(0, 0, 0, 0.12) 45%, rgba(0, 0, 0, 0.26)),
+    url('/exec-lab/space-home.webp') left center / cover no-repeat;
+}
+.nc-root[data-surface="home"]::after { content: none; }
+
+/* The home owns its whole reading column. */
+.nc-root[data-surface="home"] .nc-room {
+  width: 100%;
+  max-width: 1540px;
+  margin-inline: auto;
+  padding: 14px clamp(22px, 2.6vw, 40px) 16px;
+  gap: 13px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2 · HOME HEADER — brand · scope · language … greeting
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-homehead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 26px;
+  direction: ltr;
+  padding: 0 2px 2px;
+  flex: none;
+}
+
+.nc-homehead__id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.nc-homehead__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--nc-text);
+  text-decoration: none;
+  flex: none;
+}
+.nc-homehead__mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  border: 1px solid var(--nc-champagne-line);
+  background:
+    radial-gradient(circle at 38% 24%, rgba(255, 246, 230, 0.12), transparent 60%),
+    var(--nc-glass-2);
+  color: var(--nc-champagne-pale);
+  box-shadow: var(--nc-inner-light);
+}
+.nc-homehead__wordmark {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  line-height: 1;
+}
+.nc-homehead__wordmark small {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.34em;
+  color: var(--nc-text-3);
+  text-transform: uppercase;
+}
+
+.nc-homehead__scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-pill);
+  background: var(--nc-glass-1);
+  color: var(--nc-text-2);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 560;
+  white-space: nowrap;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.nc-homehead__scope:hover {
+  color: var(--nc-text);
+  border-color: var(--nc-champagne-line);
+}
+
+/* The shared locale switch, compressed into the reference's AR / EN pill. */
+.nc-root[data-surface="home"] .nc-homehead .nc-locale {
+  padding: 0;
+  border: 0;
+  flex-direction: row;
+  gap: 0;
+}
+.nc-root[data-surface="home"] .nc-homehead .nc-locale__label {
+  display: none;
+}
+.nc-root[data-surface="home"] .nc-homehead .nc-locale__seg {
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-1);
+}
+.nc-root[data-surface="home"] .nc-homehead .nc-locale__opt {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  font-size: 11px;
+  color: var(--nc-text-3);
+}
+.nc-root[data-surface="home"] .nc-homehead .nc-locale__opt[data-active="true"] {
+  color: var(--nc-text);
+  background: var(--nc-glass-3);
+}
+
+.nc-homehead__greeting {
+  text-align: right;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.nc-homehead__hello {
+  margin: 0;
+  font-size: clamp(20px, 1.8vw, 27px);
+  font-weight: 520;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--nc-text-2);
+}
+.nc-homehead__name {
+  font-weight: 680;
+  color: var(--nc-text);
+}
+.nc-homehead__tagline {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--nc-text-3);
+}
+
+/* Arabic-first: the reference reads AR · EN from the left, not EN · AR. */
+.nc-root[data-surface="home"][dir="rtl"] .nc-homehead .nc-locale__seg {
+  flex-direction: row-reverse;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3 · THE STAGE — the orbit, the golden horizon, and the six plates
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root[data-surface="home"] {
+  --nc-orbit-h: clamp(430px, 54vh, 600px);
+  /* The reference's plate is ~27% of the composition wide and ~9% tall. */
+  --nc-pod-w: clamp(258px, 25vw, 360px);
+  --nc-pod-h: 80px;
+  --nc-pod-radius: 30px;
+  --nc-seat: clamp(146px, 14.4vw, 214px);
+}
+
+/* The reference plate is a slim lozenge. `.nc-pod` in spatial.css is sized as
+   the NETWORK reading's 19vw × 140px module; custom properties alone do not
+   change that, so the home names its own box here. Without this rule the plates
+   render 140px tall and the composition reads as six cards, not six lozenges. */
+.nc-root[data-surface="home"] .nc-pod {
+  width: var(--nc-pod-w);
+  height: var(--nc-pod-h);
+}
+/* The approved plates sit closer to the character than the network reading's
+   coordinates do. A nudge, home-only, tightens the six into one composition
+   without moving any node in the department map or workspace. */
+.nc-root[data-surface="home"] .nc-pod[data-side="left"] {
+  transform: translate(calc(-50% + 26px), -50%) translateZ(var(--nc-pod-z, 0px));
+}
+.nc-root[data-surface="home"] .nc-pod[data-side="right"] {
+  transform: translate(calc(-50% - 26px), -50%) translateZ(var(--nc-pod-z, 0px));
+}
+
+.nc-root[data-surface="home"] .nc-ov {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: none;
+}
+.nc-root[data-surface="home"] .nc-ov__stage {
+  margin: 0;
+}
+.nc-root[data-surface="home"] .nc-room__stage {
+  /* NO PANEL. The reference draws the orbit straight onto the room; a border,
+     fill and inner shadow here read as a box inside the page, which was the
+     single largest difference from the approved composition. The stage keeps
+     only its height and clipping. */
+  height: var(--nc-orbit-h);
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+/* The routing layer is an <svg class="nc-field">, and the foundation styles
+   `.nc-field` as a text input (border, dark fill, radius). On the home that
+   painted a 1 px champagne frame and a dark rectangle across the whole
+   composition — the "inner box" itself. The scene's field is a drawing, not
+   an input, so it takes no frame. */
+.nc-root[data-surface="home"] .nc-field {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.nc-root[data-surface="home"] .nc-ov__stage::before,
+.nc-root[data-surface="home"] .nc-ov__stage::after {
+  content: none;
+}
+
+/* The plates: a wider lozenge, the identity disc on the inner edge, two lines. */
+.nc-root[data-surface="home"] .nc-pod__plate {
+  /* The reference plate is smoked glass over space, not a filled card: the sky
+     must show through it. The rim is champagne, the top edge catches the light
+     and the inner face is warmer at the top than at the foot. */
+  flex-direction: row;
+  padding: 0 15px;
+  border-radius: 30px;
+  background:
+    radial-gradient(120% 150% at 50% -20%, rgba(246, 219, 173, 0.1), transparent 58%),
+    linear-gradient(180deg, rgba(51, 48, 41, 0.52), rgba(14, 15, 14, 0.76));
+  border-color: rgba(246, 219, 173, 0.34);
+  backdrop-filter: blur(20px) saturate(1.1);
+  box-shadow:
+    0 30px 60px -38px rgba(0, 0, 0, 0.96),
+    0 0 0 1px rgba(255, 244, 224, 0.035) inset,
+    0 1px 0 rgba(255, 246, 230, 0.22) inset,
+    0 -18px 40px -26px rgba(0, 0, 0, 0.6) inset;
+}
+.nc-root[data-surface="home"] .nc-pod__plate::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 246, 230, 0.06), transparent 34%);
+  pointer-events: none;
+}
+.nc-root[data-surface="home"] .nc-pod__badge {
+  width: 48px;
+  height: 48px;
+  border-color: var(--nc-champagne-line);
+  color: var(--nc-champagne-pale);
+  background:
+    radial-gradient(circle at 38% 24%, rgba(255, 246, 230, 0.16), transparent 56%),
+    linear-gradient(180deg, rgba(58, 55, 47, 0.9), rgba(20, 20, 18, 0.9));
+  box-shadow:
+    0 10px 22px -14px rgba(0, 0, 0, 0.9),
+    0 0 0 1px rgba(246, 219, 173, 0.06) inset,
+    0 0 22px -10px rgba(243, 173, 73, 0.5);
+}
+.nc-root[data-surface="home"] .nc-pod__name {
+  font-size: 15.5px;
+  font-weight: 620;
+}
+.nc-root[data-surface="home"] .nc-pod__code {
+  display: none;
+}
+.nc-root[data-surface="home"] .nc-pod__state {
+  font-size: 11.5px;
+}
+.nc-root[data-surface="home"] .nc-pod__port {
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  background: var(--nc-champagne-pale);
+  box-shadow:
+    0 0 0 4px rgba(246, 219, 173, 0.1),
+    0 0 12px rgba(246, 219, 173, 0.38);
+  opacity: 0.8;
+}
+.nc-root[data-surface="home"] .nc-pod__port[data-side="left"] { right: -15px; }
+.nc-root[data-surface="home"] .nc-pod__port[data-side="right"] { left: -15px; }
+
+/* The character stays the largest single object, and its role reads as the
+   reference's one line under the name. */
+.nc-root[data-surface="home"] .nc-core__title {
+  font-size: 17px;
+  letter-spacing: 0.44em;
+  text-indent: 0.44em;
+}
+.nc-root[data-surface="home"] .nc-core__role {
+  font-size: 11.5px;
+  color: var(--nc-champagne-pale);
+}
+/* The reference's rim light: a warm bloom under and behind the character, not a
+   flat circle. It sits behind the seat and is never interactive. */
+.nc-root[data-surface="home"] .nc-core__halo {
+  /* The reference lights the character from the room; it does not put a lit
+     disc behind it. A wide, low bloom reads as light, where a circle read as
+     a bubble. */
+  width: calc(var(--nc-seat) * 2.5);
+  height: calc(var(--nc-seat) * 1.45);
+  background:
+    radial-gradient(ellipse at 50% 62%, rgba(243, 173, 73, 0.11), rgba(243, 173, 73, 0.03) 40%, transparent 72%);
+  filter: blur(38px);
+}
+.nc-root[data-surface="home"] .nc-orbit__veil {
+  background: radial-gradient(circle, rgba(243, 173, 73, 0.06), transparent 68%);
+}
+.nc-root[data-surface="home"] .nc-execseat::before {
+  border-color: rgba(246, 219, 173, 0.3);
+  box-shadow:
+    0 0 0 1px rgba(255, 244, 226, 0.04) inset,
+    0 0 46px -10px rgba(243, 173, 73, 0.4) inset,
+    0 26px 60px -28px rgba(0, 0, 0, 0.95);
+}
+
+/* Half-body artwork uses its native portrait ratio, not the former head disc.
+   Keep the focus outline on the real link and the identity below the jacket. */
+.nc-root[data-surface="home"] .nc-core {
+  width: clamp(230px, 24vw, 340px);
+  height: clamp(259px, 27vw, 383px);
+}
+.nc-root[data-surface="home"] .nc-execseat {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  background: none;
+}
+.nc-root[data-surface="home"] .nc-execseat::before { content: none; }
+.nc-root[data-surface="home"] .nc-execseat__figure {
+  width: 100%;
+  height: 100%;
+  animation: none;
+}
+.nc-root[data-surface="home"] .nc-core:focus-visible {
+  outline: 2px solid var(--nc-champagne-pale);
+  outline-offset: 6px;
+  border-radius: 18px;
+}
+.nc-root[data-surface="home"] .nc-core__identity { top: calc(100% + 4px); }
+.nc-root[data-surface="home"] .nc-core__readout { top: calc(100% + 49px); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4 · THE TWO ANSWERS AND THE COMPOSER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* One strip with a centre divider, not two cards with a gap. It is a summary,
+   and the reference gives it the weight of a single object. */
+.nc-root[data-surface="home"] .nc-sum {
+  flex: none;
+  gap: 0;
+  border: 1px solid var(--nc-champagne-line);
+  border-radius: 18px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(39, 38, 33, 0.72), rgba(14, 14, 13, 0.84));
+  box-shadow: var(--nc-shadow-2), var(--nc-inner-light);
+}
+.nc-root[data-surface="home"] .nc-sum__cell {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  min-height: 92px;
+  padding: 16px 24px;
+}
+.nc-root[data-surface="home"] .nc-sum__cell + .nc-sum__cell {
+  border-inline-start: 1px solid var(--nc-hairline);
+}
+.nc-root[data-surface="home"] .nc-sum__cell:hover {
+  background: var(--nc-glass-2);
+  transform: none;
+}
+.nc-root[data-surface="home"] .nc-sum__disc {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  border-color: var(--nc-champagne-line);
+  background: var(--nc-glass-2);
+  color: var(--nc-champagne-pale);
+}
+.nc-root[data-surface="home"] .nc-sum__label { font-size: 15px; }
+.nc-root[data-surface="home"] .nc-sum__sub { font-size: 11.5px; }
+.nc-root[data-surface="home"] .nc-sum__count {
+  font-size: 42px;
+  font-weight: 560;
+  color: var(--nc-text);
+}
+/* The reference pairs the icon with the outer edge of the strip and the number
+   with the centre divider, in both languages. The second cell is physically
+   reversed so the mirror cannot swap them by locale; the chevron sits between
+   the label and the number, as the reference draws it. */
+.nc-root[data-surface="home"] .nc-sum__cell + .nc-sum__cell {
+  flex-direction: row-reverse;
+}
+.nc-root[data-surface="home"] .nc-sum__chev { order: 1; }
+.nc-root[data-surface="home"] .nc-sum__count { order: 2; }
+
+.nc-homecomposer {
+  flex: none;
+}
+.nc-homecomposer .nc-cmdbar__shell {
+  flex-wrap: wrap;
+  row-gap: 8px;
+  padding: 13px 14px 12px;
+  border-radius: 22px;
+  border-color: var(--nc-champagne-line);
+  background:
+    linear-gradient(180deg, rgba(40, 39, 34, 0.92), rgba(15, 15, 13, 0.96));
+  box-shadow:
+    0 26px 60px -34px rgba(0, 0, 0, 0.96),
+    0 0 0 1px rgba(255, 244, 224, 0.035) inset;
+}
+.nc-homecomposer .nc-cmdbar__input {
+  flex: 1 1 100%;
+  order: -1;
+  min-height: 26px;
+  font-size: 15px;
+  padding-inline: 4px;
+}
+.nc-homecomposer .nc-cmdbar__scope,
+.nc-homecomposer .nc-cmdbar__wave,
+.nc-homecomposer .nc-cmdbar__scope-note {
+  display: none;
+}
+.nc-homecomposer .nc-cmdbar__glyph {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-1);
+}
+.nc-homecomposer .nc-cmdbar__exec {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 10px 0 6px;
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-pill);
+  background: var(--nc-glass-1);
+  color: var(--nc-text-2);
+  font-size: 11.5px;
+}
+.nc-homecomposer .nc-cmdbar__exec img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  border-radius: 50%;
+  background: rgba(8, 10, 14, 0.7);
+}
+.nc-homecomposer .nc-cmdbar__exec b { font-weight: 620; color: var(--nc-text); }
+/* The reference's control order, addressed bar → EXEC → model → voice → send.
+   `order` only moves the visual sequence; the DOM and tab order are unchanged. */
+.nc-homecomposer .nc-cmdbar__chip--mode { order: 1; }
+.nc-homecomposer .nc-cmdbar__voice { order: 2; }
+.nc-homecomposer .nc-cmdbar__send {
+  order: 10;
+  margin-inline-start: auto;
+  width: 44px;
+  height: 44px;
+  background: var(--nc-mint);
+  color: #052018;
+}
+.nc-homecomposer .nc-cmdbar__send:hover:not(:disabled) { background: #c9ffdf; }
+.nc-homecomposer .nc-cmdbar__send:disabled {
+  background: rgba(246, 219, 173, 0.1);
+  color: var(--nc-text-4);
+}
+.nc-homecomposer .nc-cmdbar__result {
+  margin-top: 8px;
+}
+
+.nc-home__provenance {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+  color: var(--nc-text-4);
+  text-align: center;
+}
+.nc-home__provenance::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--nc-champagne);
+  opacity: 0.7;
+}
+
+/* The disclosure stays quiet and closes the first screen. */
+.nc-root[data-surface="home"] .nc-detail {
+  flex: none;
+  background: var(--nc-glass-1);
+  border-color: var(--nc-hairline);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5 · THE DEMO COLLABORATION — one route, one slow signal, one explanation
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root[data-surface="home"] .nc-route--demo .nc-route__line {
+  stroke: var(--nc-mint);
+  stroke-opacity: 0.55;
+  stroke-width: 1.4;
+  stroke-dasharray: 3 8;
+}
+.nc-root[data-surface="home"] .nc-route--demo .nc-route__glow {
+  stroke: var(--nc-mint);
+  stroke-opacity: 0.2;
+}
+.nc-root[data-surface="home"] .nc-route--demo .nc-route__flow {
+  stroke: var(--nc-mint-pale);
+  stroke-opacity: 0.55;
+  stroke-dasharray: 2 12;
+  animation: nc-demo-flow 7.4s linear infinite;
+}
+.nc-demo-signal {
+  fill: var(--nc-mint-pale);
+  filter: drop-shadow(0 0 7px var(--nc-mint-glow));
+}
+.nc-demo-signal--still { opacity: 0.85; }
+@keyframes nc-demo-flow {
+  to { stroke-dashoffset: -84; }
+}
+
+.nc-handoff-pill {
+  position: absolute;
+  left: 50%;
+  bottom: 15px;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--nc-mint-line);
+  border-radius: var(--nc-r-pill);
+  background: linear-gradient(180deg, rgba(24, 35, 29, 0.92), rgba(10, 16, 13, 0.94));
+  color: var(--nc-text);
+  box-shadow: 0 16px 40px -24px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(144, 223, 183, 0.06) inset;
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: border-color var(--nc-dur-quick) var(--nc-ease-standard), transform var(--nc-dur-quick);
+}
+.nc-handoff-pill:hover { border-color: var(--nc-mint); transform: translateX(-50%) translateY(-1px); }
+.nc-handoff-pill__pulse {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--nc-mint-line);
+}
+.nc-handoff-pill__pulse::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid var(--nc-mint-line);
+  opacity: 0;
+  animation: nc-handoff-ring 3.8s var(--nc-ease-standard) infinite;
+}
+.nc-handoff-pill__pulse i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--nc-mint-pale);
+  box-shadow: 0 0 8px var(--nc-mint-glow);
+}
+.nc-handoff-pill__label { font-weight: 620; }
+.nc-handoff-pill__tag {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nc-mint);
+  border-inline-start: 1px solid var(--nc-hairline);
+  padding-inline-start: 8px;
+}
+.nc-handoff-pill__chev { color: var(--nc-text-3); }
+@keyframes nc-handoff-ring {
+  0%, 62% { opacity: 0; transform: scale(0.8); }
+  70% { opacity: 0.55; }
+  100% { opacity: 0; transform: scale(1.7); }
+}
+
+/* The explanation: a real dialog, visually a sheet on the phone. */
+.nc-handoff-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.nc-handoff-dialog__scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(4, 5, 4, 0.58);
+  backdrop-filter: blur(5px);
+  cursor: pointer;
+}
+.nc-handoff-dialog__panel {
+  position: relative;
+  width: min(470px, 100%);
+  max-height: min(86vh, 640px);
+  overflow-y: auto;
+  padding: 20px 22px 18px;
+  border: 1px solid var(--nc-champagne-line);
+  border-radius: 24px;
+  background:
+    radial-gradient(90% 55% at 55% 0%, rgba(208, 173, 137, 0.1), transparent 64%),
+    linear-gradient(180deg, rgba(31, 31, 27, 0.98), rgba(11, 12, 11, 0.99));
+  box-shadow: 0 44px 100px -30px rgba(0, 0, 0, 0.95), var(--nc-inner-light);
+}
+.nc-handoff-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.nc-handoff-dialog__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--nc-mint);
+}
+.nc-handoff-dialog__kicker i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nc-mint);
+  box-shadow: 0 0 9px var(--nc-mint-glow);
+}
+.nc-handoff-dialog__close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  color: var(--nc-text-3);
+  background: transparent;
+  cursor: pointer;
+}
+.nc-handoff-dialog__close:hover { color: var(--nc-text); border-color: var(--nc-hairline); }
+.nc-handoff-dialog__title {
+  margin: 12px 0 0;
+  font-size: 21px;
+  font-weight: 640;
+  line-height: 1.35;
+  color: var(--nc-text);
+}
+.nc-handoff-dialog__route {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin: 16px 0 0;
+}
+.nc-handoff-dialog__place {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--nc-champagne-line);
+  border-radius: var(--nc-r-pill);
+  background: var(--nc-glass-2);
+  font-size: 11.5px;
+  font-weight: 560;
+  color: var(--nc-text-2);
+}
+.nc-handoff-dialog__arrow { color: var(--nc-mint); display: flex; }
+.nc-root[dir="rtl"] .nc-handoff-dialog__arrow svg { transform: scaleX(-1); }
+.nc-handoff-dialog__body {
+  margin: 15px 0 0;
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--nc-text-2);
+}
+.nc-handoff-dialog__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 0;
+}
+.nc-handoff-dialog__facts > div {
+  padding: 11px 12px;
+  border: 1px solid var(--nc-hairline);
+  border-radius: 13px;
+  background: var(--nc-glass-1);
+}
+.nc-handoff-dialog__facts dt {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+.nc-handoff-dialog__facts dd {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--nc-text);
+}
+.nc-handoff-dialog__note {
+  margin: 14px 0 0;
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--nc-text-3);
+  border-inline-start: 2px solid var(--nc-mint-line);
+  padding-inline-start: 10px;
+}
+.nc-handoff-dialog__foot {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 18px;
+}
+.nc-handoff-dialog__open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 15px;
+  border-radius: var(--nc-r-pill);
+  background: linear-gradient(180deg, var(--nc-mint-pale), var(--nc-mint));
+  color: var(--nc-mint-ink);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.nc-handoff-dialog__dismiss {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-pill);
+  background: transparent;
+  color: var(--nc-text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.nc-handoff-dialog__dismiss:hover { border-color: var(--nc-champagne-line); color: var(--nc-text); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6 · PHONE — a composed reading, never a shrunken canvas
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-mobile-command {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  /* The home's RTL desktop grid must not survive the phone breakpoint: its three
+     columns would leave the 68px rail reserved off-screen and squeeze the
+     composition to 292px on a 360px phone. */
+  .nc-root[data-surface="home"] .nc-shell,
+  .nc-root[data-surface="home"][dir="rtl"] .nc-shell,
+  .nc-root[data-surface="home"] .nc-shell[data-right="collapsed"],
+  .nc-root[data-surface="home"][data-focus="true"] .nc-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .nc-root[data-surface="home"][dir="rtl"] .nc-main { grid-column: 1; }
+
+  .nc-root .nc-mobile-command {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    width: 100%;
+    padding: max(8px, env(safe-area-inset-top, 0px)) 14px
+      calc(92px + var(--nc-kb, 0px) + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* ── Header ─────────────────────────────────────────────────────────── */
+  .nc-mhome__head {
+    display: grid;
+    /* Physical order, as the reference draws it: brand · scope · AR/EN · menu.
+       The header itself is LTR so the brand stays on the left in Arabic too. */
+    grid-template-columns: auto minmax(0, auto) minmax(0, 1fr) auto;
+    direction: ltr;
+    align-items: center;
+    gap: 7px;
+    min-height: 38px;
+  }
+  .nc-mhome__head .nc-locale { justify-self: end; }
+  /* Arabic-first: the reference reads AR · EN from the left, not EN · AR. */
+  .nc-root[dir="rtl"] .nc-mhome__head .nc-locale__seg,
+  .nc-root[dir="rtl"] .nc-homehead .nc-locale__seg { flex-direction: row-reverse; }
+  .nc-mhome__head .nc-homehead__brand { gap: 8px; }
+  .nc-mhome__head .nc-homehead__mark { width: 34px; height: 34px; border-radius: 10px; }
+  .nc-mhome__head .nc-homehead__wordmark { font-size: 15px; letter-spacing: 0.16em; }
+  .nc-mhome__head .nc-homehead__wordmark small { font-size: 7px; letter-spacing: 0.28em; }
+
+  .nc-mhome__scope {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-width: 0;
+    height: 32px;
+    padding: 0 9px;
+    border: 1px solid var(--nc-hairline);
+    border-radius: var(--nc-r-pill);
+    background: var(--nc-glass-1);
+    color: var(--nc-text-2);
+    font: inherit;
+    font-size: 10.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 116px;
+  }
+  .nc-mhome__head .nc-locale {
+    padding: 0;
+    border: 0;
+    flex-direction: row;
+  }
+  .nc-mhome__head .nc-locale__label { display: none; }
+  .nc-mhome__head .nc-locale__seg {
+    gap: 1px;
+    padding: 2px;
+    border: 1px solid var(--nc-hairline);
+    background: var(--nc-glass-1);
+  }
+  .nc-mhome__head .nc-locale__opt {
+    flex: 0 0 auto;
+    padding: 5px 7px;
+    font-size: 10.5px;
+  }
+  .nc-mhome__menu {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--nc-hairline);
+    border-radius: 50%;
+    background: var(--nc-glass-1);
+    color: var(--nc-text-2);
+    cursor: pointer;
+  }
+  .nc-mhome__menu:active { background: var(--nc-glass-3); }
+
+  .nc-mhome__scope-note {
+    margin: -7px 2px 0;
+    font-size: 9.5px;
+    line-height: 1.45;
+    color: var(--nc-text-4);
+    text-align: start;
+  }
+
+  /* ── Greeting ───────────────────────────────────────────────────────── */
+  .nc-mhome__greeting {
+    text-align: center;
+    padding: 0 4px;
+  }
+  .nc-mhome__hello {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 520;
+    line-height: 1.3;
+    color: var(--nc-text-2);
+  }
+  .nc-mhome__name { color: var(--nc-text); font-weight: 680; }
+  .nc-mhome__tagline {
+    margin: 5px 0 0;
+    font-size: 12px;
+    color: var(--nc-text-3);
+  }
+
+  /* ── Hero: the six plates AROUND the character ─────────────────────────
+     The approved phone is not a grid under a portrait: EXEC stands in a lane
+     between two columns of three plates, and the orbit turns behind all of it.
+     So the field is a three-column grid — LEFT PLATES · CHARACTER · RIGHT
+     PLATES — and the seat is absolutely centred in the middle lane, behind the
+     plates so their inner edges may overlap its shoulders. Every plate keeps
+     its own touch box and its own reading direction. */
+  .nc-mhome__hero {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 2px 0 4px;
+    /* Frameless: the composition floats on the room's own sky. */
+    background: radial-gradient(58% 46% at 50% 44%, rgba(243, 173, 73, 0.09), transparent 70%);
+  }
+  /* The rings are allowed to run past the column, but not to create a
+     horizontal scroll: the field clips them to its own box. */
+  .nc-mhome__field { position: relative; overflow: clip; }
+  .nc-mhome__orbit {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: min(108vw, 430px);
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    opacity: 0.95;
+    z-index: 0;
+  }
+  .nc-mhome__orbit span {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    border: 1px solid rgba(246, 219, 173, 0.18);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .nc-mhome__orbit span[data-ring="outer"] { width: 100%; height: 100%; border-style: dashed; border-color: rgba(246, 219, 173, 0.13); }
+  .nc-mhome__orbit span[data-ring="mid"] { width: 78%; height: 78%; border-color: rgba(246, 219, 173, 0.16); }
+  .nc-mhome__orbit span[data-ring="inner"] { width: 56%; height: 56%; border-color: rgba(246, 219, 173, 0.2); }
+  .nc-mhome__orbit i {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    margin: -3.5px 0 0 -3.5px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 34% 30%, #fff7e8, var(--nc-champagne) 60%, rgba(124, 101, 68, 0.4));
+    box-shadow: 0 0 12px rgba(246, 219, 173, 0.42);
+  }
+  .nc-mhome__orbit i[data-pearl="1"] { left: 12%; top: 48%; }
+  .nc-mhome__orbit i[data-pearl="2"] { left: 78%; top: 22%; }
+  .nc-mhome__orbit i[data-pearl="3"] { left: 88%; top: 72%; }
+
+  .nc-mhome__seat {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: 2;
+    transform: translate(-50%, -51%);
+    width: clamp(150px, 48vw, 200px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+  .nc-mhome__seat:focus-visible {
+    outline: 2px solid var(--nc-champagne-line);
+    outline-offset: 6px;
+    border-radius: 24px;
+  }
+  .nc-mhome__seat-figure {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    aspect-ratio: 700 / 788;
+  }
+  .nc-mhome__seat-figure img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.7));
+  }
+  .nc-mhome__seat-fallback {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    border: 1px dashed var(--nc-champagne-line);
+    border-radius: 50%;
+    color: var(--nc-champagne);
+    font-size: 11px;
+    letter-spacing: 0.24em;
+  }
+  .nc-mhome__seat-name {
+    font-size: 13px;
+    font-weight: 620;
+    letter-spacing: 0.4em;
+    text-indent: 0.4em;
+    color: var(--nc-text);
+  }
+  .nc-mhome__seat-role {
+    max-width: 124px;
+    font-size: 9px;
+    line-height: 1.25;
+    color: var(--nc-champagne);
+    text-align: center;
+    text-wrap: balance;
+  }
+
+  .nc-mhome__depts {
+    position: relative;
+    z-index: 3;
+    display: grid;
+    /* Physical composition: left plates, the character's lane, right plates.
+       The lane is the width the head needs; the plates keep the reader's
+       direction (set in markup) so Arabic text stays RTL. */
+    direction: ltr;
+    grid-template-columns: minmax(0, 1fr) clamp(104px, 32vw, 138px) minmax(0, 1fr);
+    grid-auto-rows: minmax(86px, auto);
+    gap: 10px 8px;
+    align-items: stretch;
+  }
+  .nc-mhome__dept:nth-child(1),
+  .nc-mhome__dept-skeleton:nth-child(1) { grid-area: 1 / 1; }
+  .nc-mhome__dept:nth-child(2),
+  .nc-mhome__dept-skeleton:nth-child(2) { grid-area: 1 / 3; }
+  .nc-mhome__dept:nth-child(3),
+  .nc-mhome__dept-skeleton:nth-child(3) { grid-area: 2 / 1; }
+  .nc-mhome__dept:nth-child(4),
+  .nc-mhome__dept-skeleton:nth-child(4) { grid-area: 2 / 3; }
+  .nc-mhome__dept:nth-child(5),
+  .nc-mhome__dept-skeleton:nth-child(5) { grid-area: 3 / 1; }
+  .nc-mhome__dept:nth-child(6),
+  .nc-mhome__dept-skeleton:nth-child(6) { grid-area: 3 / 3; }
+  .nc-mhome__dept {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 78px;
+    padding: 7px 8px;
+    border: 1px solid rgba(246, 219, 173, 0.26);
+    border-radius: 18px;
+    background:
+      linear-gradient(180deg, rgba(44, 43, 38, 0.62), rgba(14, 15, 14, 0.82));
+    backdrop-filter: blur(14px) saturate(1.06);
+    box-shadow:
+      0 16px 30px -22px rgba(0, 0, 0, 0.95),
+      0 1px 0 rgba(255, 246, 230, 0.12) inset;
+    text-decoration: none;
+    color: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .nc-mhome__dept:active { background: var(--nc-glass-plate-strong); }
+  /* The disc faces the centre, physically: the left-hand card of each pair
+     keeps it on its right, the right-hand card on its left, in both languages.
+     `flex-direction` follows the card's own `dir`, so the rule is stated per
+     direction — flipping only the odd child mirrored the discs outward in
+     Arabic while English matched the reference. */
+  .nc-mhome__dept[dir="ltr"]:nth-child(odd),
+  .nc-mhome__dept[dir="rtl"]:nth-child(even) { flex-direction: row-reverse; }
+  .nc-mhome__dept-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px solid var(--nc-champagne-line);
+    background:
+      radial-gradient(circle at 38% 24%, rgba(255, 246, 230, 0.14), transparent 58%),
+      linear-gradient(180deg, rgba(54, 51, 44, 0.92), rgba(19, 19, 17, 0.92));
+    color: var(--nc-champagne-pale);
+  }
+  .nc-mhome__dept-icon svg { width: 15px; height: 15px; }
+  .nc-mhome__dept-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .nc-mhome__dept-name {
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.22;
+    color: var(--nc-text);
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+  .nc-mhome__dept-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 9.5px;
+    line-height: 1.2;
+    color: var(--nc-text-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .nc-mhome__dept-status i {
+    width: 5px;
+    height: 5px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--nc-accent);
+    box-shadow: 0 0 7px var(--nc-accent);
+  }
+  .nc-mhome__dept-skeleton {
+    min-height: 86px;
+    border: 1px solid var(--nc-hairline);
+    border-radius: 18px;
+    background: var(--nc-glass-1);
+  }
+
+  .nc-handoff-pill[data-variant="phone"] {
+    position: relative;
+    left: auto;
+    bottom: auto;
+    transform: none;
+    z-index: 2;
+    align-self: center;
+    margin-top: 2px;
+    min-height: 40px;
+    max-width: 100%;
+  }
+  .nc-handoff-pill[data-variant="phone"]:hover { transform: none; }
+
+  /* ── Summaries ──────────────────────────────────────────────────────── */
+  .nc-root .nc-mobile-command .nc-sum {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    border-radius: 16px;
+  }
+  .nc-root .nc-mobile-command .nc-sum__cell {
+    padding: 12px 10px;
+    gap: 8px;
+    min-height: 70px;
+  }
+  .nc-root .nc-mobile-command .nc-sum__disc {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+  }
+  .nc-root .nc-mobile-command .nc-sum__disc svg { width: 15px; height: 15px; }
+  .nc-root .nc-mobile-command .nc-sum__stack { gap: 1px; }
+  .nc-root .nc-mobile-command .nc-sum__label {
+    font-size: 11.5px;
+    line-height: 1.3;
+    white-space: normal;
+  }
+  .nc-root .nc-mobile-command .nc-sum__sub {
+    font-size: 9.5px;
+    line-height: 1.3;
+  }
+  .nc-root .nc-mobile-command .nc-sum__count { font-size: 22px; }
+  .nc-root .nc-mobile-command .nc-sum__chev { display: none; }
+
+  /* ── Composer ───────────────────────────────────────────────────────── */
+  .nc-mhome__composer {
+    scroll-margin-block-end: 130px;
+  }
+  .nc-mhome__composer .nc-cmdbar__shell {
+    border-radius: 20px;
+    padding: 8px 9px 7px;
+    row-gap: 5px;
+  }
+  .nc-mhome__composer .nc-cmdbar__input {
+    min-height: 21px;
+    font-size: 14.5px;
+  }
+  .nc-mhome__composer .nc-cmdbar__input:focus { scroll-margin-block-end: 140px; }
+  .nc-mhome__composer .nc-cmdbar__glyph { width: 32px; height: 32px; }
+  .nc-mhome__composer .nc-cmdbar__exec {
+    height: 32px;
+    font-size: 10.5px;
+    padding-inline-end: 8px;
+  }
+  .nc-mhome__composer .nc-cmdbar__exec img { width: 20px; height: 20px; }
+  .nc-mhome__composer .nc-cmdbar__chip--mode { height: 32px; padding: 0 9px; }
+  .nc-mhome__composer .nc-cmdbar__send { width: 38px; height: 38px; }
+
+  .nc-mhome__provenance {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: -2px 0 0;
+    font-size: 9.5px;
+    color: var(--nc-text-4);
+    text-align: center;
+  }
+  .nc-mhome__provenance span {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--nc-champagne);
+  }
+
+  /* ── Operating detail, folded ──────────────────────────────────────── */
+  .nc-mhome__detail {
+    border: 1px solid var(--nc-hairline);
+    border-radius: 14px;
+    background: var(--nc-glass-1);
+    overflow: hidden;
+  }
+  .nc-mhome__detail summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 12px;
+    list-style: none;
+    color: var(--nc-text-2);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .nc-mhome__detail summary::-webkit-details-marker { display: none; }
+  .nc-mhome__detail summary span {
+    margin-inline-start: auto;
+    font-size: 10px;
+    color: var(--nc-text-4);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 55%;
+  }
+  .nc-mhome__detail-body {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--nc-hairline);
+  }
+  .nc-mhome__detail-body a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 46px;
+    padding: 0 12px;
+    color: var(--nc-text-2);
+    font-size: 12.5px;
+    text-decoration: none;
+  }
+  .nc-mhome__detail-body a + a { border-top: 1px solid var(--nc-hairline); }
+
+  /* ── Dialog becomes a sheet above the bar and the keyboard ─────────── */
+  .nc-handoff-dialog {
+    place-items: end center;
+    padding: 12px 12px 0;
+  }
+  .nc-handoff-dialog__panel {
+    width: 100%;
+    max-height: min(82vh, 640px);
+    border-radius: 24px 24px 0 0;
+    padding: 18px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    margin-bottom: calc(var(--nc-kb, 0px));
+  }
+  .nc-handoff-dialog__title { font-size: 18px; }
+  .nc-handoff-dialog__facts { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 400px) {
+  /* Two more pixels of plate on each side, taken from the page gutter, because
+     the lane and six readable names are the constraint at this width. */
+  .nc-root .nc-mobile-command { padding-inline: 8px; gap: 13px; }
+  .nc-mhome__scope { max-width: 104px; }
+  .nc-mhome__orbit { width: min(112vw, 400px); }
+  .nc-mhome__dept { padding: 7px; gap: 6px; min-height: 86px; }
+  .nc-mhome__dept-icon { width: 28px; height: 28px; }
+  .nc-mhome__dept-name { font-size: 12px; }
+  .nc-mhome__dept-status { font-size: 9px; }
+  .nc-handoff-pill[data-variant="phone"] { font-size: 10.5px; }
+  .nc-handoff-pill[data-variant="phone"] .nc-handoff-pill__tag { display: none; }
+}
+
+@media (max-width: 335px) {
+  /* Only below this width can the wordmark, company scope, language and menu
+     no longer sit on one line. The MARK stays (the brand is still identifiable)
+     and the scope keeps its own row of breathing room. Nothing is removed.
+     At 360px they still fit — measured, not assumed — so the approved wordmark
+     stays visible on the common small phone. */
+  .nc-mhome__head .nc-homehead__wordmark { display: none; }
+  .nc-mhome__scope { max-width: 110px; }
+  /* A narrower character lane, so the smallest phones still give two or three
+     words of name per plate rather than shrinking the whole composition. */
+  .nc-mhome__depts { grid-template-columns: minmax(0, 1fr) 96px minmax(0, 1fr); }
+  .nc-mhome__seat { width: 128px; }
+  .nc-mhome__dept-icon { width: 26px; height: 26px; }
+  .nc-mhome__dept-name { font-size: 11.5px; }
+  .nc-mhome__dept { min-height: 84px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nc-root[data-surface="home"] .nc-route--demo .nc-route__flow,
+  .nc-handoff-pill__pulse::after {
+    animation: none;
+  }
+  .nc-handoff-pill,
+  .nc-handoff-pill:hover { transition: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   7 · VISUAL REVIEW CORRECTION — quieter sky · clearer orbit · safe phone UI
+   ───────────────────────────────────────────────────────────────────────────
+   Home-only correction for the measured 320px overlap, broken English words
+   and undersized touch targets. The same layer moves the glass, champagne rims
+   and orbital hierarchy toward the approved reference.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root[data-surface="home"]::before {
+  background:
+    radial-gradient(78% 72% at 52% 44%, transparent 22%, rgba(2, 3, 5, 0.16) 68%, rgba(2, 3, 5, 0.5) 100%),
+    linear-gradient(90deg, rgba(3, 4, 6, 0.22), rgba(3, 4, 6, 0.42) 38%, rgba(3, 4, 6, 0.62)),
+    url('/exec-lab/space-home.webp') 9% center / cover no-repeat;
+  filter: saturate(0.82) brightness(0.82);
+}
+
+@media (min-width: 761px) {
+  .nc-root[data-surface="home"] .nc-scene {
+    --nc-pod-w: clamp(266px, 26vw, 374px);
+    --nc-pod-h: 88px;
+    --nc-pod-radius: 34px;
+  }
+  .nc-root[data-surface="home"] .nc-pod__plate {
+    padding-inline: 17px;
+    border-color: rgba(246, 219, 173, 0.5);
+    background:
+      radial-gradient(130% 160% at 50% -28%, rgba(255, 246, 230, 0.17), transparent 58%),
+      linear-gradient(180deg, rgba(53, 49, 41, 0.68), rgba(12, 13, 12, 0.84));
+    box-shadow:
+      0 28px 60px -36px rgba(0, 0, 0, 0.98),
+      0 0 0 1px rgba(255, 244, 224, 0.06) inset,
+      0 1px 0 rgba(255, 246, 230, 0.3) inset,
+      0 0 34px -24px rgba(243, 173, 73, 0.58);
+  }
+  .nc-root[data-surface="home"] .nc-pod__badge {
+    width: 56px;
+    height: 56px;
+    border-color: rgba(246, 219, 173, 0.58);
+    box-shadow:
+      0 12px 26px -16px rgba(0, 0, 0, 0.96),
+      0 0 0 1px rgba(255, 246, 230, 0.1) inset,
+      0 0 28px -10px rgba(243, 173, 73, 0.58);
+  }
+  .nc-root[data-surface="home"] .nc-pod__badge svg { width: 23px; height: 23px; }
+  .nc-root[data-surface="home"] .nc-pod__name { font-size: 16px; font-weight: 650; }
+  .nc-root[data-surface="home"] .nc-pod__state { font-size: 12px; }
+  .nc-root[data-surface="home"] .nc-core {
+    width: clamp(220px, 22vw, 310px);
+    height: clamp(248px, 24.8vw, 349px);
+  }
+  .nc-root[data-surface="home"] .nc-orbit__ring[data-ring="outer"] {
+    width: 78%;
+    height: 60%;
+    border-color: rgba(246, 219, 173, 0.23);
+  }
+  .nc-root[data-surface="home"] .nc-orbit__ring[data-ring="mid"] {
+    width: 62%;
+    height: 47%;
+    border-color: rgba(246, 219, 173, 0.32);
+  }
+  .nc-root[data-surface="home"] .nc-orbit__ring[data-ring="inner"] {
+    width: 42%;
+    height: 32%;
+    border-color: rgba(246, 219, 173, 0.42);
+    box-shadow: inset 0 0 48px rgba(243, 173, 73, 0.09), 0 0 36px -24px rgba(243, 173, 73, 0.7);
+  }
+  .nc-root[data-surface="home"] .nc-orbit__pearls i {
+    box-shadow: 0 0 14px rgba(246, 219, 173, 0.52);
+  }
+  .nc-root[data-surface="home"] .nc-route:not(.nc-route--demo) .nc-route__line {
+    stroke: rgba(246, 219, 173, 0.32);
+    stroke-width: 1.15;
+  }
+  .nc-root[data-surface="home"] .nc-route:not(.nc-route--demo) .nc-route__glow {
+    stroke: rgba(243, 173, 73, 0.2);
+    stroke-width: 6;
+  }
+  .nc-homecomposer .nc-cmdbar__shell {
+    border-color: rgba(246, 219, 173, 0.48);
+    background:
+      radial-gradient(120% 120% at 50% -30%, rgba(255, 246, 230, 0.1), transparent 54%),
+      linear-gradient(180deg, rgba(42, 40, 34, 0.94), rgba(12, 13, 12, 0.97));
+    box-shadow:
+      0 30px 70px -38px rgba(0, 0, 0, 0.98),
+      0 1px 0 rgba(255, 246, 230, 0.24) inset,
+      0 0 0 1px rgba(255, 244, 224, 0.045) inset;
+  }
+}
+
+@media (max-width: 760px) {
+  .nc-root[data-surface="home"]::before {
+    background:
+      radial-gradient(92% 72% at 52% 38%, transparent 18%, rgba(2, 3, 5, 0.2) 62%, rgba(2, 3, 5, 0.58) 100%),
+      linear-gradient(90deg, rgba(3, 4, 6, 0.2), rgba(3, 4, 6, 0.48) 52%, rgba(3, 4, 6, 0.68)),
+      url('/exec-lab/space-home.webp') 30% center / cover no-repeat;
+    filter: saturate(0.76) brightness(0.74);
+  }
+  .nc-root .nc-mobile-command {
+    gap: 9px;
+    padding-inline: 12px;
+    padding-bottom: calc(104px + var(--nc-kb, 0px) + env(safe-area-inset-bottom, 0px));
+  }
+  .nc-mhome__head { min-height: 44px; gap: 6px; }
+  .nc-mhome__scope {
+    height: 44px;
+    min-width: 44px;
+    padding-inline: 10px;
+  }
+  .nc-mhome__head .nc-locale__seg { padding: 0; gap: 0; }
+  .nc-mhome__head .nc-locale__opt {
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+  .nc-mhome__menu { width: 44px; height: 44px; }
+  .nc-mhome__hero {
+    gap: 7px;
+    padding-block: 0 2px;
+    background: radial-gradient(58% 48% at 50% 44%, rgba(243, 173, 73, 0.11), transparent 72%);
+  }
+  .nc-mhome__orbit { width: min(116vw, 440px); opacity: 0.82; }
+  .nc-mhome__orbit span[data-ring="outer"] { border-color: rgba(246, 219, 173, 0.23); }
+  .nc-mhome__orbit span[data-ring="mid"] { border-color: rgba(246, 219, 173, 0.32); }
+  .nc-mhome__orbit span[data-ring="inner"] {
+    border-color: rgba(246, 219, 173, 0.42);
+    box-shadow: 0 0 30px -20px rgba(243, 173, 73, 0.8);
+  }
+  .nc-mhome__seat {
+    width: clamp(116px, 38vw, 152px);
+    transform: translate(-50%, -50%);
+  }
+  .nc-mhome__depts {
+    grid-template-columns: minmax(0, 1fr) clamp(76px, calc(100vw - 286px), 110px) minmax(0, 1fr);
+    grid-auto-rows: minmax(76px, auto);
+    gap: 8px 6px;
+  }
+  .nc-mhome__dept {
+    min-height: 76px;
+    gap: 6px;
+    padding: 7px 9px;
+    border-color: rgba(246, 219, 173, 0.48);
+    border-radius: 24px;
+    background:
+      radial-gradient(120% 150% at 50% -28%, rgba(255, 246, 230, 0.16), transparent 58%),
+      linear-gradient(180deg, rgba(52, 48, 40, 0.74), rgba(13, 14, 13, 0.88));
+    box-shadow:
+      0 20px 36px -25px rgba(0, 0, 0, 0.98),
+      0 1px 0 rgba(255, 246, 230, 0.27) inset,
+      0 0 24px -18px rgba(243, 173, 73, 0.6);
+  }
+  .nc-mhome__dept-icon {
+    width: 38px;
+    height: 38px;
+    border-color: rgba(246, 219, 173, 0.58);
+    box-shadow: 0 8px 18px -12px rgba(0, 0, 0, 0.96), 0 0 20px -11px rgba(243, 173, 73, 0.68);
+  }
+  .nc-mhome__dept-icon svg { width: 19px; height: 19px; }
+  .nc-mhome__dept-copy { flex: 1 1 auto; }
+  .nc-mhome__dept-name {
+    font-size: clamp(11px, 3vw, 12px);
+    line-height: 1.18;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+  }
+  .nc-handoff-pill[data-variant="phone"] { min-height: 44px; }
+  .nc-root .nc-mobile-command .nc-sum__cell {
+    min-height: 64px;
+    padding-block: 9px;
+  }
+  .nc-mhome__composer .nc-cmdbar__shell {
+    column-gap: 6px;
+    row-gap: 5px;
+    padding: 7px 8px 6px;
+    border-color: rgba(246, 219, 173, 0.5);
+    border-radius: 22px;
+    background:
+      radial-gradient(130% 120% at 50% -34%, rgba(255, 246, 230, 0.12), transparent 58%),
+      linear-gradient(180deg, rgba(45, 42, 35, 0.95), rgba(13, 14, 13, 0.98));
+    box-shadow: 0 24px 46px -30px rgba(0, 0, 0, 0.98), 0 1px 0 rgba(255, 246, 230, 0.25) inset;
+  }
+  .nc-mhome__composer .nc-cmdbar__glyph { width: 32px; height: 44px; }
+  .nc-mhome__composer .nc-cmdbar__exec {
+    height: 44px;
+    gap: 4px;
+    padding: 0 7px 0 4px;
+  }
+  .nc-mhome__composer .nc-cmdbar__chip--mode {
+    height: 44px;
+    padding-inline: 8px;
+  }
+  .nc-mhome__composer .nc-cmdbar__voice,
+  .nc-mhome__composer .nc-cmdbar__send {
+    width: 44px;
+    height: 44px;
+  }
+  .nc-root .nc-mobilebar {
+    inset-inline: 12px;
+    bottom: calc(8px + var(--nc-kb) + env(safe-area-inset-bottom, 0px));
+    height: 64px;
+    padding: 4px 6px;
+    border: 1px solid rgba(246, 219, 173, 0.42);
+    border-radius: 22px;
+    background:
+      radial-gradient(120% 150% at 50% -30%, rgba(255, 246, 230, 0.11), transparent 58%),
+      linear-gradient(180deg, rgba(35, 33, 28, 0.94), rgba(10, 11, 10, 0.98));
+    box-shadow: 0 22px 48px -24px rgba(0, 0, 0, 0.98), 0 1px 0 rgba(255, 246, 230, 0.2) inset;
+  }
+  .nc-root .nc-main__scroll { padding-bottom: calc(106px + env(safe-area-inset-bottom, 0px)); }
+  .nc-root .nc-toast { bottom: calc(92px + var(--nc-kb) + env(safe-area-inset-bottom, 0px)); }
+}
+
+@media (max-width: 400px) {
+  .nc-root .nc-mobile-command { padding-inline: 8px; gap: 8px; }
+  .nc-mhome__scope { max-width: 96px; }
+  .nc-mhome__orbit { width: min(118vw, 410px); }
+  .nc-mhome__dept { min-height: 74px; padding: 6px 7px; gap: 5px; }
+  .nc-mhome__dept-icon { width: 34px; height: 34px; }
+  .nc-mhome__dept-icon svg { width: 18px; height: 18px; }
+  .nc-mhome__dept-name { font-size: 11.25px; }
+}
+
+@media (max-width: 335px) {
+  .nc-mhome__head { gap: 4px; }
+  .nc-mhome__scope { max-width: 88px; padding-inline: 7px; }
+  .nc-mhome__depts {
+    grid-template-columns: minmax(0, 1fr) 76px minmax(0, 1fr);
+    grid-auto-rows: minmax(72px, auto);
+    gap: 6px 4px;
+  }
+  .nc-mhome__seat { width: 112px; }
+  .nc-mhome__dept {
+    min-height: 72px;
+    padding: 5px 4px;
+    gap: 3px;
+    border-radius: 21px;
+  }
+  .nc-mhome__dept-icon { width: 30px; height: 30px; }
+  .nc-mhome__dept-name {
+    font-size: 10.5px;
+    line-height: 1.16;
+    text-wrap: pretty;
+  }
+  .nc-mhome__dept-status { font-size: 8.5px; }
+  .nc-root .nc-mobile-command .nc-sum__cell {
+    min-height: 60px;
+    padding: 8px 6px;
+    gap: 5px;
+  }
+  .nc-root .nc-mobile-command .nc-sum__label { font-size: 10.5px; }
+  .nc-root .nc-mobile-command .nc-sum__sub { font-size: 9px; }
+  .nc-root .nc-mobile-command .nc-sum__count { font-size: 20px; }
+  .nc-mhome__composer .nc-cmdbar__shell { column-gap: 4px; padding-inline: 7px; }
+  .nc-mhome__composer .nc-cmdbar__exec {
+    gap: 2px;
+    padding-inline: 3px 5px;
+    font-size: 10px;
+  }
+  .nc-mhome__composer .nc-cmdbar__chip--mode {
+    padding-inline: 6px;
+    font-size: 10.5px;
+  }
+  .nc-root .nc-mobilebar { inset-inline: 8px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   8 · FINAL VISUAL ALIGNMENT — reference proportions without changing scope
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (min-width: 761px) {
+  .nc-root[data-surface="home"] .nc-scene {
+    --nc-pod-w: clamp(274px, 24vw, 346px);
+    --nc-pod-h: 94px;
+    --nc-pod-radius: 47px;
+  }
+  .nc-root[data-surface="home"] .nc-pod__plate {
+    gap: 14px;
+    padding-inline: 18px;
+    border-radius: var(--nc-pod-radius);
+    border-color: rgba(246, 219, 173, 0.58);
+    background:
+      radial-gradient(135% 170% at 50% -32%, rgba(255, 246, 230, 0.2), transparent 56%),
+      linear-gradient(180deg, rgba(55, 51, 43, 0.64), rgba(13, 14, 13, 0.82));
+    backdrop-filter: blur(24px) saturate(1.08);
+  }
+  .nc-root[data-surface="home"] .nc-pod__badge {
+    width: 60px;
+    height: 60px;
+    border-width: 1px;
+    border-color: rgba(255, 231, 190, 0.72);
+    color: #fff0cf;
+  }
+  .nc-root[data-surface="home"] .nc-pod__badge svg { width: 26px; height: 26px; }
+  .nc-root[data-surface="home"] .nc-pod__name {
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.16;
+    color: #fffaf0;
+  }
+  .nc-root[data-surface="home"] .nc-pod__state {
+    font-size: 12px;
+    line-height: 1.25;
+    color: rgba(241, 235, 222, 0.72);
+  }
+
+  .nc-homecomposer .nc-cmdbar__shell {
+    column-gap: 9px;
+    padding: 14px 15px 13px;
+    border-radius: 26px;
+  }
+  .nc-homecomposer .nc-cmdbar__input {
+    min-height: 28px;
+    font-size: 15.5px;
+  }
+  .nc-homecomposer .nc-cmdbar__glyph,
+  .nc-homecomposer .nc-cmdbar__voice,
+  .nc-homecomposer .nc-cmdbar__chip--mode,
+  .nc-homecomposer .nc-cmdbar__exec {
+    min-width: 44px;
+    height: 44px;
+  }
+  .nc-homecomposer .nc-cmdbar__glyph { width: 44px; border-radius: 14px; }
+  .nc-homecomposer .nc-cmdbar__exec { padding-inline: 7px 12px; }
+  .nc-homecomposer .nc-cmdbar__exec img { width: 28px; height: 28px; }
+  .nc-homecomposer .nc-cmdbar__send {
+    width: 52px;
+    height: 52px;
+    border: 1px solid rgba(205, 255, 226, 0.9);
+    background: var(--nc-mint);
+    color: #052018;
+    box-shadow: 0 0 0 3px rgba(178, 255, 211, 0.08), 0 10px 28px -12px rgba(117, 255, 178, 0.78);
+  }
+}
+
+@media (max-width: 760px) {
+  .nc-root .nc-mobile-command {
+    padding-bottom: calc(104px + var(--nc-kb, 0px) + env(safe-area-inset-bottom, 0px));
+  }
+  .nc-mhome__dept {
+    border-radius: 30px;
+    border-color: rgba(246, 219, 173, 0.58);
+  }
+  .nc-mhome__dept-icon {
+    width: 40px;
+    height: 40px;
+    border-color: rgba(255, 231, 190, 0.72);
+    color: #fff0cf;
+  }
+  .nc-mhome__dept-icon svg { width: 20px; height: 20px; }
+  .nc-mhome__dept-name {
+    font-weight: 700;
+    color: #fffaf0;
+  }
+  .nc-mhome__dept-status { color: rgba(241, 235, 222, 0.68); }
+
+  .nc-mhome__composer .nc-cmdbar__shell {
+    padding: 8px 9px 7px;
+    border-radius: 24px;
+  }
+  .nc-mhome__composer .nc-cmdbar__glyph { width: 44px; height: 44px; border-radius: 14px; }
+  .nc-mhome__composer .nc-cmdbar__send {
+    width: 48px;
+    height: 48px;
+    border: 1px solid rgba(205, 255, 226, 0.9);
+    background: var(--nc-mint);
+    color: #052018;
+    box-shadow: 0 0 0 3px rgba(178, 255, 211, 0.08), 0 10px 24px -12px rgba(117, 255, 178, 0.78);
+  }
+  .nc-homecomposer .nc-cmdbar__send:disabled {
+    background: rgba(178, 255, 211, 0.72);
+    border-color: rgba(225, 255, 237, 0.88);
+    color: rgba(5, 32, 24, 0.88);
+    box-shadow: 0 0 0 3px rgba(178, 255, 211, 0.06), 0 8px 22px -13px rgba(117, 255, 178, 0.68);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 760px) and (min-height: 800px) {
+  .nc-root .nc-mobile-command {
+    gap: clamp(11px, 1.45dvh, 13px);
+    padding-bottom: calc(84px + var(--nc-kb, 0px) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-width: 400px) {
+  .nc-mhome__dept { border-radius: 28px; }
+  .nc-mhome__dept-icon { width: 36px; height: 36px; }
+  .nc-mhome__dept-icon svg { width: 19px; height: 19px; }
+}
+
+@media (max-width: 335px) {
+  .nc-mhome__dept { border-radius: 26px; }
+  .nc-mhome__dept-icon { width: 30px; height: 30px; }
+  .nc-mhome__dept-icon svg { width: 17px; height: 17px; }
+  .nc-mhome__composer .nc-cmdbar__send { width: 44px; height: 44px; }
+}
+
+.nc-homecomposer .nc-cmdbar__shell { direction: ltr; }
+.nc-root[dir="rtl"] .nc-homecomposer .nc-cmdbar__input {
+  direction: rtl;
+  text-align: right;
+}
+.nc-homecomposer .nc-cmdbar__send:disabled {
+  background: rgba(178, 255, 211, 0.72);
+  border-color: rgba(225, 255, 237, 0.88);
+  color: rgba(5, 32, 24, 0.88);
+  box-shadow: 0 0 0 3px rgba(178, 255, 211, 0.08), 0 10px 26px -13px rgba(117, 255, 178, 0.72);
+  opacity: 1;
+}
+.nc-root[data-surface="home"] .nc-cmdbar[data-home="true"] .nc-cmdbar__send svg {
+  transform: rotate(-90deg);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   10 · POLISH PASS — crisp type, honest glass, refined controls (2026-10-29)
+   ───────────────────────────────────────────────────────────────────────────
+   The complaint this answers is specific: the plate names read soft, because
+   two things sat BETWEEN the words and the reader — a milky sheen across the
+   whole plate (`.nc-pod__plate::after`) and an amber wash in the plate's own
+   background. Type on tinted glass at 60% opacity never looks sharp, however
+   heavy you make it.
+
+   So this pass does not "add glow". It REMOVES the two veils, drops the plate
+   to near-black glass, and puts the warmth where it belongs: one hairline of
+   champagne on the rim, one on the identity disc. The rules below are additive
+   and home-scoped, and they come last, so nothing earlier in the cascade is
+   rewritten — only overridden, and only on `/command`.
+
+   Controls: the plate and the demo pill share one radius, one hairline and one
+   focus ring, so the composition reads as a system rather than as six cards
+   that happen to sit near each other.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Type: the words sit on glass, not under it ─────────────────────────── */
+.nc-root[data-surface="home"] .nc-pod__name {
+  color: #fcf7ed;
+  font-weight: 640;
+  letter-spacing: 0.002em;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  text-shadow: none;
+}
+.nc-root[data-surface="home"] .nc-pod__state {
+  color: rgba(240, 234, 222, 0.6);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.nc-root[data-surface="home"] .nc-pod__state-label { font-weight: 600; }
+.nc-root[data-surface="home"] .nc-pod__led {
+  box-shadow:
+    0 0 0 1px rgba(8, 8, 7, 0.55),
+    0 0 8px -1px currentColor;
+}
+.nc-root[data-surface="home"] .nc-core__title {
+  color: #fcf7ed;
+  font-weight: 560;
+  letter-spacing: 0.40em;
+  text-indent: 0.40em;
+}
+.nc-root[data-surface="home"] .nc-core__role {
+  color: rgba(246, 219, 173, 0.78);
+  letter-spacing: 0.06em;
+}
+
+/* ── The plate: near-black glass, one champagne rim, no wash behind type ── */
+.nc-root[data-surface="home"] .nc-pod__plate {
+  border: 1px solid rgba(246, 219, 173, 0.3);
+  background:
+    radial-gradient(120% 150% at 50% -34%, rgba(255, 246, 230, 0.08), transparent 62%),
+    linear-gradient(180deg, rgba(42, 38, 32, 0.9), rgba(16, 16, 15, 0.94) 52%, rgba(9, 10, 9, 0.96));
+  box-shadow:
+    0 26px 54px -32px rgba(0, 0, 0, 0.94),
+    0 1px 0 rgba(255, 248, 235, 0.2) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.6) inset;
+  backdrop-filter: blur(18px) saturate(1.06);
+  -webkit-backdrop-filter: blur(18px) saturate(1.06);
+}
+/* The sheen becomes a rim light: 1px at the top edge, gone by 24%, so it can
+   never sit over a glyph. */
+.nc-root[data-surface="home"] .nc-pod__plate::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 248, 235, 0.2),
+    rgba(255, 248, 235, 0.05) 16%,
+    rgba(255, 248, 235, 0.014) 46%,
+    rgba(255, 248, 235, 0) 72%
+  );
+  pointer-events: none;
+}
+.nc-root[data-surface="home"] .nc-pod__badge {
+  border: 1px solid rgba(246, 219, 173, 0.4);
+  background:
+    radial-gradient(circle at 50% 14%, rgba(255, 246, 230, 0.16), transparent 66%),
+    linear-gradient(180deg, rgba(44, 40, 34, 0.98), rgba(14, 14, 13, 0.98));
+  color: #ffeac4;
+  box-shadow:
+    0 0 0 1px rgba(255, 246, 230, 0.05) inset,
+    0 1px 0 rgba(255, 248, 235, 0.18) inset,
+    0 12px 22px -16px rgba(0, 0, 0, 0.92);
+}
+.nc-root[data-surface="home"] .nc-pod[data-hovered="true"] .nc-pod__badge,
+.nc-root[data-surface="home"] .nc-pod[data-selected="true"] .nc-pod__badge {
+  border-color: rgba(255, 231, 190, 0.62);
+  color: #fff6e2;
+  box-shadow:
+    0 1px 0 rgba(255, 248, 235, 0.18) inset,
+    0 0 22px -12px rgba(243, 173, 73, 0.6);
+}
+
+/* ── States: hover lifts, selection is a ring, focus is never a colour ─── */
+.nc-root[data-surface="home"] .nc-pod__plate:hover,
+.nc-root[data-surface="home"] .nc-pod[data-hovered="true"] .nc-pod__plate {
+  border-color: rgba(246, 219, 173, 0.52);
+  background:
+    radial-gradient(120% 150% at 50% -34%, rgba(255, 246, 230, 0.1), transparent 62%),
+    linear-gradient(180deg, rgba(32, 30, 26, 0.92), rgba(13, 14, 13, 0.95));
+  box-shadow:
+    0 36px 68px -40px rgba(0, 0, 0, 0.98),
+    0 1px 0 rgba(255, 248, 235, 0.22) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.55) inset;
+}
+.nc-root[data-surface="home"] .nc-pod[data-selected="true"] .nc-pod__plate {
+  border-color: rgba(255, 231, 190, 0.72);
+  box-shadow:
+    0 0 0 1px rgba(255, 231, 190, 0.2),
+    0 36px 68px -40px rgba(0, 0, 0, 0.98),
+    0 1px 0 rgba(255, 248, 235, 0.22) inset;
+}
+.nc-root[data-surface="home"] .nc-pod__plate:focus-visible,
+.nc-root[data-surface="home"] .nc-handoff-pill:focus-visible {
+  outline: 2px solid var(--nc-lime);
+  outline-offset: 3px;
+}
+
+/* ── The demo pill: a control, not a badge ─────────────────────────────── */
+.nc-root[data-surface="home"] .nc-handoff-pill {
+  min-height: 40px;
+  padding: 0 15px;
+  gap: 9px;
+  border: 1px solid rgba(174, 232, 199, 0.28);
+  background: linear-gradient(180deg, rgba(17, 26, 21, 0.9), rgba(9, 13, 11, 0.94));
+  box-shadow:
+    0 18px 40px -26px rgba(0, 0, 0, 0.95),
+    0 1px 0 rgba(255, 255, 255, 0.07) inset;
+  font-size: 12px;
+  letter-spacing: 0.012em;
+}
+.nc-root[data-surface="home"] .nc-handoff-pill:hover {
+  border-color: rgba(174, 232, 199, 0.5);
+  background: linear-gradient(180deg, rgba(21, 32, 26, 0.94), rgba(11, 16, 13, 0.96));
+}
+.nc-root[data-surface="home"] .nc-handoff-pill__label { font-weight: 600; }
+.nc-root[data-surface="home"] .nc-handoff-pill__pulse { width: 16px; height: 16px; }
+.nc-root[data-surface="home"] .nc-handoff-pill__pulse i { width: 4px; height: 4px; }
+.nc-root[data-surface="home"] .nc-handoff-pill__tag {
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.11em;
+  color: rgba(174, 232, 199, 0.86);
+  border-inline-start-color: rgba(174, 232, 199, 0.22);
+  padding-inline-start: 9px;
+}
+.nc-root[data-surface="home"] .nc-handoff-pill__chev {
+  color: rgba(174, 232, 199, 0.7);
+  transition: transform var(--nc-dur-quick) var(--nc-ease-standard);
+}
+.nc-root[data-surface="home"] .nc-handoff-pill:hover .nc-handoff-pill__chev {
+  transform: translateX(2px);
+}
+
+/* ── The orbit, read as geometry rather than as noise ──────────────────── */
+.nc-root[data-surface="home"] .nc-orbit__ring[data-ring="outer"] { border-color: rgba(246, 219, 173, 0.17); }
+.nc-root[data-surface="home"] .nc-orbit__ring[data-ring="mid"] { border-color: rgba(246, 219, 173, 0.23); }
+.nc-root[data-surface="home"] .nc-orbit__ring[data-ring="inner"] { border-color: rgba(246, 219, 173, 0.29); }
+
+/* ── Desktop proportions: a smaller disc leaves the name its own line ──── */
+@media (min-width: 761px) {
+  .nc-root[data-surface="home"] .nc-pod__badge {
+    width: 52px;
+    height: 52px;
+  }
+  .nc-root[data-surface="home"] .nc-pod__badge svg { width: 22px; height: 22px; }
+  .nc-root[data-surface="home"] .nc-pod__name {
+    font-size: 17px;
+    font-weight: 640;
+    line-height: 1.15;
+    letter-spacing: 0;
+  }
+  .nc-root[data-surface="home"] .nc-pod__state { font-size: 10.5px; }
+  .nc-root[data-surface="home"] .nc-pod__plate { gap: 15px; padding-inline: 19px; }
+}
+@media (max-width: 1240px) {
+  .nc-root[data-surface="home"] .nc-pod__badge { width: 42px; height: 42px; }
+  .nc-root[data-surface="home"] .nc-pod__badge svg { width: 19px; height: 19px; }
+}
+@media (max-width: 1000px) {
+  .nc-root[data-surface="home"] .nc-pod__badge { width: 38px; height: 38px; }
+  .nc-root[data-surface="home"] .nc-pod__badge svg { width: 17px; height: 17px; }
+  .nc-root[data-surface="home"] .nc-pod__plate { gap: 11px; padding-inline: 14px; }
+}
+
+/* The phone keeps its 44px touch target: this file's base pill rule comes last
+   and would otherwise shrink it below the size the phone layout chose. */
+@media (max-width: 760px) {
+  .nc-root[data-surface="home"] .nc-handoff-pill {
+    min-height: 44px;
+    font-size: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nc-root[data-surface="home"] .nc-handoff-pill__chev { transition: none; }
+}

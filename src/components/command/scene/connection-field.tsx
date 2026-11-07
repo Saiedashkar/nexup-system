@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DEPARTMENTS, type DepartmentId } from "../state/organization-model";
-import { corePlacement, podPlacement, type CameraState, type Placement } from "../state/spatial-camera";
+import { corePlacement, podPlacement, type Placement } from "../state/spatial-camera";
 import { isWorkingStatus, needsHumanStatus, type OrganizationVisualState } from "../state/visual-state";
+import { usePrefersReducedMotion } from "../state/use-reduced-motion";
 import { cssVars } from "../ui/css-vars";
 
 /**
@@ -105,14 +106,17 @@ function rimPoint(center: Point, toward: Point, radius: number, gap = 6): Point 
 export function ConnectionField({
   visual,
   hovered,
-  focused,
-  camera,
+  selected,
+  demoHandoff,
 }: {
   visual: OrganizationVisualState;
   hovered: DepartmentId | null;
-  focused: DepartmentId | null;
-  camera: CameraState;
+  /** The space the contextual panel is reading. Highlights its own route. */
+  selected: DepartmentId | null;
+  /** The one explicit demo collaboration drawn on the home. */
+  demoHandoff?: { from: DepartmentId; to: DepartmentId } | null;
 }) {
+  const reducedMotion = usePrefersReducedMotion();
   const ref = useRef<SVGSVGElement | null>(null);
   const [metrics, setMetrics] = useState<Metrics>(DEFAULT_METRICS);
 
@@ -162,20 +166,17 @@ export function ConnectionField({
       cancelAnimationFrame(raf);
       window.clearTimeout(settle);
     };
-  }, [focused]);
+  }, [selected]);
 
   const { w, h, coreSize, pods } = metrics;
   const toPx = (place: Placement): Point => ({ x: (place.x / 100) * w, y: (place.y / 100) * h });
   const placementFor = (id: DepartmentId): Placement =>
     podPlacement({
-      camera,
       department: DEPARTMENTS.find((department) => department.id === id)!,
-      isFocused: focused === id,
       isHovered: hovered === id,
-      hasFocus: Boolean(focused),
     });
 
-  const corePx = toPx(corePlacement(camera));
+  const corePx = toPx(corePlacement());
   const coreRadius = Math.max(26, coreSize * 0.47);
 
   /* A space is "lit" when it is doing something a human should know about. */
@@ -185,9 +186,9 @@ export function ConnectionField({
     return isWorkingStatus(node.status) || needsHumanStatus(node.status) || node.needsApproval === true;
   };
 
-  const quiet = Boolean(hovered || focused);
-  /* The open space: what is entered wins, otherwise what is hovered. */
-  const open = focused ?? hovered;
+  const quiet = Boolean(hovered || selected);
+  /* The open space: what is selected wins, otherwise what is hovered. */
+  const open = selected ?? hovered;
 
   const routes = DEPARTMENTS.map((department) => {
     const place = placementFor(department.id);
@@ -195,12 +196,16 @@ export function ConnectionField({
     const box = pods[department.id] ?? FALLBACK_POD;
     const isLit = lit(department.id);
     const isHovered = hovered === department.id;
-    const isFocused = focused === department.id;
-    const isReceded = quiet && !isHovered && !isFocused && !isLit;
-    const state = isFocused ? "focus" : isHovered ? "hover" : isLit ? "live" : "idle";
+    const isSelected = selected === department.id;
+    const isReceded = quiet && !isHovered && !isSelected && !isLit;
+    const state = isSelected ? "focus" : isHovered ? "hover" : isLit ? "live" : "idle";
     const start = rimPoint(corePx, center, coreRadius);
     const end = rectEdge(center, corePx, box);
-    const bow = state === "idle" ? 0.1 : 0.16;
+    /* A restrained bow. At rest the route reads as a straight, quiet line
+       between two fixed points — the previous 0.10–0.16 made every idle route
+       curve like a data visualisation, which is exactly the decorative-graph
+       reading the direction asks us to drop. */
+    const bow = state === "idle" ? 0.04 : 0.08;
     return {
       department,
       state,
@@ -211,7 +216,7 @@ export function ConnectionField({
     };
   });
 
-  type Segment = { id: string; from: Placement; to: Placement; d: string };
+  type Segment = { id: string; from: Placement; to: Placement; d: string; start?: Point };
   const handoffs: Segment[] = visual.handoffs.map((handoff) => {
     /* Handoff signals carry department ids as plain strings. */
     const fromId = handoff.from as DepartmentId;
@@ -229,6 +234,29 @@ export function ConnectionField({
     );
     return { id: handoff.id, from: fromPlace, to: toPlace, d };
   });
+
+  /* THE DEMO COLLABORATION. Clients & Projects → Creative & Production, drawn
+     from the same placements as the two plates. It is separate from
+     `visual.handoffs` on purpose: the running scenario may have its own handoff,
+     and the home's one explainable demo must not depend on which scenario is
+     selected in the Motion Lab. */
+  const demo = demoHandoff
+    ? (() => {
+        const fromPlace = placementFor(demoHandoff.from);
+        const toPlace = placementFor(demoHandoff.to);
+        const fromBox = pods[demoHandoff.from] ?? FALLBACK_POD;
+        const toBox = pods[demoHandoff.to] ?? FALLBACK_POD;
+        const start = rectEdge(toPx(fromPlace), toPx(toPlace), fromBox, 5);
+        const end = rectEdge(toPx(toPlace), toPx(fromPlace), toBox, 5);
+        return {
+          id: "nc-demo-client-creative",
+          from: fromPlace,
+          to: toPlace,
+          start,
+          d: arcPath(start, end, -0.14),
+        };
+      })()
+    : null;
 
   return (
     <>
@@ -273,7 +301,32 @@ export function ConnectionField({
               <path className="nc-route__flow" d={handoff.d} />
             </g>
           ))}
+
+          {demo && (
+            <g className="nc-route nc-route--demo" data-state="demo">
+              <path className="nc-route__glow" d={demo.d} filter="url(#nc-route-glow)" />
+              <path className="nc-route__line" d={demo.d} />
+              <path className="nc-route__flow" d={demo.d} />
+            </g>
+          )}
         </g>
+
+        {/* ONE slow signal on the demo route. It is a visual aid, not a claim
+            that anything is moving; the pill beside the composition opens the
+            explanation. Reduced motion keeps a still marker instead. */}
+        {demo &&
+          (reducedMotion ? (
+            <circle
+              className="nc-demo-signal nc-demo-signal--still"
+              cx={demo.start?.x ?? 0}
+              cy={demo.start?.y ?? 0}
+              r={3.2}
+            />
+          ) : (
+            <circle className="nc-demo-signal" r={3.6}>
+              <animateMotion dur="7.4s" repeatCount="indefinite" path={demo.d} />
+            </circle>
+          ))}
       </svg>
 
       {/* Energy travelling along the connection — the actual "data signal". */}

@@ -12,18 +12,22 @@
  * enlarged card". Scaling a canvas cannot communicate entering a place, because
  * everything else on screen stays exactly where it was, only smaller.
  *
- * So the camera is now a fixed frame and the *room* re-stages around it:
+ * So the camera is now a fixed frame and the *room* re-stages around it.
  *
- *   · the focused space is re-placed on the workspace anchor, and takes a much
- *     larger physical form (the DepartmentPod changes shape, not just size);
- *   · the Intelligence Core relocates to its own anchor and STAYS VISIBLE, so
- *     the environment still has a centre of gravity;
- *   · every other space drifts outward and falls deeper into the room, which is
- *     how "unrelated work recedes" reads as architecture rather than as a
- *     dimmed card;
- *   · the camera itself holds still. `scale` stays in the contract because a
- *     later phase (mission level, war room) will use it — but the level change
- *     no longer depends on it.
+ * THE CALM-OVERVIEW PASS TAKES THE RE-STAGING OUT
+ * Re-staging existed to serve "entering a space" — the focused pod became a
+ * large internal workspace (a mode rail and three panels) and everything else
+ * drifted outward and fell back. The direction removed that: nodes carry an
+ * icon, a name and one status, and DETAILS APPEAR IN A CONTEXTUAL PANEL instead
+ * of inside the node. With no in-node workspace to make room for, relocating
+ * seven objects to say "selected" would be motion with no meaning.
+ *
+ * So selecting a space is now a HIGHLIGHT, not a move: every node keeps the
+ * position the organization configuration gave it, the camera never leaves the
+ * overview frame, and `podPlacement` varies only by hover depth. The contract
+ * (`CameraState`, `Placement`) is unchanged, so nothing downstream needed a
+ * different shape — and `scale` stays because a later phase (mission level, war
+ * room) will use it.
  *
  * Everything here is pure arithmetic on percentages and px. No DOM, no React.
  */
@@ -35,15 +39,11 @@ export type SceneLevel = "organization" | "department";
 
 export type CameraState = {
   level: SceneLevel;
-  /** Uniform scale of the canvas. 1 at both levels: re-staging carries focus. */
+  /** Uniform scale of the canvas. 1 at the organization level. */
   scale: number;
   /** Canvas translation, in percent of the stage (matches the CSS transform). */
   x: number;
   y: number;
-  /** How far the focused department travels forward, in px. */
-  focusDepth: number;
-  /** How far the remaining departments recede, in px (negative). */
-  recedeDepth: number;
 };
 
 /**
@@ -53,26 +53,11 @@ export type CameraState = {
 export const CAMERA_TUNING = {
   /** Overview: the scene sits still and level. */
   overview: { scale: 1, x: 0, y: 0 },
-  /** Focus: the frame does not move. The room rearranges inside it. */
-  focus: { scale: 1, x: 0, y: 0 },
-  /** Where the room re-stages its pieces when a space is entered. */
-  placement: {
-    /** The workspace anchor — where the entered space is re-placed, in percent. */
-    workspace: { x: 64, y: 52 },
-    /** Where the core relocates so it stays an anchor without owning the frame. */
-    core: { x: 17, y: 32 },
-    /**
-     * Receded spaces drift outward by this share of their distance from the
-     * core. Small on purpose: the room must still read as one place, so the
-     * recede is a lean, not an evacuation.
-     */
-    spread: 0.18,
-  },
+  /** Selected: the frame does not move either — selection is a highlight. */
+  selected: { scale: 1, x: 0, y: 0 },
   /** Depth, in px. Positive is toward the viewer. */
   depth: {
-    /** Absolute depth of the entered space, so every workspace is the same size. */
-    focus: 110,
-    recede: -120,
+    /** How far a hovered space leans toward the reader. The only motion left. */
     hover: 46,
   },
 } as const;
@@ -83,26 +68,15 @@ export const OVERVIEW_CAMERA: CameraState = {
   scale: CAMERA_TUNING.overview.scale,
   x: CAMERA_TUNING.overview.x,
   y: CAMERA_TUNING.overview.y,
-  focusDepth: CAMERA_TUNING.depth.focus,
-  recedeDepth: CAMERA_TUNING.depth.recede,
 };
 
 /**
- * Solve the camera for the current level. The frame is identical at both
- * levels — see the header — so this returns overview values while still
- * reporting the level, which the room layers read to change their own light.
+ * The camera at rest. Kept as a function because every scene layer already calls
+ * it, and because a later phase (mission level, war room) will genuinely change
+ * the frame — at which point this is the one place that decides how.
  */
-export function cameraFor(focused: Department | null): CameraState {
-  if (!focused) return OVERVIEW_CAMERA;
-  const { focus } = CAMERA_TUNING;
-  return {
-    level: "department",
-    scale: focus.scale,
-    x: focus.x,
-    y: focus.y,
-    focusDepth: CAMERA_TUNING.depth.focus,
-    recedeDepth: CAMERA_TUNING.depth.recede,
-  };
+export function cameraFor(): CameraState {
+  return OVERVIEW_CAMERA;
 }
 
 /** The canvas transform for a camera state. `transform-origin` is 0 0 in CSS. */
@@ -113,53 +87,30 @@ export function cameraTransform(camera: CameraState): string {
 /** Percent-of-stage position for any node. */
 export type Placement = { x: number; y: number; depth: number };
 
-/** Where the Intelligence Core stands right now. It only ever relocates. */
-export function corePlacement(camera: CameraState): Placement {
-  if (camera.level === "organization") {
-    return { x: EXECUTIVE.x, y: EXECUTIVE.y, depth: EXECUTIVE.depth };
-  }
-  const { core } = CAMERA_TUNING.placement;
-  return { x: core.x, y: core.y, depth: EXECUTIVE.depth };
+/** Where the Intelligence Core stands. Fixed — the entry point is the centre. */
+export function corePlacement(): Placement {
+  return { x: EXECUTIVE.x, y: EXECUTIVE.y, depth: EXECUTIVE.depth };
 }
 
 /**
- * Where a space stands right now. This is the single place that decides whether
- * a node is the workspace, receded, hovered or at rest — hover wins over
- * recede, so hovering a background space still feels responsive without
- * breaking the focus hierarchy.
+ * Where a space stands. The configuration's own coordinates, plus the one piece
+ * of motion the calm overview keeps: a hovered space leans toward the reader.
+ *
+ * SELECTION DELIBERATELY DOES NOT MOVE A NODE. It used to — the selected pod
+ * became a large internal workspace and the rest of the room drifted outward to
+ * make room for it. Details now live in the contextual panel, so there is no
+ * workspace inside the node to make room for, and moving seven objects to say
+ * "selected" would be motion without meaning. The rail reads the selection.
  */
 export function podPlacement({
-  camera,
   department,
-  isFocused,
   isHovered,
-  hasFocus,
 }: {
-  camera: CameraState;
   department: Department;
-  isFocused: boolean;
   isHovered: boolean;
-  hasFocus: boolean;
 }): Placement {
-  if (isFocused) {
-    const { workspace } = CAMERA_TUNING.placement;
-    return { x: workspace.x, y: workspace.y, depth: CAMERA_TUNING.depth.focus };
-  }
-
-  if (hasFocus) {
-    const { spread } = CAMERA_TUNING.placement;
-    return {
-      x: department.x + (department.x - EXECUTIVE.x) * spread,
-      y: department.y + (department.y - EXECUTIVE.y) * spread,
-      depth: department.depth + camera.recedeDepth,
-    };
-  }
-
-  if (isHovered) {
-    return { x: department.x, y: department.y, depth: department.depth + CAMERA_TUNING.depth.hover };
-  }
-
-  return { x: department.x, y: department.y, depth: department.depth };
+  const depth = department.depth + (isHovered ? CAMERA_TUNING.depth.hover : 0);
+  return { x: department.x, y: department.y, depth };
 }
 
 /**

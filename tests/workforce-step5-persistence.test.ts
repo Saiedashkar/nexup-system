@@ -23,6 +23,12 @@ import {
 } from "@/modules/workforce/persistence";
 import { DeterministicHermesTransport } from "@/modules/workforce/runtimes/hermes/testing/deterministic-transport";
 
+import type { BudgetGovernor } from "@/modules/ai-workforce/policies/budget-governor";
+import {
+  createExecutionAuthority,
+  type ExecutionAuthority,
+} from "@/modules/workforce/execution/execution-authority";
+
 /**
  * STEP 5/8 — DURABILITY, against a real PostgreSQL.
  *
@@ -64,6 +70,9 @@ const MIGRATIONS = [
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_1A/migration.sql",
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_1B/migration.sql",
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_2/migration.sql",
+  // Fifth review: the durable record repository selects `recoverySweptAt`, which
+  // PHASE_5 adds to `ai_execution_records` (created by PHASE_2 above).
+  "prisma/proposed-migrations/AI_WORKFORCE_PHASE_5/migration.sql",
 ];
 
 const FOUNDER = "actor_founder";
@@ -107,6 +116,41 @@ function hermesConfig(): HermesRuntimeConfig {
   };
 }
 
+/**
+ * The explicit test-only budget governor, per
+ * `docs/AI_WORKFORCE_STEP5A_REMEDIATION_DESIGN.md` §0.2.
+ *
+ * The leg below is a REAL Hermes adapter over a deterministic transport, and a
+ * RUNTIME leg is always `VARIABLE_PROVIDER_COST` — refused by the shipped DENY
+ * governor, which the 5A-4 suite proves. The shipped default is untouched; this
+ * proof states its own governor so the DURABLE lifecycle can be exercised.
+ */
+const persistenceTestGovernor: BudgetGovernor = {
+  policyRef: "test.step5-persistence.allow",
+  async evaluate(input) {
+    return {
+      allowed: true,
+      reason: "ALLOWED_ATTESTED_INCLUDED_ROUTE",
+      policyRef: "test.step5-persistence.allow",
+      spend: input.spend,
+    };
+  },
+};
+
+/**
+ * The canonical business the proof's mission names (`biz_nexup`), resolved to
+ * the slug the foreground authority reaches (`nexup`).
+ *
+ * The dispatch preflight FAILS CLOSED on a mission that names a business it
+ * cannot verify (Step 5A-4 correction, P1-3), so a composition that intends to
+ * dispatch MUST state its registry — leaving it out is a refusal, not a skip.
+ */
+const persistenceBusinessRegistry = {
+  async resolve(reference: string) {
+    return reference === "biz_nexup" ? { id: "biz_nexup", slug: "nexup" } : null;
+  },
+};
+
 describeIfDatabase("STEP 5 — the lifecycle survives a real database and a restart", () => {
   const handles: WorkforcePrismaHandle[] = [];
 
@@ -116,6 +160,8 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
     actorId: string;
     runtimeId: string;
     handle: WorkforcePrismaHandle;
+    /** This process's OWN authenticated authority, as a route would build it. */
+    authority: ExecutionAuthority;
   };
 
   /**
@@ -144,12 +190,29 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
     const built = await bootstrapStrategyAnalyst(domain, { runtime: adapter });
     if (!built.enabled) throw new Error(built.reason);
 
+    const authority = createExecutionAuthority({
+      userId: "user_operator",
+      actorId: "actor_human_operator",
+      actorSlug: "human-operator",
+      actorType: "HUMAN",
+      permissionTokens: ["aiworkforce.access"],
+      accessibleBusinessSlugs: ["nexup"],
+      isSuperAdmin: false,
+      hasOfficeFinanceFull: false,
+      requestedAt: "2026-08-01T00:00:00.000Z",
+    });
+
     return {
       domain,
       handle,
       actorId: built.actorId,
       runtimeId: built.runtimeId,
-      orchestrator: createMissionOrchestrator(domain, { defaultReviewerActorId: FOUNDER }),
+      authority,
+      orchestrator: createMissionOrchestrator(domain, {
+        defaultReviewerActorId: FOUNDER,
+        budget: persistenceTestGovernor,
+        businesses: persistenceBusinessRegistry,
+      }),
     };
   }
 
@@ -253,14 +316,14 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
         requiredCapabilityVersion: STRATEGY_INTERNAL_BRIEF_CAPABILITY_VERSION,
       },
-    ]);
+    ], { authority: first.authority });
     expect(planned.mission.state).toBe("RUNNING");
     const task = taskByTitle(planned.tasks, "durable-brief");
     expect(task.state).toBe("RUNNING");
     expect(task.executionHandleId).toBeTruthy();
 
     // The agent succeeds; a human still has to accept it.
-    const parked = await first.orchestrator.settleTask(mission.id, task.id);
+    const parked = await first.orchestrator.settleTask(mission.id, task.id, { authority: first.authority });
     expect(parked.state).toBe("REVIEW");
     const [pending] = await first.domain.reviews.forTask(task.id);
     expect(pending.state).toBe("PENDING");
@@ -306,6 +369,7 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
       decision: "APPROVED",
       decidedBy: FOUNDER,
       note: "accepted after restart",
+      authority: second.authority,
     });
     expect(completed.mission.state).toBe("COMPLETED");
     expect(completed.mission.finishedAt).toBeTruthy();
@@ -387,7 +451,7 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
         assignedActorId: other.actorId,
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
       },
-    ]);
+    ], { authority: other.authority });
     const advanced = await other.domain.missions.require(mission.id);
     expect(advanced.state).not.toBe(stale!.state);
 
@@ -416,13 +480,13 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
         assignedActorId: first.actorId,
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
       },
-    ]);
+    ], { authority: first.authority });
     const task = taskByTitle(planned.tasks, "one-decision-task");
-    await first.orchestrator.settleTask(mission.id, task.id);
+    await first.orchestrator.settleTask(mission.id, task.id, { authority: first.authority });
     const [review] = await first.domain.reviews.forTask(task.id);
 
     // Process A decides.
-    await first.orchestrator.decide(review.id, { decision: "APPROVED", decidedBy: FOUNDER });
+    await first.orchestrator.decide(review.id, { decision: "APPROVED", decidedBy: FOUNDER, authority: first.authority });
 
     // Process B, holding the same PENDING snapshot, tries to decide again: the
     // compare-and-set loses and no overwrite happens.
@@ -439,7 +503,7 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
 
     // ...and the service reports it as already decided, not as an error state.
     await expect(
-      first.orchestrator.decide(review.id, { decision: "REJECTED", decidedBy: FOUNDER }),
+      first.orchestrator.decide(review.id, { decision: "REJECTED", decidedBy: FOUNDER, authority: first.authority }),
     ).rejects.toThrow(/already decided/i);
   }, 120_000);
 
@@ -459,18 +523,18 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
         assignedActorId: first.actorId,
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
       },
-    ]);
+    ], { authority: first.authority });
     const task = taskByTitle(planned.tasks, "agent-cannot-approve");
-    await first.orchestrator.settleTask(mission.id, task.id);
+    await first.orchestrator.settleTask(mission.id, task.id, { authority: first.authority });
     const [review] = await first.domain.reviews.forTask(task.id);
 
     await expect(
-      first.orchestrator.decide(review.id, { decision: "APPROVED", decidedBy: first.actorId }),
+      first.orchestrator.decide(review.id, { decision: "APPROVED", decidedBy: first.actorId, authority: first.authority }),
     ).rejects.toThrow(/human authority/i);
 
     // Still PENDING, and still decidable by the person who owns it.
     expect((await first.domain.reviews.get(review.id))!.state).toBe("PENDING");
-    await first.orchestrator.decide(review.id, { decision: "APPROVED", decidedBy: FOUNDER });
+    await first.orchestrator.decide(review.id, { decision: "APPROVED", decidedBy: FOUNDER, authority: first.authority });
   }, 120_000);
 
   it("keeps both attempts of a retried task, with their own keys and audit trails", async () => {
@@ -489,24 +553,25 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
         assignedActorId: first.actorId,
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
       },
-    ]);
+    ], { authority: first.authority });
     const task = taskByTitle(planned.tasks, "revised-twice");
 
-    await first.orchestrator.settleTask(mission.id, task.id);
+    await first.orchestrator.settleTask(mission.id, task.id, { authority: first.authority });
     const [firstReview] = await first.domain.reviews.forTask(task.id);
     const revised = await first.orchestrator.decide(firstReview.id, {
       decision: "NEEDS_REVISION",
       decidedBy: FOUNDER,
       note: "sharpen it",
+      authority: first.authority,
     });
     expect(taskByTitle(revised.tasks, "revised-twice").attempt).toBe(2);
 
     // The revision put the task back to RUNNING on attempt 2; settle it and
     // accept THAT attempt, so the second attempt ends COMPLETED.
-    await first.orchestrator.settleTask(mission.id, task.id);
+    await first.orchestrator.settleTask(mission.id, task.id, { authority: first.authority });
     const [fresh] = (await first.domain.reviews.forTask(task.id)).filter((entry) => entry.state === "PENDING");
     expect(fresh).toBeTruthy();
-    await first.orchestrator.decide(fresh.id, { decision: "APPROVED", decidedBy: FOUNDER });
+    await first.orchestrator.decide(fresh.id, { decision: "APPROVED", decidedBy: FOUNDER, authority: first.authority });
 
     // A fresh process sees BOTH attempts, ordered, each with its own key.
     const second = await boot("r2");
@@ -543,11 +608,11 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
         maxAttempts: 2,
       },
-    ]);
+    ], { authority: first.authority });
     const task = taskByTitle(planned.tasks, "always-fails");
 
     // Attempt 1 fails RETRYABLY: the task goes back to READY, it does not fail yet.
-    const afterFirst = await first.orchestrator.settleTask(mission.id, task.id);
+    const afterFirst = await first.orchestrator.settleTask(mission.id, task.id, { authority: first.authority });
     expect(afterFirst.state).toBe("READY");
     const firstAttempts = await first.domain.executionRecords.listForTask(task.id);
     expect(firstAttempts.map((record) => record.attempt)).toEqual([1]);
@@ -556,10 +621,10 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
     expect(firstAttempts[0].error?.retryable).toBe(true);
 
     // The stepper re-dispatches it; attempt 2 exhausts the allowance.
-    const advanced = await first.orchestrator.advance(mission.id);
+    const advanced = await first.orchestrator.advance(mission.id, { authority: first.authority });
     const retried = taskByTitle(advanced.tasks, "always-fails");
     expect(retried.attempt).toBe(2);
-    const afterSecond = await first.orchestrator.settleTask(mission.id, retried.id);
+    const afterSecond = await first.orchestrator.settleTask(mission.id, retried.id, { authority: first.authority });
     expect(afterSecond.state).toBe("FAILED");
 
     // Everything above comes back from processes that never saw any of it.
@@ -601,12 +666,14 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
         assignedActorId: first.actorId,
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
       },
-    ]);
+    ], { authority: first.authority });
     const task = taskByTitle(planned.tasks, "long-running");
     expect(task.state).toBe("RUNNING");
     expect(task.executionHandleId).toBeTruthy();
 
-    const cancelled = await first.orchestrator.cancelMission(mission.id, "test cancellation");
+    const cancelled = await first.orchestrator.cancelMission(mission.id, "test cancellation", {
+      authority: first.authority,
+    });
     expect(cancelled.mission.state).toBe("CANCELLED");
     expect(cancelled.tasks[0].state).toBe("CANCELLED");
 
@@ -672,7 +739,7 @@ describeIfDatabase("STEP 5 — the lifecycle survives a real database and a rest
         assignedActorId: first.actorId,
         requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
       },
-    ]);
+    ], { authority: first.authority });
     const existing = planned.tasks[0];
     await expect(
       repositories.tasks.insert({

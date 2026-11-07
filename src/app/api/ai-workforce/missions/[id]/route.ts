@@ -70,10 +70,13 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       typeof body?.waitTimeoutMs === "number" && body.waitTimeoutMs > 0 ? { waitTimeoutMs: body.waitTimeoutMs } : {};
     // startNext:false reconciles the mission WITHOUT dispatching, for a caller
     // that wants to look before it runs anything.
+    // `authority` is forwarded to the Capability Execution Service: a drain that
+    // starts an attempt needs the SAME server-created authority the caller was
+    // authenticated with, and the execution service refuses without it.
     const advanced =
       body?.startNext === false
-        ? await application.commands.advance(id as MissionId, { startNext: false })
-        : await application.commands.drain(id as MissionId, wait);
+        ? await application.commands.advance(id as MissionId, { startNext: false, authority })
+        : await application.commands.drain(id as MissionId, { ...wait, authority });
 
     const snapshot = await application.commands.snapshot(id as MissionId);
     return NextResponse.json({ ...snapshot, changes: advanced.changes });

@@ -55,6 +55,9 @@
   --nc-growth: #4b8dff;
   --nc-client: #f0b429;
   --nc-operations: #2dd4bf;
+  /* The studio: the one hue this cool palette was missing, still cold enough to
+     belong to it and clearly not the technology indigo. */
+  --nc-creative: #f472b6;
   --nc-product: #8389ff;
   --nc-finance: #38bdf8;
   --nc-human: #eef3fc;
@@ -932,8 +935,8 @@
 /* Identity badge — the department's colour disc, ready for a future avatar. */
 .nc-root .nc-pod__badge {
   flex: none;
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -951,7 +954,22 @@
 .nc-root .nc-pod__top,
 .nc-root .nc-pod__insight,
 .nc-root .nc-pod__stats { flex: none; }
-.nc-root .nc-pod__top { display: flex; align-items: center; gap: 12px; }
+/* The header row is a BUDGET, not a suggestion. Its three occupants (badge,
+   name, state) are laid out so the row can never be wider than the plate:
+   the badge and the state chip are fixed, the NAME is the only thing that
+   flexes, and the chip clips itself rather than pushing the name off the card.
+   Before this, a long localized state ("Needs approval") pushed the chip ~50px
+   outside the plate's right edge, which was invisible in a layout test and
+   obvious on screen. */
+.nc-root .nc-pod__top { display: flex; align-items: center; gap: 10px; }
+.nc-root .nc-pod__head { flex: 1 1 auto; }
+.nc-root .nc-pod__state {
+  flex: none;
+  max-width: 44%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* The network port. One element on the edge that faces the core, derived from
    the node's own position, so every card visibly plugs into the graph. */

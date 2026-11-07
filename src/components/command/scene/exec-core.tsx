@@ -1,54 +1,71 @@
 "use client";
 
-import { EXECUTIVE } from "../state/organization-model";
+import { useState } from "react";
+import Link from "next/link";
+import { useLocale } from "../i18n/command-locale";
 import type { Placement } from "../state/spatial-camera";
-import { EXEC_ACTOR } from "../state/actors";
 import { cssVars } from "../ui/css-vars";
-import { EXEC_PHASE_LABEL, STATUS_LABEL, execPhase, type VisualNodeState } from "../state/visual-state";
+import { execPhase, type VisualNodeState } from "../state/visual-state";
+import {
+  EXEC_CHARACTER_BODY,
+  EXEC_CHARACTER_BODY_SIZE,
+  EXEC_CHARACTER_FALLBACK_LABEL,
+  EXEC_CHARACTER_HEAD,
+  EXEC_CHARACTER_HEAD_SIZE,
+} from "../state/exec-character";
 
 /**
- * EXEC CORE — the Intelligence Core (Phase UI-02.1)
- * ─────────────────────────────────────────────────
- * In UI-01.1 the Executive was a glowing lime circle, and the first pass of
- * UI-02.1 turned it into a layered sphere. Both read as *avatars*: the first
- * because it was a circle, the second because a glowing ball is the most
- * generic object in this whole visual language.
+ * EXEC ENTRY — the centre of the company overview (champagne-orbit pass)
+ * ────────────────────────────────────────────────────────────────────────
+ * WHAT CHANGED, AND WHY
+ * The previous pass stood a violet sphere of dots here: a live, entirely-CSS
+ * object that was right for the direction it belonged to and is wrong for this
+ * one. The approved company overview puts the APPROVED CHARACTER at the centre
+ * of the orbit, with its name and one line of role beneath it.
  *
- * The approved direction calls for calm, premium central intelligence — not a
- * glowing green gaming orb. So the body is now a GLOBE: a soft lit sphere with
- * an internal atmosphere, wrapped in three orbiting rings that turn only while
- * the core is actually working. Its identity sits beneath it, and its readout is
- * a quiet plate rather than a floating pill.
+ * So the sphere is gone. What replaced it is a SEAT: a champagne-rimmed disc
+ * with the approved head cutout in it, sized to the reference's proportion
+ * (roughly a fifth of the composition's width — see `--nc-seat`). The seat is
+ * built to accept a full-body cutout the moment one exists; today it renders the
+ * approved head, and the missing body cutout is reported rather than drawn. The
+ * whole question is written down in `state/exec-character.ts`.
  *
- * The sphere is deliberately a single, replaceable slot (`.nc-core__globe`):
- * when the Agent Identity System lands, EXEC can carry a real character/avatar
- * at the centre without any structural change here.
+ * WHAT DID NOT CHANGE
+ *   · It is still a REAL LINK to EXEC's own destination, so it is focusable,
+ *     middle-clickable and copyable as a URL. Product owns the way IN; the
+ *     conversation itself is Agent Studio's (`/command/exec/**`).
+ *   · It still takes the same one prop shape — a `VisualNodeState` — and still
+ *     collapses the nine runtime states into four phases with a word, so the
+ *     state is never carried by colour alone.
+ *   · The ring and pearl geometry around it is the composition's, not this
+ *     component's: see `.nc-orbit` in `orbit.css`.
  *
- * The state contract is untouched: it still receives one `VisualNodeState`, the
- * nine runtime states still collapse into four phases, and it is still a real
- * control that opens the Executive console. Status is no longer a pill floating
- * under the object — it is a readout plate attached to the housing, which is
- * where a status light belongs on a machine.
- *
- * The rings live here rather than in the wiring layer because they belong to the
- * core's own volume — they are its physical scale, not a connection.
+ * A broken or absent file is reported in the seat rather than silently leaving a
+ * hole — the composition must never pretend to be complete.
  */
 export function ExecCore({
   visual,
   placement,
-  onOpen,
+  href,
 }: {
   visual: VisualNodeState;
-  /** Where the core stands right now — the camera relocates it when a space is entered. */
+  /** Where the seat stands — a position, resolved by the camera. */
   placement: Placement;
-  onOpen: () => void;
+  /** EXEC's destination. A navigation entry, never a second console. */
+  href: string;
 }) {
+  const { t, tc } = useLocale();
+  const [assetFailed, setAssetFailed] = useState(false);
   const phase = execPhase(visual.status);
-  const busy = phase === "thinking" || phase === "running";
+  /* EXEC is an identifier and stays the same word in both languages; its PHASE
+     is read aloud from the dictionary. */
+  const phaseLabel = t(`status.phase.${phase}`);
+  const bodySrc = EXEC_CHARACTER_BODY;
+  const src = bodySrc ?? EXEC_CHARACTER_HEAD;
 
   return (
-    <button
-      type="button"
+    <Link
+      href={href}
       className="nc-core"
       data-phase={phase}
       data-status={visual.status}
@@ -57,73 +74,51 @@ export function ExecCore({
         "--nc-core-y": `${placement.y.toFixed(3)}%`,
         "--nc-core-z": `${placement.depth}px`,
       })}
-      onClick={onOpen}
-      title={visual.activeJob ?? undefined}
-      aria-label={`${EXECUTIVE.label} — ${EXEC_PHASE_LABEL[phase]}. Runtime state ${STATUS_LABEL[visual.status]}${
-        visual.activeJob ? `. ${visual.activeJob}` : ""
-      }. ${EXECUTIVE.level}. Open the Executive console.`}
+      title={visual.activeJob ? tc(visual.activeJob) : undefined}
+      aria-label={`${t("cc.execEntry")}. ${phaseLabel}. ${t(`status.node.${visual.status}`)}${
+        visual.activeJob ? `. ${tc(visual.activeJob)}` : ""
+      }. ${t("cc.execEntryAria")}.`}
     >
-      {/* Rings are part of the core's volume: they tilt with the camera and only
-          turn while the core is actually working. */}
-      <span className="nc-core__rings" aria-hidden="true">
-        <svg viewBox="0 0 200 200" width="100%" height="100%">
-          <ellipse className={`nc-core__ring${busy ? " nc-core__ring--live" : ""}`} cx="100" cy="100" rx="92" ry="26" />
-          <ellipse
-            className={`nc-core__ring${busy ? " nc-core__ring--live" : ""}`}
-            cx="100"
-            cy="100"
-            rx="72"
-            ry="42"
-            data-tilt="back"
-          />
-          <ellipse
-            className={`nc-core__ring${busy ? " nc-core__ring--live nc-core__ring--spin" : ""}`}
-            cx="100"
-            cy="100"
-            rx="50"
-            ry="58"
-            data-tilt="front"
-          />
-        </svg>
-      </span>
-
-      {/* A second, oblique orbit. The equatorial rings are the core's own gauge;
-          this one crosses them, which is what gives a globe "orbit" instead of
-          "gauge". Static on purpose — only the equatorial band turns. */}
-      <span className="nc-core__orbit" aria-hidden="true">
-        <svg viewBox="0 0 200 200" width="100%" height="100%">
-          <ellipse className="nc-core__orbit-ring" cx="100" cy="100" rx="88" ry="34" />
-        </svg>
-      </span>
-
-      {/* The atmosphere: an outer halo that seats the sphere in the room and
-          gives the centre a light source of its own. */}
+      {/* The atmosphere that seats the character in the composition. */}
       <span className="nc-core__halo" aria-hidden="true" />
 
-      {/* The body: a calm, intelligent sphere. Deliberately NOT a gamer orb —
-          a soft lit globe whose inner atmosphere is the only saturated thing in
-          the scene. The structure leaves room for a future character/avatar
-          identity to sit at its centre without a rebuild: `.nc-core__nucleus`
-          is that slot, and it is hidden behind the identity until an avatar
-          exists. */}
-      <span className="nc-core__body" aria-hidden="true">
-        <span className="nc-core__globe" />
-        <span className="nc-core__grid" />
-        <span className="nc-core__nucleus" />
+      {/* THE SEAT. Decorative to a screen reader: the link above already names
+          EXEC, its state and what opening it does, so the figure adds nothing a
+          reader needs and would only add a duplicated label. */}
+      <span className="nc-execseat" aria-hidden="true">
+        {assetFailed ? (
+          <span className="nc-execseat__fallback">{EXEC_CHARACTER_FALLBACK_LABEL}</span>
+        ) : (
+          /* A plain <img>, deliberately: the asset is a fixed-size local file in
+             `public/`, it needs no optimisation pipeline, and an `<img>` that
+             fails reports it through `onError` — which is how the seat knows to
+             say the asset is missing instead of rendering nothing. */
+          <img
+            className="nc-execseat__figure"
+            src={src}
+            width={(bodySrc ? EXEC_CHARACTER_BODY_SIZE : EXEC_CHARACTER_HEAD_SIZE).width}
+            height={(bodySrc ? EXEC_CHARACTER_BODY_SIZE : EXEC_CHARACTER_HEAD_SIZE).height}
+            alt=""
+            draggable={false}
+            decoding="async"
+            onError={() => setAssetFailed(true)}
+          />
+        )}
       </span>
 
-      {/* Integrated readout: the machine states its own condition, on itself. */}
+      {/* The identity: the identifier and its one-line role — the same two facts
+          this entry has always stated, in the reference's own position. */}
+      <span className="nc-core__identity">
+        <span className="nc-core__title">{t("cc.execEntry")}</span>
+        <span className="nc-core__role">{t("cc.execKicker")}</span>
+      </span>
+
+      {/* Integrated readout: one state word, on the object, with a dot so the
+          colour is never the only channel. */}
       <span className="nc-core__readout">
         <span className="nc-core__readout-led" aria-hidden="true" />
-        <span className="nc-core__readout-state">{EXEC_PHASE_LABEL[phase]}</span>
-        <span className="nc-core__readout-sep" aria-hidden="true" />
-        <span className="nc-core__readout-level">{EXECUTIVE.level}</span>
+        <span className="nc-core__readout-state">{phaseLabel}</span>
       </span>
-
-      <span className="nc-core__identity">
-        <span className="nc-core__title">{EXEC_ACTOR.name}</span>
-        <span className="nc-core__role">{EXECUTIVE.kicker}</span>
-      </span>
-    </button>
+    </Link>
   );
 }

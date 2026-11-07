@@ -79,7 +79,11 @@ export function CommandProvider({ children }: { children: React.ReactNode }) {
   const [revision, setRevision] = useState(1);
   const [focus, setFocus] = useState<DepartmentId | null>(null);
   const [execOpen, setExecOpen] = useState(false);
-  const [rightCollapsed, setRightCollapsed] = useState(false);
+  /* The context panel opens CLOSED (Pass 3). People, systems and history are
+     context for the two answers the home exists to give, not competition with
+     them — so the panel is one deliberate click away instead of permanently
+     occupying a fifth of the screen. */
+  const [rightCollapsed, setRightCollapsed] = useState(true);
   const [motionMode, setMotionMode] = useState<MotionMode>("full");
   const [speed, setSpeed] = useState(1);
   const [autoCycle, setAutoCycle] = useState(false);

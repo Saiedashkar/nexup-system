@@ -20,7 +20,11 @@ import {
   type ExecutionClaimRepository,
   type ExecutionClaimRequest,
 } from "@/modules/workforce/execution/execution-claim";
-import { PrismaExecutionClaimRepository } from "@/modules/workforce/persistence";
+import type { ExecutionRecord } from "@/modules/workforce/execution/execution-record";
+import {
+  PrismaExecutionAttemptCommitter,
+  PrismaExecutionClaimRepository,
+} from "@/modules/workforce/persistence";
 
 /**
  * STEP 5A-2 — the DURABLE execution claim, against a real PostgreSQL.
@@ -52,13 +56,21 @@ const REPO_ROOT = path.resolve(__dirname, "..");
 const PSQL_BIN = process.env.PSQL_BIN || "C:\\Program Files\\PostgreSQL\\18\\bin\\psql.exe";
 const PORT = BASE_URL ? new URL(BASE_URL).port || "5432" : "5432";
 
-/** Every proposal up to and including the claim ledger, in apply order. */
+/**
+ * Every proposal up to and including the recovery-rotation key, in apply order.
+ *
+ * The fifth review moved recovery progress into the ROWS (`recoverySweptAt`), which
+ * PHASE_5 adds to the claim ledger and the execution records. The durable
+ * repositories SELECT that column, so a database without it cannot serve the
+ * ledger at all — the throwaway databases these proofs use therefore apply it.
+ */
 const MIGRATIONS = [
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_1A/migration.sql",
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_1B/migration.sql",
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_2/migration.sql",
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_3/migration.sql",
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_4/migration.sql",
+  "prisma/proposed-migrations/AI_WORKFORCE_PHASE_5/migration.sql",
 ];
 
 const describeIfDatabase = BASE_URL ? describe : describe.skip;
@@ -109,6 +121,36 @@ function claimRequest(overrides: Partial<ExecutionClaimRequest> = {}): Execution
     runtimeId: "runtime_hermes_saeed",
     leaseOwner: "process_A",
     ...overrides,
+  };
+}
+
+/**
+ * One execution record, exactly as the atomic finalizer would insert it.
+ *
+ * `missionId`/`taskId` are deliberately absent: on this table they are real
+ * foreign keys, and creating a mission and a task just to host a row would make
+ * this test about fixture plumbing instead of about the commit boundary. The
+ * invariant under test does not involve them.
+ */
+function executionRecordFixture(input: {
+  id: string;
+  handleId: string;
+  idempotencyKey: string;
+  attempt: number;
+  at: string;
+}): ExecutionRecord {
+  return {
+    id: input.id,
+    handleId: input.handleId,
+    runtimeId: "runtime_hermes_saeed",
+    actorId: "actor_analyst",
+    capabilityId: "strategy.internal-brief",
+    attempt: input.attempt,
+    status: "ACCEPTED",
+    idempotencyKey: input.idempotencyKey,
+    startedAt: input.at,
+    updatedAt: input.at,
+    audit: [{ seq: 1, at: input.at, type: "PREFLIGHT", status: "ACCEPTED", detail: "fixture" }],
   };
 }
 
@@ -213,28 +255,49 @@ describeIfDatabase("STEP 5A-2 — the durable claim ledger, a real PostgreSQL an
     const request = claimRequest();
     const [left, right] = await Promise.all([durableLedger("race-l"), durableLedger("race-r")]);
 
-    const outcomes = await Promise.all([
-      left.repo.claim({ ...request, leaseOwner: "instance_L" }),
-      right.repo.claim({ ...request, leaseOwner: "instance_R" }),
-    ]);
+    // The instance is tied to its TOKEN, so the assertions below use the repo and
+    // the token of whichever instance actually WON. Hard-coding `right` and
+    // "instance_R" made this test pass only while the LEFT instance won: when the
+    // right one did, the CAS it expected to be refused was legitimately
+    // ACCEPTED, and the suite went red for a defect that did not exist.
+    const instances = [
+      { repo: left.repo, token: "instance_L", label: "left" },
+      { repo: right.repo, token: "instance_R", label: "right" },
+    ];
+    const outcomes = await Promise.all(
+      instances.map((instance) => instance.repo.claim({ ...request, leaseOwner: instance.token })),
+    );
 
-    const winners = outcomes.filter((outcome) => outcome.kind === "CLAIMED");
-    const losers = outcomes.filter((outcome) => outcome.kind === "IN_PROGRESS");
-    expect(winners).toHaveLength(1);
-    expect(losers).toHaveLength(1);
+    const winnerIndex = outcomes.findIndex((outcome) => outcome.kind === "CLAIMED");
+    expect(winnerIndex).toBeGreaterThanOrEqual(0);
+    const winner = instances[winnerIndex]!;
+    const loser = instances[winnerIndex === 0 ? 1 : 0]!;
+    const winnerOutcome = outcomes[winnerIndex]!;
+    const loserOutcome = outcomes[winnerIndex === 0 ? 1 : 0]!;
+    expect(winnerOutcome.kind).toBe("CLAIMED");
+    expect(loserOutcome.kind).toBe("IN_PROGRESS");
 
     // The loser may not execute, and it addressed the winner's row rather than
     // creating one of its own.
-    expect(losers[0]?.claim.id).toBe(winners[0]?.claim.id);
+    expect(loserOutcome.claim.id).toBe(winnerOutcome.claim.id);
     // ONE row for this attempt — the property that makes a second concurrent
     // advance unable to start a second run. A whole-ledger count would prove
     // nothing here: the table is shared by every test in this file.
     expect(await left.repo.listForTask(request.taskId)).toHaveLength(1);
 
-    // The loser cannot enter dispatch either: the CAS refuses a claim it does
-    // not hold.
-    const claimed = await right.repo.markDispatching(winners[0]!.claim.id, { leaseOwner: "instance_R" });
-    expect(claimed).toBeNull();
+    // The LOSER cannot enter dispatch: the CAS refuses a claim it does not hold.
+    const refused = await loser.repo.markDispatching(winnerOutcome.claim.id, {
+      invocationToken: loser.token,
+    });
+    expect(refused).toBeNull();
+
+    // …and the WINNER can, which is what makes the refusal above evidence about
+    // the TOKEN rather than about the row being un-enterable for any reason.
+    const accepted = await winner.repo.markDispatching(winnerOutcome.claim.id, {
+      invocationToken: winner.token,
+    });
+    expect(accepted?.state).toBe("DISPATCHING");
+    expect(accepted?.leaseOwner).toBe(winner.token);
   });
 
   it("refuses a second execution authority while a lease is live (2, 9)", async () => {
@@ -280,7 +343,7 @@ describeIfDatabase("STEP 5A-2 — the durable claim ledger, a real PostgreSQL an
 
     const claimed = await first.repo.claim({ ...request, leaseOwner: "instance_A" });
     expect(claimed.kind).toBe("CLAIMED");
-    const entered = await first.repo.markDispatching(claimed.claim.id, { leaseOwner: "instance_A" });
+    const entered = await first.repo.markDispatching(claimed.claim.id, { invocationToken: "instance_A" });
     expect(entered?.state).toBe("DISPATCHING");
 
     // The crash: the external request may already have reached Hermes, and no
@@ -299,7 +362,7 @@ describeIfDatabase("STEP 5A-2 — the durable claim ledger, a real PostgreSQL an
     expect(recovery?.kind).toBe("UNVERIFIED");
 
     // And it can never be moved back into dispatch, by any route.
-    expect(await second.repo.markDispatching(claimed.claim.id, { leaseOwner: "instance_C" })).toBeNull();
+    expect(await second.repo.markDispatching(claimed.claim.id, { invocationToken: "instance_C" })).toBeNull();
     const persisted = await second.repo.get(claimed.claim.id);
     expect(persisted?.state).toBe("UNVERIFIED");
     // The lease is genuinely GONE, not merely stale — and the field is omitted,
@@ -320,8 +383,9 @@ describeIfDatabase("STEP 5A-2 — the durable claim ledger, a real PostgreSQL an
     const first = await durableLedger("disp-a");
 
     const claimed = await first.repo.claim({ ...request, leaseOwner: "instance_A" });
-    await first.repo.markDispatching(claimed.claim.id, { leaseOwner: "instance_A" });
+    await first.repo.markDispatching(claimed.claim.id, { invocationToken: "instance_A" });
     const dispatched = await first.repo.markDispatched(claimed.claim.id, {
+      invocationToken: "instance_A",
       executionRecordId: "rec_step5a_1",
       handleId: "handle_step5a_1",
     });
@@ -382,11 +446,32 @@ describeIfDatabase("STEP 5A-2 — the durable claim ledger, a real PostgreSQL an
     expect(second.kind).toBe("IN_PROGRESS");
 
     // Losing CAS calls return `null`, which the caller branches on. None throws.
-    expect(await ledger.repo.markDispatched(first.claim.id, { executionRecordId: "rec", handleId: "h" })).toBeNull();
-    expect(await ledger.repo.release(first.claim.id, "refused")).not.toBeNull();
-    expect(await ledger.repo.release(first.claim.id, "again")).toBeNull();
+    expect(
+      await ledger.repo.markDispatched(first.claim.id, {
+        invocationToken: "instance_A",
+        executionRecordId: "rec",
+        handleId: "h",
+      }),
+    ).toBeNull();
+    // Release now requires the OWNING invocation token (Step 5A-4): releasing is
+    // what makes an attempt dispatchable again, so only its holder may free it.
+    expect(
+      await ledger.repo.release(first.claim.id, { invocationToken: "instance_A", detail: "refused" }),
+    ).not.toBeNull();
+    expect(
+      await ledger.repo.release(first.claim.id, { invocationToken: "instance_A", detail: "again" }),
+    ).toBeNull();
+    expect(
+      await ledger.repo.release(first.claim.id, { invocationToken: "instance_B", detail: "not the owner" }),
+    ).toBeNull();
     expect(await ledger.repo.markUnverified(first.claim.id, "not entering")).toBeNull();
-    expect(await ledger.repo.markDispatched("claim_that_never_existed", { executionRecordId: "rec", handleId: "h" })).toBeNull();
+    expect(
+      await ledger.repo.markDispatched("claim_that_never_existed", {
+        invocationToken: "instance_A",
+        executionRecordId: "rec",
+        handleId: "h",
+      }),
+    ).toBeNull();
 
     // A PRIMARY-KEY collision is NOT absorbed by ON CONFLICT (idempotencyKey), so
     // it is the one genuine error path. It must surface as the typed code, not as
@@ -502,12 +587,13 @@ describeIfDatabase("STEP 5A-2 — the durable claim ledger, a real PostgreSQL an
     // (5) No dispatch authority comes out of the refusal: it THREW instead of
     //     returning an outcome, so there is nothing to dispatch from, and the
     //     attempt was neither promoted nor mutated.
-    expect(await second.repo.markDispatching(owner.claim.id, { leaseOwner: "instance_B" })).toBeNull();
+    expect(await second.repo.markDispatching(owner.claim.id, { invocationToken: "instance_B" })).toBeNull();
     expect((await second.repo.get(owner.claim.id))?.state).toBe("CLAIMED");
 
     // Same-key replay after the attempt is durably identified still ADOPTS.
-    await first.repo.markDispatching(owner.claim.id, { leaseOwner: "instance_A" });
+    await first.repo.markDispatching(owner.claim.id, { invocationToken: "instance_A" });
     await first.repo.markDispatched(owner.claim.id, {
+      invocationToken: "instance_A",
       executionRecordId: "rec_identity_1",
       handleId: "handle_identity_1",
     });
@@ -542,11 +628,12 @@ describeIfDatabase("STEP 5A-2 — the durable claim ledger, a real PostgreSQL an
       const seen: string[] = [];
       const first = await ledger.repo.claim({ ...request, leaseOwner: "P1" });
       seen.push(first.kind);
-      const entered = await ledger.repo.markDispatching(first.claim.id, { leaseOwner: "P1" });
+      const entered = await ledger.repo.markDispatching(first.claim.id, { invocationToken: "P1" });
       seen.push(entered ? entered.state : "null");
       const contended = await ledger.repo.claim({ ...request, leaseOwner: "P2" });
       seen.push(contended.kind);
       const identified = await ledger.repo.markDispatched(first.claim.id, {
+        invocationToken: "P1",
         executionRecordId: "rec_parity",
         handleId: "handle_parity",
       });
@@ -564,7 +651,7 @@ describeIfDatabase("STEP 5A-2 — the durable claim ledger, a real PostgreSQL an
       const seen: string[] = [];
       const first = await ledger.repo.claim({ ...request, leaseOwner: "P1" });
       seen.push(first.kind);
-      const entered = await ledger.repo.markDispatching(first.claim.id, { leaseOwner: "P1" });
+      const entered = await ledger.repo.markDispatching(first.claim.id, { invocationToken: "P1" });
       seen.push(entered ? entered.state : "null");
       await ledger.expire(first.claim.id);
       const doubt = await ledger.repo.claim({ ...request, leaseOwner: "P2" });
@@ -573,7 +660,7 @@ describeIfDatabase("STEP 5A-2 — the durable claim ledger, a real PostgreSQL an
       seen.push(stillDoubt.kind);
       const recovery = await ledger.repo.recoveryFor(first.claim.id, { requester: "P2" });
       seen.push(recovery ? recovery.kind : "null");
-      const refused = await ledger.repo.markDispatching(first.claim.id, { leaseOwner: "P3" });
+      const refused = await ledger.repo.markDispatching(first.claim.id, { invocationToken: "P3" });
       seen.push(refused ? refused.state : "null");
       return seen;
     }
@@ -584,7 +671,10 @@ describeIfDatabase("STEP 5A-2 — the durable claim ledger, a real PostgreSQL an
       const seen: string[] = [];
       const first = await ledger.repo.claim({ ...request, leaseOwner: "P1" });
       seen.push(first.kind);
-      const released = await ledger.repo.release(first.claim.id, "a control refused before dispatch");
+      const released = await ledger.repo.release(first.claim.id, {
+        invocationToken: "P1",
+        detail: "a control refused before dispatch",
+      });
       seen.push(released ? released.state : "null");
       const retaken = await ledger.repo.claim({ ...request, leaseOwner: "P2" });
       seen.push(retaken.kind);
@@ -629,6 +719,231 @@ describeIfDatabase("STEP 5A-2 — the durable claim ledger, a real PostgreSQL an
     // makes; assert it is real without pinning a number that other tests move.
     expect(await second.repo.count()).toBeGreaterThanOrEqual(2);
   });
+
+  it("commits the execution record and DISPATCHED together, or commits NEITHER (9)", async () => {
+    const ledger = await durableLedger("atomic-a");
+    const request = claimRequest();
+    const committer = new PrismaExecutionAttemptCommitter({ client: ledger.handle.client });
+    const at = "2026-02-01T00:00:00.000Z";
+
+    // ── The happy path: ONE transaction writes both durable facts. ──
+    const won = await ledger.repo.claim({ ...request, leaseOwner: "invocation_1" });
+    if (won.kind !== "CLAIMED") throw new Error(`expected CLAIMED, got ${won.kind}`);
+    const entered = await ledger.repo.markDispatching(won.claim.id, { invocationToken: "invocation_1" });
+    expect(entered?.state).toBe("DISPATCHING");
+
+    const kept = executionRecordFixture({
+      id: "exec_kept",
+      handleId: "handle_kept",
+      idempotencyKey: request.idempotencyKey,
+      attempt: 1,
+      at,
+    });
+    const committed = await committer.commitDispatched({
+      claimId: won.claim.id,
+      invocationToken: "invocation_1",
+      record: kept,
+    });
+    expect(committed.claim.state).toBe("DISPATCHED");
+    expect(committed.claim.executionRecordId).toBe("exec_kept");
+    expect(committed.claim.handleId).toBe("handle_kept");
+    expect(await ledger.handle.client.aiExecutionRecord.findUnique({ where: { id: "exec_kept" } })).not.toBeNull();
+
+    // ── The rollback: an invocation that no longer owns the claim. The CAS
+    //    matches no row, so a record inserted by the SAME transaction must
+    //    vanish with it — neither side may commit alone. ──
+    const attempt2 = {
+      ...request,
+      attempt: 2,
+      idempotencyKey: executionIdempotencyKeyForAttempt(request.taskId, 2),
+      leaseOwner: "invocation_2",
+    };
+    const loser = await ledger.repo.claim(attempt2);
+    if (loser.kind !== "CLAIMED") throw new Error(`expected CLAIMED, got ${loser.kind}`);
+    const entered2 = await ledger.repo.markDispatching(loser.claim.id, { invocationToken: "invocation_2" });
+    expect(entered2?.state).toBe("DISPATCHING");
+
+    const orphan = executionRecordFixture({
+      id: "exec_orphan",
+      handleId: "handle_orphan",
+      idempotencyKey: attempt2.idempotencyKey,
+      attempt: 2,
+      at,
+    });
+    await expect(
+      committer.commitDispatched({
+        claimId: loser.claim.id,
+        invocationToken: "invocation_NOT_the_owner",
+        record: orphan,
+      }),
+    ).rejects.toMatchObject({ code: "PERSISTENCE_UNAVAILABLE" });
+
+    // The record insert ran first and is GONE: the ledger points at nothing and
+    // no reader can adopt a dangling execution.
+    expect(await ledger.handle.client.aiExecutionRecord.findUnique({ where: { id: "exec_orphan" } })).toBeNull();
+    const stillOpen = await ledger.repo.get(loser.claim.id);
+    expect(stillOpen?.state).toBe("DISPATCHING");
+    expect(stillOpen?.executionRecordId).toBeUndefined();
+
+    // The OWNING token still finalises it, which proves the refusal above was
+    // about ownership and not an inability to commit at all.
+    const recovered = await committer.commitDispatched({
+      claimId: loser.claim.id,
+      invocationToken: "invocation_2",
+      record: orphan,
+    });
+    expect(recovered.claim.state).toBe("DISPATCHED");
+    expect(await ledger.handle.client.aiExecutionRecord.findUnique({ where: { id: "exec_orphan" } })).not.toBeNull();
+  });
+
+/*
+ * STEP 5A-4 — CANCELLATION versus DISPATCH, against the real database.
+ *
+ * The in-memory correction suite proves the SEMANTICS; these cases prove the
+ * durable adapter actually delivers them, because the whole point of the claim is
+ * that it survives the process — and because the two defects being corrected (a
+ * two-write cancellation reservation, and a reservation that selects the wrong
+ * attempt) were both visible only in what the LEDGER row ends up saying.
+ */
+describeIfDatabase("STEP 5A-4 — the cancellation reservation is ONE atomic, terminal write", () => {
+  it("lands the exact attempt directly as CANCELLED — no intermediate CLAIMED row to strand", async () => {
+    const request = claimRequest();
+    const [a, b] = await Promise.all([durableLedger("cancel-a"), durableLedger("cancel-b")]);
+
+    const reservations = await Promise.all([
+      a.repo.reserveCancellation({ ...request, leaseOwner: "instance_A", detail: "cancelled by operator" }),
+      b.repo.reserveCancellation({ ...request, leaseOwner: "instance_B", detail: "cancelled by operator" }),
+    ]);
+
+    // Exactly one WON the reservation; the other read the same terminal row.
+    expect(reservations.filter((row) => row.kind === "RESERVED")).toHaveLength(1);
+    expect(reservations.filter((row) => row.kind === "ALREADY_CANCELLED")).toHaveLength(1);
+
+    const rows = await a.repo.listForTask(request.taskId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.state).toBe("CANCELLED");
+    // No lease at all: there is nothing for a later lapse to RECLAIM, which is
+    // exactly how the two-write sequence could hand a cancelled attempt back to a
+    // racing dispatch.
+    expect(rows[0]!.leaseExpiresAt).toBeUndefined();
+    const recovery = await a.repo.recoveryFor(rows[0]!.id);
+    expect(recovery?.kind).toBe("CANCELLED");
+  });
+
+  it("beats a concurrent dispatch: the racing claim() finds a terminal attempt", async () => {
+    const request = claimRequest();
+    const [canceller, dispatcher] = await Promise.all([durableLedger("race-cancel"), durableLedger("race-d")]);
+
+    const reservation = await canceller.repo.reserveCancellation({
+      ...request,
+      leaseOwner: "instance_C",
+      detail: "operator cancelled",
+    });
+    expect(reservation.kind).toBe("RESERVED");
+
+    const dispatch = await dispatcher.repo.claim({ ...request, leaseOwner: "instance_D" });
+    expect(dispatch.kind).toBe("CANCELLED");
+
+    // …and there is nothing left to enter dispatch ON.
+    const entered = await dispatcher.repo.markDispatching(dispatch.claim.id, { invocationToken: "instance_D" });
+    expect(entered).toBeNull();
+  });
+
+  it("refuses a LIVE claim, and flips a lapsed one in the SAME single write", async () => {
+    const request = claimRequest();
+    const [owner, canceller] = await Promise.all([durableLedger("live-owner"), durableLedger("live-cancel")]);
+
+    const held = await owner.repo.claim({ ...request, leaseOwner: "instance_O", leaseTtlMs: 600_000 });
+    expect(held.kind).toBe("CLAIMED");
+
+    // A live reservation means an invocation may be mid-flight: not cancellable
+    // by this path, and reported rather than forced.
+    const blocked = await canceller.repo.reserveCancellation({
+      ...request,
+      leaseOwner: "instance_C",
+      detail: "operator cancelled",
+    });
+    expect(blocked.kind).toBe("IN_PROGRESS");
+
+    // Once the lease lapses (the DATABASE's clock, never this process's), the
+    // reservation lands as one statement — never claim()+markCancelled().
+    await canceller.expire(held.claim.id);
+    const landed = await canceller.repo.reserveCancellation({
+      ...request,
+      leaseOwner: "instance_C",
+      detail: "operator cancelled",
+    });
+    expect(landed.kind).toBe("RESERVED");
+    if (landed.kind !== "RESERVED") throw new Error("expected RESERVED");
+    expect(landed.claim.state).toBe("CANCELLED");
+    expect(await canceller.repo.listForTask(request.taskId)).toHaveLength(1);
+  });
+
+  it("reserves the CURRENT attempt and leaves a HISTORICAL one exactly as it was", async () => {
+    const base = claimRequest();
+    const attempt1: ExecutionClaimRequest = { ...base };
+    const attempt2: ExecutionClaimRequest = {
+      ...base,
+      attempt: 2,
+      idempotencyKey: executionIdempotencyKeyForAttempt(base.taskId, 2),
+    };
+    const [ledger, canceller] = await Promise.all([durableLedger("hist-1"), durableLedger("hist-2")]);
+
+    // Attempt 1 reached DISPATCHED, then failed and the task went back to READY.
+    const held = await ledger.repo.claim({ ...attempt1, leaseOwner: "instance_1", leaseTtlMs: 600_000 });
+    await ledger.repo.markDispatching(held.claim.id, { invocationToken: "instance_1", leaseTtlMs: 600_000 });
+    await ledger.repo.markDispatched(held.claim.id, {
+      invocationToken: "instance_1",
+      executionRecordId: "record_attempt_1",
+      handleId: "handle_attempt_1",
+    });
+
+    const reserved = await canceller.repo.reserveCancellation({
+      ...attempt2,
+      leaseOwner: "instance_C",
+      detail: "operator cancelled",
+    });
+    expect(reserved.kind).toBe("RESERVED");
+    if (reserved.kind !== "RESERVED") throw new Error("expected RESERVED");
+
+    const rows = await canceller.repo.listForTask(base.taskId);
+    const byAttempt = new Map(rows.map((row) => [row.attempt, row]));
+    expect(byAttempt.get(1)?.state).toBe("DISPATCHED");
+    expect(byAttempt.get(1)?.handleId).toBe("handle_attempt_1");
+    expect(byAttempt.get(1)?.executionRecordId).toBe("record_attempt_1");
+    expect(byAttempt.get(2)?.state).toBe("CANCELLED");
+  });
+
+  it("rolls a reservation back to RELEASED, so a partial cancellation strands nothing", async () => {
+    const request = claimRequest();
+    const ledger = await durableLedger("rollback");
+
+    const reserved = await ledger.repo.reserveCancellation({
+      ...request,
+      leaseOwner: "instance_R",
+      detail: "operator cancelled",
+    });
+    expect(reserved.kind).toBe("RESERVED");
+    if (reserved.kind !== "RESERVED") throw new Error("expected RESERVED");
+
+    // Only the reservation's OWN token may free it.
+    const wrongToken = await ledger.repo.rollbackCancellation(reserved.claim.id, {
+      invocationToken: "someone_else",
+      detail: "not mine",
+    });
+    expect(wrongToken).toBeNull();
+
+    const released = await ledger.repo.rollbackCancellation(reserved.claim.id, {
+      invocationToken: "instance_R",
+      detail: "cancellation rolled back",
+    });
+    expect(released?.state).toBe("RELEASED");
+
+    // …and the attempt is genuinely dispatchable again rather than terminally dead.
+    const reclaimed = await ledger.repo.claim({ ...request, leaseOwner: "instance_D" });
+    expect(["CLAIMED", "RECLAIMED"]).toContain(reclaimed.kind);
+  });
+});
 });
 
 /**
@@ -642,13 +957,28 @@ describeIfDatabase("STEP 5A-2 — the durable claim ledger, a real PostgreSQL an
  * accidental direct write VISIBLE in a failing test. It runs without a database,
  * so it is not gated behind `AI_WORKFORCE_TEST_DATABASE_URL`.
  */
+
 describe("STEP 5A-2 — the claim table has exactly ONE approved writer", () => {
   it("is referenced only by the approved persistence adapter in src/", () => {
     // Exactly ONE file, deliberately. A barrel re-export or a factory would not
     // need to name the delegate anyway, so the list stays as small as the rule.
+    //
+    // 5A-4 NOTE — the atomic finalizer is deliberately NOT a second writer. It
+    // delegates its owner-CAS to `updateClaimDispatched`, exported by this very
+    // adapter, so the database clock and the lease predicate stay spelled in one
+    // place; it merely decides WHEN the statement runs, and runs it on its own
+    // transaction client. What tripped this guard was its EXPLANATION, not a
+    // write, so the scan now ignores comments: prose about the table is evidence
+    // of nothing, while a real delegate/raw-SQL reference still fails here.
     const approved = new Set([
       path.join("src", "modules", "workforce", "persistence", "prisma-execution-claim-repository.ts"),
     ]);
+
+    // Comments removed before matching. Naive on purpose: a tripwire that cannot
+    // be satisfied by writing a comment is the point, and a string containing an
+    // unbalanced comment opener is not a shape this codebase uses.
+    const stripComments = (source: string) =>
+      source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
 
     const offenders: string[] = [];
     const walk = (directory: string) => {
@@ -659,7 +989,7 @@ describe("STEP 5A-2 — the claim table has exactly ONE approved writer", () => 
           continue;
         }
         if (!/\.(ts|tsx)$/.test(entry.name)) continue;
-        const source = fs.readFileSync(full, "utf8");
+        const source = stripComments(fs.readFileSync(full, "utf8"));
         if (!source.includes("aiExecutionClaim") && !source.includes("ai_execution_claims")) continue;
         const relative = path.relative(REPO_ROOT, full);
         if (!approved.has(relative)) offenders.push(relative);

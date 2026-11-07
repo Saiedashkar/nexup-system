@@ -15,6 +15,12 @@ import {
 } from "@/modules/workforce";
 import { DeterministicHermesTransport } from "@/modules/workforce/runtimes/hermes/testing/deterministic-transport";
 
+import type { BudgetGovernor } from "@/modules/ai-workforce/policies/budget-governor";
+import {
+  createExecutionAuthority,
+  type ExecutionAuthority,
+} from "@/modules/workforce/execution/execution-authority";
+
 /**
  * STEP 5/8 G — the Command Center's QUERY surfaces, before Step 6 draws them.
  *
@@ -30,6 +36,26 @@ import { DeterministicHermesTransport } from "@/modules/workforce/runtimes/herme
 const FOUNDER = "actor_founder";
 const MARKER = "NEXUP_COMMAND_CENTER_QUERY_OK";
 const INSTRUCTION = `Return exactly: ${MARKER}`;
+
+/**
+ * The explicit test-only governor this suite composes.
+ *
+ * The queries below read the state a REAL dispatch leaves behind, and a Hermes
+ * leg is `VARIABLE_PROVIDER_COST`, which 5A-4's shipped DENY governor refuses.
+ * `docs/AI_WORKFORCE_STEP5A_REMEDIATION_DESIGN.md` §0.2 permits a test to
+ * compose its own governor; nothing about the shipped default changes.
+ */
+const queryTestGovernor: BudgetGovernor = {
+  policyRef: "test.command-center-queries.allow",
+  async evaluate(input) {
+    return {
+      allowed: true,
+      reason: "ALLOWED_ATTESTED_INCLUDED_ROUTE",
+      policyRef: "test.command-center-queries.allow",
+      spend: input.spend,
+    };
+  },
+};
 
 function hermesConfig(): HermesRuntimeConfig {
   return {
@@ -52,6 +78,8 @@ function hermesConfig(): HermesRuntimeConfig {
 type Wired = {
   domain: WorkforceDomain;
   orchestrator: ReturnType<typeof createMissionOrchestrator>;
+  /** The server-created authority each foreground operation must carry. */
+  authority: ExecutionAuthority;
   actorId: string;
   runtimeId: string;
   ids: ReturnType<typeof createSequentialIdFactory>;
@@ -73,13 +101,29 @@ async function wired(): Promise<Wired> {
   const built = await bootstrapStrategyAnalyst(domain, { runtime: adapter });
   if (!built.enabled) throw new Error(built.reason);
 
+  const authority = createExecutionAuthority({
+    userId: "user_operator",
+    actorId: "actor_human_operator",
+    actorSlug: "human-operator",
+    actorType: "HUMAN",
+    permissionTokens: ["aiworkforce.access"],
+    accessibleBusinessSlugs: ["nexup"],
+    isSuperAdmin: false,
+    hasOfficeFinanceFull: false,
+    requestedAt: "2026-09-01T00:00:00.000Z",
+  });
+
   return {
     domain,
     ids,
     now,
+    authority,
     actorId: built.actorId,
     runtimeId: built.runtimeId,
-    orchestrator: createMissionOrchestrator(domain, { defaultReviewerActorId: FOUNDER }),
+    orchestrator: createMissionOrchestrator(domain, {
+      defaultReviewerActorId: FOUNDER,
+      budget: queryTestGovernor,
+    }),
   };
 }
 
@@ -91,15 +135,19 @@ async function planOneTask(w: Wired, title: string, goal: string, missionInput: 
     owner: FOUNDER,
     ...missionInput,
   });
-  const planned = await w.orchestrator.plan(mission.id, [
-    {
-      title: `${title}-task`,
-      objective: `produce the brief for ${title}`,
-      input: { instruction: INSTRUCTION },
-      assignedActorId: w.actorId,
-      requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
-    },
-  ]);
+  const planned = await w.orchestrator.plan(
+    mission.id,
+    [
+      {
+        title: `${title}-task`,
+        objective: `produce the brief for ${title}`,
+        input: { instruction: INSTRUCTION },
+        assignedActorId: w.actorId,
+        requiredCapabilityId: STRATEGY_INTERNAL_BRIEF_CAPABILITY_ID,
+      },
+    ],
+    { authority: w.authority },
+  );
   const task = planned.tasks[0];
   return { mission: planned.mission, task };
 }
@@ -119,12 +167,16 @@ describe("G — the Command Center query surfaces", () => {
 
     // One mission parked for a human, and one that is already finished.
     const running = await planOneTask(w, "active-mission", "still going", { projectRef: "prj_strategy", clientRef: "cli_1" });
-    await w.orchestrator.settleTask(running.mission.id, running.task.id);
+    await w.orchestrator.settleTask(running.mission.id, running.task.id, { authority: w.authority });
 
     const finished = await planOneTask(w, "finished-mission", "already done");
-    await w.orchestrator.settleTask(finished.mission.id, finished.task.id);
+    await w.orchestrator.settleTask(finished.mission.id, finished.task.id, { authority: w.authority });
     const [finishedReview] = await w.domain.reviews.forTask(finished.task.id);
-    await w.orchestrator.decide(finishedReview.id, { decision: "APPROVED", decidedBy: FOUNDER });
+    await w.orchestrator.decide(finishedReview.id, {
+      decision: "APPROVED",
+      decidedBy: FOUNDER,
+      authority: w.authority,
+    });
 
     const queries = createCommandCenterQueries({
       missions: w.domain.missionRepository,
@@ -195,10 +247,14 @@ describe("G — the Command Center query surfaces", () => {
     const w = await wired();
     const { mission, task } = await planOneTask(w, "retried", "one revision then done");
 
-    await w.orchestrator.settleTask(mission.id, task.id);
+    await w.orchestrator.settleTask(mission.id, task.id, { authority: w.authority });
     const [firstReview] = await w.domain.reviews.forTask(task.id);
-    await w.orchestrator.decide(firstReview.id, { decision: "NEEDS_REVISION", decidedBy: FOUNDER });
-    await w.orchestrator.settleTask(mission.id, task.id);
+    await w.orchestrator.decide(firstReview.id, {
+      decision: "NEEDS_REVISION",
+      decidedBy: FOUNDER,
+      authority: w.authority,
+    });
+    await w.orchestrator.settleTask(mission.id, task.id, { authority: w.authority });
     const [secondReview] = (await w.domain.reviews.forTask(task.id)).filter((entry) => entry.state === "PENDING");
     expect(secondReview).toBeTruthy();
 
@@ -226,7 +282,7 @@ describe("G — the Command Center query surfaces", () => {
   it("READS only: running every query changes nothing", async () => {
     const w = await wired();
     const { mission, task } = await planOneTask(w, "read-only", "queries must not advance the mission");
-    await w.orchestrator.settleTask(mission.id, task.id);
+    await w.orchestrator.settleTask(mission.id, task.id, { authority: w.authority });
 
     const queries = createCommandCenterQueries({
       missions: w.domain.missionRepository,
@@ -276,7 +332,7 @@ describe("G — the Command Center query surfaces", () => {
   it("is reachable from the composed domain", async () => {
     const w = await wired();
     const { mission, task } = await planOneTask(w, "via-domain", "the domain exposes the surface");
-    await w.orchestrator.settleTask(mission.id, task.id);
+    await w.orchestrator.settleTask(mission.id, task.id, { authority: w.authority });
     const queued = await w.domain.queries.decisionQueue();
     expect(queued.map((row) => row.taskId)).toEqual([task.id]);
     const active = await w.domain.queries.activeMissions();

@@ -1,0 +1,365 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEXUP COMMAND — PASS 2 LAYER
+   ───────────────────────────────────────────────────────────────────────────
+   Imported LAST by src/app/command/layout.tsx, after every earlier layer.
+
+   House rules, exactly as every layer before it kept them:
+     · every selector is scoped under `.nc-root`, so nothing here can reach the
+       legacy application;
+     · it redefines NO design token globally. Where the Intelligence Core needed
+       to be calmer, the override is bound to `.nc-core` itself — a local value,
+       not a change to the palette every other surface reads;
+     · no decorative charts, no gradients for their own sake, no new colour.
+
+   Four concerns, in this order:
+     1 · the language switch
+     2 · the Cards reading of the organization
+     3 · the calmer Intelligence Core
+     4 · RTL corrections (scoped to `.nc-root[dir="rtl"]` only)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1 · LANGUAGE SWITCH
+   Two options, always both readable, each labelled in its own language. It is
+   chrome, not a page setting, so it is quiet enough to sit in the rail and in
+   the phone shell without competing with navigation.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nc-locale {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 8px 10px;
+  border-top: 1px solid var(--nc-border);
+}
+
+.nc-root .nc-locale__label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+
+.nc-root .nc-locale__seg {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-border-2);
+  background: var(--nc-surface-2);
+}
+
+.nc-root .nc-locale__opt {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--nc-r-pill);
+  background: transparent;
+  color: var(--nc-text-2);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background var(--nc-dur-micro) var(--nc-ease-standard),
+              color var(--nc-dur-micro) var(--nc-ease-standard);
+}
+
+.nc-root .nc-locale__opt:hover { color: var(--nc-text); }
+
+/* The rail variant stacks the two options: each one then gets the full width of
+   the column, so no language name can ever be clipped — and in a 64px collapsed
+   rail a horizontal pair would have been unreadable either way. */
+.nc-root .nc-locale[data-variant="rail"] .nc-locale__seg {
+  flex-direction: column;
+  border-radius: var(--nc-r-2);
+}
+
+.nc-root .nc-locale[data-variant="rail"] .nc-locale__opt {
+  border-radius: calc(var(--nc-r-2) - 3px);
+  text-align: center;
+  padding: 6px 6px;
+}
+
+.nc-root .nc-locale__opt[data-active="true"] {
+  background: var(--nc-surface-3);
+  color: var(--nc-text);
+  box-shadow: var(--nc-shadow-1);
+}
+
+.nc-root .nc-locale__opt:focus-visible {
+  outline: 2px solid var(--nc-lime-line);
+  outline-offset: 1px;
+}
+
+/* The phone shell: the switch sits just above the bar, on the trailing edge, so
+   it never covers the five areas it navigates. */
+.nc-root .nc-mobilebar__locale {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .nc-root .nc-mobilebar__locale {
+    display: block;
+    position: absolute;
+    inset-inline-end: 12px;
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    z-index: 56;
+  }
+  .nc-root .nc-mobilebar__locale .nc-locale {
+    padding: 0;
+    border-top: 0;
+    background: var(--nc-surface-2);
+    border: 1px solid var(--nc-border-2);
+    border-radius: var(--nc-r-pill);
+    box-shadow: var(--nc-shadow-2);
+  }
+  .nc-root .nc-mobilebar__locale .nc-locale__label { display: none; }
+  /* Both options size to their own label. The rail stacks them, but the phone
+     shell shows them side by side, and an equal-width flex pair clipped the
+     longer language name ("English" lost its last letters at 390px). A language
+     switch the reader cannot read is worse than no switch. */
+  .nc-root .nc-mobilebar__locale .nc-locale__opt {
+    flex: 0 0 auto;
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
+/* ── SVG labels are NOT mirrored by `dir` ───────────────────────────────────
+   A department's internal network is drawn in SVG. SVG geometry does not flip
+   with `dir`: the plates, the anchors and every x-coordinate stay where they
+   were laid out, while `<text>` with `text-anchor: start` would start at that x
+   and run LEFTWARD in an RTL container — pushing the label out through the left
+   edge of its own plate. The fix is not an override that fights the text: the
+   label is a short, single run (an actor or a capability), so pinning the
+   element's direction to `ltr` keeps the anchor where the geometry puts it and
+   the Arabic inside still renders right-to-left on its own. */
+.nc-root .nc-dw-map__label,
+.nc-root .nc-dw-map__sub {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2 · THE CARDS READING
+   The readable alternative to the graph: one card per space, ordered by what
+   needs a human first. No chart, no decorative motion — the meter is a static
+   width, so `prefers-reduced-motion` has nothing to suppress here.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nc-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  padding: 14px 16px 18px;
+  min-width: 0;
+}
+
+.nc-root .nc-cards__note {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  color: var(--nc-text-3);
+}
+
+.nc-root .nc-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "mark head"
+    "status status"
+    "job job"
+    "figures figures"
+    "meter meter"
+    "foot foot";
+  gap: 10px 11px;
+  padding: 14px 15px;
+  border-radius: var(--nc-r-3);
+  border: 1px solid var(--nc-border-2);
+  background: var(--nc-surface-2);
+  text-decoration: none;
+  color: inherit;
+  min-width: 0;
+  transition: border-color var(--nc-dur-micro) var(--nc-ease-standard),
+              background var(--nc-dur-micro) var(--nc-ease-standard);
+}
+
+.nc-root .nc-card:hover { background: var(--nc-surface-3); border-color: var(--nc-border-3); }
+.nc-root .nc-card:focus-visible { outline: 2px solid var(--nc-lime-line); outline-offset: 2px; }
+.nc-root .nc-card[data-attention="true"] { border-color: color-mix(in srgb, var(--nc-approval) 34%, var(--nc-border-2)); }
+
+.nc-root .nc-card__mark {
+  grid-area: mark;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  border: 1px solid var(--nc-border-2);
+  background: var(--nc-surface-3);
+  color: var(--nc-accent, var(--nc-text-2));
+}
+
+.nc-root .nc-card--core .nc-card__mark { color: var(--nc-lime); }
+
+.nc-root .nc-card__head { grid-area: head; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.nc-root .nc-card__name {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--nc-text);
+  line-height: 1.25;
+}
+.nc-root .nc-card__cap { font-size: 11px; color: var(--nc-text-3); line-height: 1.35; }
+
+.nc-root .nc-card__status {
+  grid-area: status;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nc-text-2);
+}
+.nc-root .nc-card__led { width: 7px; height: 7px; border-radius: 50%; background: var(--nc-idle); }
+.nc-root .nc-card[data-attention="true"] .nc-card__led { background: var(--nc-approval); }
+
+.nc-root .nc-card__job {
+  grid-area: job;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--nc-text-2);
+}
+
+.nc-root .nc-card__figures {
+  grid-area: figures;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--nc-border);
+}
+.nc-root .nc-card__figure { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nc-root .nc-card__figure b { font-size: 16px; font-weight: 650; color: var(--nc-text); }
+.nc-root .nc-card__figure span { font-size: 10px; color: var(--nc-text-4); }
+.nc-root .nc-card__figure[data-attention="true"] b { color: var(--nc-approval); }
+
+.nc-root .nc-card__meter {
+  grid-area: meter;
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--nc-border-2);
+  overflow: hidden;
+}
+.nc-root .nc-card__meter i { display: block; height: 100%; background: var(--nc-accent, var(--nc-text-3)); }
+
+.nc-root .nc-card__foot {
+  grid-area: foot;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--nc-text-3);
+}
+.nc-root .nc-card__bottleneck { display: inline-flex; align-items: center; gap: 5px; color: var(--nc-approval); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3 · THE CALMER INTELLIGENCE CORE
+   The core is the centre of the room, not the light source of the room. The
+   previous revision gave it a large halo, an animated breath and a 90px outer
+   bloom — three sources of glow competing with the department surfaces around
+   it. This reduces the body, quiets the atmosphere, and removes the bloom, so
+   the core reads as the most IMPORTANT object rather than the brightest one.
+   Bound to `.nc-core`, never to a global token.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nc-core {
+  --nc-core-size: clamp(124px, 8.8vw, 158px);
+}
+
+.nc-root .nc-core__halo {
+  inset: -9%;
+  opacity: 0.42;
+  filter: blur(16px);
+  animation: none;
+}
+
+.nc-root .nc-core__globe {
+  box-shadow:
+    0 0 0 1px rgba(170, 212, 255, 0.4),
+    0 0 0 6px rgba(90, 150, 255, 0.04),
+    0 0 34px -14px rgba(74, 140, 255, 0.34),
+    0 20px 48px -26px rgba(16, 60, 175, 0.5),
+    inset -22px -26px 56px rgba(0, 0, 0, 0.66),
+    inset 16px 14px 32px rgba(120, 180, 255, 0.2);
+}
+
+.nc-root .nc-core__grid { opacity: 0.26; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4 · RTL CORRECTIONS
+   Scoped to `.nc-root[dir="rtl"]`, i.e. only while the product is in Arabic —
+   the LTR product and the legacy Arabic application are both untouched.
+
+   What is NOT flipped, deliberately: the spatial canvas. The room is a physical
+   map with fixed coordinates, and mirroring it would move every department away
+   from the wing it belongs to and turn the wiring inside out. Text inside the
+   room still runs RTL, because `dir` on `.nc-root` governs inline direction.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The rail belongs on the trailing side of the shell. The grid is flipped as a
+   whole and each column is placed explicitly, so the mirror is total rather
+   than partial. */
+.nc-root[dir="rtl"] .nc-shell {
+  grid-template-columns: var(--nc-context-w) minmax(0, 1fr) var(--nc-rail-w);
+}
+.nc-root[dir="rtl"] .nc-context { grid-column: 1; grid-row: 1; }
+.nc-root[dir="rtl"] .nc-main { grid-column: 2; grid-row: 1; }
+.nc-root[dir="rtl"] .nc-rail { grid-column: 3; grid-row: 1; }
+
+/* Physical placement that has to move with the reading direction. */
+.nc-root[dir="rtl"] .nc-exectab { right: auto; inset-inline-start: 16px; }
+
+/* Directional glyphs: a control that means "forward" must point the way the
+   reader reads forward. Only affordances, never brand or identity marks. */
+.nc-root[dir="rtl"] .nl-viewall svg,
+.nc-root[dir="rtl"] .nc-cc-panel__viewall svg,
+.nc-root[dir="rtl"] .nc-context__viewall svg,
+.nc-root[dir="rtl"] .nc-cc-head__back svg,
+.nc-root[dir="rtl"] .nc-surface__level-back svg,
+.nc-root[dir="rtl"] .nc-cc-tool svg:last-child,
+.nc-root[dir="rtl"] .nc-cmdbar__send svg {
+  transform: scaleX(-1);
+}
+
+/* Numerals and codes inside Arabic prose: an identifier reads left-to-right
+   even in an RTL line, so the runs are isolated rather than overridden. These
+   selectors mark the places where that matters most. */
+.nc-root[dir="rtl"] .nc-pod__code,
+.nc-root[dir="rtl"] .nl-mark,
+.nc-root[dir="rtl"] .nc-cc-table__mark,
+.nc-root[dir="rtl"] .nc-cc-progress__pct,
+.nc-root[dir="rtl"] .nl-figure__value,
+.nc-root[dir="rtl"] .nc-card__figure b {
+  unicode-bidi: isolate;
+}
+
+/* Mixed-direction table cells: give the row's own cell an isolated context so a
+   Latin identifier beside Arabic text cannot reorder the sentence. */
+.nc-root[dir="rtl"] .nl-cell[data-variant="lead"],
+.nc-root[dir="rtl"] .nc-cc-table__cell--lead {
+  unicode-bidi: isolate;
+}
+
+/* The area strip scrolls; in RTL it must start from the right edge. */
+.nc-root[dir="rtl"] .nl-areas__track { direction: rtl; }

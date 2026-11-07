@@ -92,6 +92,39 @@ export function resolveCapability(registry: ToolRegistry, capability: string): T
   return adapter;
 }
 
+/**
+ * Resolves a capability to an EXECUTABLE adapter at an EXACT `id@version`.
+ *
+ * `resolveCapability` resolves by id and returns whatever single adapter holds
+ * it — so a caller that authorised `client.search@2.0.0` could otherwise be
+ * handed the `client.search@1.0.0` handler. Capability identity is
+ * `id + version` (see `capability-contracts.ts`), so the version is part of the
+ * authorisation, not a display detail. This resolver is the ONE place that
+ * binds the two: it returns the adapter ONLY when the registry's definition is
+ * at the exact authorised version, and otherwise fails closed.
+ *
+ * @throws CAPABILITY_VERSION_CONFLICT when the id exists at a different version
+ * @throws TOOL_NOT_FOUND when the id is not registered at all
+ * @throws TOOL_DISABLED when the exact adapter is disabled
+ */
+export function resolveCapabilityExact(registry: ToolRegistry, id: string, version: string): ToolAdapter {
+  const adapter = registry.getAdapter(id);
+  if (!adapter) {
+    throw new AiWorkforceError("TOOL_NOT_FOUND", `No capability is registered with id "${id}"`, { toolId: id });
+  }
+  if (adapter.definition.version !== version) {
+    throw new AiWorkforceError(
+      "CAPABILITY_VERSION_CONFLICT",
+      `Capability "${id}" is registered at version "${adapter.definition.version}", not the authorised "${version}"`,
+      { toolId: id, authorisedVersion: version, registeredVersion: adapter.definition.version },
+    );
+  }
+  if (!adapter.definition.enabled) {
+    throw new AiWorkforceError("TOOL_DISABLED", `Tool "${id}@${version}" is disabled`, { toolId: id });
+  }
+  return adapter;
+}
+
 export function describeCapability(definition: ToolDefinition): string {
   return `${definition.id}@${definition.version} [${definition.riskLevel}/${definition.readWriteMode}] ${definition.name}`;
 }

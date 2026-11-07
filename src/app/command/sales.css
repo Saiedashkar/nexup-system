@@ -1,0 +1,1391 @@
+/* NEXUP COMMAND — MARKETING & SALES LAYER
+   ────────────────────────────────────────────────────────────────────────────
+   THE GATEWAY (`/command/sales`) AND THE SALES ROOM (`/command/sales/room`).
+
+   Same rule as every layer before it: additive, `nxs-`-prefixed, it redefines no
+   token and overrides no shell rule. Every colour here is an existing COMMAND
+   token — champagne for the edges and the one primary action, mint for "working",
+   amber for "awaiting approval" — so the two rooms read as the same material as
+   the home, EXEC and Mission Control.
+
+   The room's stage is drawn with real depth, not a picture: the platform is one
+   tilted plane behind the stations (`perspective` + `rotateX`), and the stations
+   themselves stay FLAT and upright, because text on a tilted plane is text you
+   cannot read — especially in Arabic. The tilt is the room; the cards are paper.
+
+   Phones: the grid collapses to one column, the tilted platform stands down, and
+   every control keeps a ≥40px touch target. Motion is optional throughout and is
+   removed entirely under `prefers-reduced-motion`.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ── Page frame ─────────────────────────────────────────────────────────── */
+
+.nc-root .nxs-page,
+.nc-root .nxs-room-page {
+  display: grid;
+  /* ONE clamp for the whole page. Without it an auto grid column sizes itself to
+     its widest child's max-content, so a phone inherited the desktop stage width
+     (~1050px) and clipped the right of every card. */
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: 14px;
+  padding-block-end: 34px;
+  max-width: 1180px;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+
+.nc-root .nxs-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: var(--nc-r-3);
+  border: 1px solid var(--nc-border);
+  background: linear-gradient(180deg, rgba(26, 27, 24, 0.62), rgba(10, 11, 10, 0.5));
+  box-shadow: var(--nc-shadow-2), var(--nc-inner-light);
+  backdrop-filter: blur(var(--nc-blur-2));
+}
+
+.nc-root .nxs-head__lead {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.nc-root .nxs-head__mark {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: var(--nc-champagne-pale);
+  background: radial-gradient(circle at 32% 22%, rgba(246, 219, 173, 0.18), rgba(10, 11, 10, 0.86));
+  border: 1px solid var(--nc-champagne-line);
+  box-shadow: var(--nc-inner-light);
+}
+
+.nc-root .nxs-head__copy { min-width: 0; }
+
+.nc-root .nxs-head__kicker {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--nc-text-3);
+}
+
+.nc-root .nxs-head__title {
+  margin: 2px 0 5px;
+  font-size: 23px;
+  line-height: 1.25;
+  color: var(--nc-text);
+}
+
+.nc-root .nxs-head__blurb {
+  margin: 0;
+  max-width: 68ch;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--nc-text-2);
+}
+
+.nc-root .nxs-head__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.nc-root .nxs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: var(--nc-r-pill);
+  font-size: 11px;
+  color: var(--nc-champagne-pale);
+  background: var(--nc-champagne-soft);
+  border: 1px solid var(--nc-champagne-line);
+  white-space: nowrap;
+}
+
+.nc-root .nxs-badge i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nc-mint);
+  box-shadow: 0 0 8px var(--nc-mint-glow);
+}
+
+.nc-root .nxs-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--nc-text-3);
+  text-decoration: none;
+  padding: 5px 8px;
+  border-radius: var(--nc-r-1);
+  border: 1px solid transparent;
+}
+
+.nc-root .nxs-back:hover {
+  color: var(--nc-text);
+  border-color: var(--nc-border-2);
+  background: var(--nc-glass-1);
+}
+
+/* ── Glass card, shared by both pages ───────────────────────────────────── */
+
+.nc-root .nxs-card {
+  padding: 15px 17px;
+  border-radius: var(--nc-r-3);
+  border: 1px solid var(--nc-border);
+  background: linear-gradient(180deg, rgba(27, 28, 25, 0.68), rgba(10, 11, 10, 0.6));
+  box-shadow: var(--nc-shadow-2), var(--nc-inner-light);
+  backdrop-filter: blur(var(--nc-blur-2));
+}
+
+.nc-root .nxs-card__head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.nc-root .nxs-card__head--row {
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.nc-root .nxs-card__mark {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--nc-champagne);
+  background: var(--nc-glass-2);
+  border: 1px solid var(--nc-border-2);
+}
+
+.nc-root .nxs-card__title {
+  margin: 0;
+  font-size: 14px;
+  color: var(--nc-text);
+}
+
+.nc-root .nxs-card__note {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--nc-text-3);
+}
+
+.nc-root .nxs-card__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nc-root .nxs-progress {
+  font-size: 11px;
+  color: var(--nc-champagne-pale);
+  padding: 3px 9px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-champagne-line);
+  background: var(--nc-champagne-soft);
+}
+
+/* ── Buttons, chips, fields ─────────────────────────────────────────────── */
+
+.nc-root .nxs-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 8px 13px;
+  border-radius: var(--nc-r-1);
+  border: 1px solid var(--nc-border-2);
+  background: var(--nc-glass-2);
+  color: var(--nc-text-2);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition: border-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.nc-root .nxs-btn:hover { color: var(--nc-text); border-color: var(--nc-champagne-line); }
+
+.nc-root .nxs-btn[data-variant="primary"] {
+  color: #16120d;
+  font-weight: 600;
+  border-color: transparent;
+  background: linear-gradient(180deg, rgba(246, 219, 173, 0.95), rgba(208, 173, 137, 0.88));
+}
+
+.nc-root .nxs-btn[data-variant="primary"]:hover { color: #0c0a08; }
+
+.nc-root .nxs-btn[data-variant="done"] {
+  color: var(--nc-mint-pale);
+  border-color: var(--nc-mint-line);
+  background: var(--nc-mint-soft);
+}
+
+.nc-root .nxs-btn[data-variant="quiet"] {
+  border-color: transparent;
+  background: transparent;
+  color: var(--nc-text-3);
+}
+
+.nc-root .nxs-btn[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.nc-root .nxs-linkbtn {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  color: var(--nc-champagne-pale);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.nc-root .nxs-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.nc-root .nxs-chip {
+  min-height: 32px;
+  padding: 6px 11px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-border-2);
+  background: var(--nc-glass-1);
+  color: var(--nc-text-2);
+  font-size: 11.5px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.nc-root .nxs-chip[data-active="true"] {
+  color: var(--nc-champagne-pale);
+  border-color: var(--nc-champagne-line);
+  background: var(--nc-champagne-soft);
+}
+
+.nc-root .nxs-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  margin-top: 4px;
+}
+
+.nc-root .nxs-fields__row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nc-root .nxs-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.nc-root .nxs-field__label {
+  font-size: 11px;
+  color: var(--nc-text-3);
+}
+
+.nc-root .nxs-input,
+.nc-root .nxs-textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: var(--nc-r-1);
+  border: 1px solid var(--nc-border-2);
+  background: rgba(6, 7, 6, 0.72);
+  color: var(--nc-text);
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.nc-root .nxs-textarea { resize: vertical; min-height: 104px; }
+
+.nc-root .nxs-input:focus-visible,
+.nc-root .nxs-textarea:focus-visible {
+  outline: 2px solid var(--nc-champagne-line);
+  outline-offset: 1px;
+}
+
+.nc-root .nxs-hint,
+.nc-root .nxs-foot {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--nc-text-3);
+}
+
+.nc-root .nxs-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── Gateway: the stage, two glass doors, one summary each ─────────── */
+
+/* THE STAGE IS ONE BACKDROP, drawn on the SECTION and never on a door: a planet
+   low on the left, stars, and three orbit rings leaning across the whole frame.
+   Because the stage sits on the section, the picture cannot shift when a door is
+   hovered, and the two panes read as standing in the same light. Decoration only:
+   absolute, aria-hidden, pointer-events none. */
+
+.nc-root .nxs-hero {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: 16px;
+  /* The sky band above the doors is not empty space: the planet's limb and the
+     three orbit arcs cross it, which is what makes the stage read as one place
+     instead of a wall the doors are stuck onto. */
+  /* NO CARD. The scene is the page, not a panel drawn on it: no border, no
+     radius, no shadow, almost no band above the doors. The planet limb, the
+     stars and the three orbits run to the edges of the column and are cut by
+     `overflow`, which is what makes the reference read as one extended place. */
+  padding: 24px 12px 8px;
+  border: 0;
+  border-radius: 0;
+  /* THE PLANET IS THE HOME'S OWN ARTWORK, not a second drawing of it. The home
+     already ships its sky — the warm limb on the left, the grain, the stars — as
+     `/exec-lab/space-home.webp`, so the stage reuses that file under a veil
+     instead of re-approximating a disc in gradients. One asset, two surfaces. */
+  background:
+    linear-gradient(90deg, rgba(4, 6, 5, 0.2), rgba(4, 6, 5, 0.42) 46%, rgba(4, 6, 5, 0.58)),
+    radial-gradient(120% 90% at 82% -18%, rgba(246, 219, 173, 0.06), transparent 58%),
+    url("/exec-lab/space-home.webp") left center / cover no-repeat,
+    linear-gradient(180deg, #0a0b09, #050605 58%, #0a0a08);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+/* Stars, in px so they stay specks at every width, plus the floor glow. */
+.nc-root .nxs-hero__sky {
+  position: absolute;
+  inset: 0;
+  z-index: -4;
+  background-image:
+    radial-gradient(1.5px 1.5px at 8% 18%, rgba(255, 246, 232, 0.55), transparent 62%),
+    radial-gradient(1.2px 1.2px at 21% 42%, rgba(255, 246, 232, 0.38), transparent 62%),
+    radial-gradient(1.6px 1.6px at 33% 12%, rgba(255, 246, 232, 0.48), transparent 62%),
+    radial-gradient(1.1px 1.1px at 46% 30%, rgba(255, 246, 232, 0.32), transparent 62%),
+    radial-gradient(1.4px 1.4px at 58% 9%, rgba(255, 246, 232, 0.44), transparent 62%),
+    radial-gradient(1.2px 1.2px at 71% 26%, rgba(255, 246, 232, 0.34), transparent 62%),
+    radial-gradient(1.7px 1.7px at 84% 16%, rgba(255, 246, 232, 0.5), transparent 62%),
+    radial-gradient(1.2px 1.2px at 93% 38%, rgba(255, 246, 232, 0.32), transparent 62%),
+    radial-gradient(1.3px 1.3px at 64% 52%, rgba(255, 246, 232, 0.28), transparent 62%),
+    radial-gradient(1.2px 1.2px at 12% 62%, rgba(255, 246, 232, 0.26), transparent 62%),
+    radial-gradient(150% 90% at 50% 122%, rgba(246, 219, 173, 0.08), transparent 62%);
+  pointer-events: none;
+}
+
+/* THE LIMB: the atmosphere the asset's planet throws into the left of the frame.
+   It is a soft warm haze, not a disc — the body itself comes from the photograph
+   above, so anything drawn here would be a second planet. It sits physically on
+   the left in both locales, because that is where the asset's planet is. */
+.nc-root .nxs-hero__limb {
+  position: absolute;
+  z-index: -3;
+  left: -10%;
+  top: -8%;
+  width: 42%;
+  height: 96%;
+  background:
+    radial-gradient(closest-side at 0% 46%, rgba(255, 216, 160, 0.46), transparent 74%),
+    radial-gradient(closest-side at 0% 78%, rgba(243, 173, 73, 0.26), transparent 72%);
+  filter: blur(16px);
+  pointer-events: none;
+}
+
+/* THE ORBITS: three ellipses leaning the same way, wide enough to leave the
+   frame, so they read as one continuous system rather than as decoration
+   attached to a card. The top edge is the lit one. */
+.nc-root .nxs-hero__ring {
+  position: absolute;
+  z-index: -2;
+  left: -10%;
+  top: 1%;
+  width: 120%;
+  height: 58%;
+  border-radius: 50%;
+  border: 1px solid rgba(246, 219, 173, 0.13);
+  border-top-color: rgba(255, 242, 218, 0.5);
+  transform: rotate(-13deg);
+  filter: drop-shadow(0 0 10px rgba(246, 219, 173, 0.3));
+  pointer-events: none;
+}
+
+.nc-root .nxs-hero__ring[data-ring="mid"] {
+  left: 1%;
+  top: 7%;
+  width: 98%;
+  height: 46%;
+  border-color: rgba(246, 219, 173, 0.1);
+  border-top-color: rgba(255, 242, 218, 0.38);
+}
+
+.nc-root .nxs-hero__ring[data-ring="inner"] {
+  left: 14%;
+  top: 13%;
+  width: 74%;
+  height: 34%;
+  border-color: rgba(246, 219, 173, 0.08);
+  border-top-color: rgba(255, 242, 218, 0.28);
+  filter: none;
+}
+
+/* The horizon: the warm floor the doors stand on, widest under the planet. */
+.nc-root .nxs-hero__horizon {
+  position: absolute;
+  inset-inline: -8%;
+  inset-block-end: 4%;
+  height: 46%;
+  z-index: -2;
+  background:
+    radial-gradient(52% 100% at 50% 100%, rgba(246, 219, 173, 0.05), transparent 72%),
+    radial-gradient(38% 60% at 6% 100%, rgba(206, 152, 92, 0.06), transparent 78%),
+    linear-gradient(180deg, transparent 30%, rgba(2, 3, 2, 0.78));
+  pointer-events: none;
+}
+
+.nc-root .nxs-hero__doors {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.nc-root .nxs-hero__col {
+  --nxs-tint: 246, 219, 173;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-width: 0;
+}
+
+.nc-root .nxs-hero__col[data-tint="mint"] { --nxs-tint: 120, 214, 172; }
+.nc-root .nxs-hero__col[data-tint="champagne"] { --nxs-tint: 246, 219, 173; }
+
+/* WHICH DOOR IS WHERE. The reference reads marketing on the RIGHT and sales on
+   the LEFT in Arabic — the order a reader of that page takes them in. The DOM
+   keeps sales first (so the LTR product keeps sales on the left, unchanged); in
+   RTL the grid fills from the right, so marketing is pulled to the first cell
+   and the pair lands the way the reference has it. Text inside each door keeps
+   its own RTL flow: only the two columns swap. */
+.nc-root[dir="rtl"] .nxs-hero__col[data-dept="marketing"] { order: -1; }
+
+/* THE DOOR: dark smoked glass with real depth. It is mostly body, not fill —
+   a near-black pane, a bright top rim, and the department's light arriving at
+   the EDGES (see .nxs-door__glow), so the background reads through the border
+   instead of washing the middle beige. */
+.nc-root .nxs-door {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 300px;
+  padding: 32px 22px 26px;
+  border-radius: 26px;
+  border: 1px solid rgba(var(--nxs-tint), 0.4);
+  /* LAYERED, not filled: a smoked body, a lit crown where the sky hits the top
+     of the pane, and a bounce at the foot. The veil is thin enough that the
+     planet and the orbits behind it survive as shapes through the glass. */
+  background:
+    linear-gradient(180deg, rgba(20, 26, 22, 0.2), rgba(5, 7, 6, 0.44) 54%, rgba(6, 8, 7, 0.66)),
+    radial-gradient(96% 56% at 50% -6%, rgba(var(--nxs-tint), 0.22), transparent 62%),
+    radial-gradient(120% 64% at 50% 124%, rgba(var(--nxs-tint), 0.16), transparent 66%);
+  /* THE THICKNESS is read at the edges: a lit top rim, a solid band along the
+     foot where the slab ends, and the dark line under it. Without these three
+     the pane is a bordered rectangle; with them it is a piece of glass with a
+     seen cross-section. */
+  box-shadow:
+    inset 0 2px 0 rgba(255, 253, 246, 0.5),
+    inset 0 0 0 1px rgba(var(--nxs-tint), 0.18),
+    inset 0 -13px 0 -8px rgba(var(--nxs-tint), 0.26),
+    inset 0 -16px 0 -9px rgba(0, 0, 0, 0.5),
+    inset 0 -34px 60px -38px rgba(0, 0, 0, 0.98),
+    0 0 34px -14px rgba(var(--nxs-tint), 0.62),
+    0 44px 90px -54px rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(10px) saturate(130%);
+  color: inherit;
+  text-decoration: none;
+  text-align: center;
+  transition: transform 260ms ease, border-color 260ms ease, box-shadow 260ms ease;
+}
+
+.nc-root a.nxs-door:hover,
+.nc-root a.nxs-door:focus-visible {
+  transform: translateY(-3px);
+  border-color: rgba(var(--nxs-tint), 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 252, 244, 0.56),
+    inset 0 0 0 1px rgba(var(--nxs-tint), 0.24),
+    0 0 0 1px rgba(var(--nxs-tint), 0.2),
+    0 0 34px -12px rgba(var(--nxs-tint), 0.62),
+    0 46px 86px -50px rgba(0, 0, 0, 0.95);
+}
+
+/* THE EDGE LIGHT. Inside the isolated door, a negative-z child paints over the
+   door's own background but under its text, so these four blooms sit in the
+   glass: brightest along the top rim and the foot, faint on the sides. */
+.nc-root .nxs-door__glow {
+  position: absolute;
+  z-index: -2;
+  inset: -2px;
+  border-radius: inherit;
+  background:
+    radial-gradient(58% 20% at 50% 0%, rgba(var(--nxs-tint), 0.34), transparent 72%),
+    radial-gradient(64% 22% at 50% 100%, rgba(var(--nxs-tint), 0.26), transparent 74%),
+    radial-gradient(16% 52% at 0% 50%, rgba(var(--nxs-tint), 0.22), transparent 72%),
+    radial-gradient(16% 52% at 100% 50%, rgba(var(--nxs-tint), 0.22), transparent 72%);
+  filter: blur(12px);
+  pointer-events: none;
+}
+
+/* TWO FURTHER GLASS LAYERS. `::before` is the thick inner bezel the reference's
+   panes have — a second rim set in from the edge, so the door reads as a slab of
+   glass with depth rather than as a bordered rectangle. `::after` is the specular
+   sweep across the crown and the cool bounce off the foot; it is what makes the
+   tint arrive as reflection and not as a fill. Both sit at z-index -1: above the
+   door's own background and the edge blooms, below every word. */
+.nc-root .nxs-door::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 8px;
+  border-radius: inherit;
+  border: 1px solid rgba(var(--nxs-tint), 0.36);
+  /* The base is where glass shows how thick it is: a heavier line along the
+     bottom of the inner bezel, the way a cut edge catches the light. */
+  border-bottom-width: 3px;
+  border-bottom-color: rgba(var(--nxs-tint), 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 253, 246, 0.4),
+    inset 0 0 34px rgba(var(--nxs-tint), 0.14);
+  pointer-events: none;
+}
+
+.nc-root .nxs-door::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(148deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 16%, transparent 34%),
+    linear-gradient(330deg, rgba(var(--nxs-tint), 0.14) 0%, transparent 26%),
+    linear-gradient(0deg, rgba(var(--nxs-tint), 0.2), transparent 16%),
+    radial-gradient(70% 26% at 50% 105%, rgba(var(--nxs-tint), 0.22), transparent 72%);
+  pointer-events: none;
+}
+
+/* THE DEPARTMENT'S INSTRUMENT. The reference does not put a small chip over
+   the name; it puts one large glowing object above it. So the mark lost its
+   plate entirely: what is left is the drawing, a halo behind it, and a drop
+   shadow in the door's own tint, which is what makes it look lit from within. */
+.nc-root .nxs-door__mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  color: var(--nc-champagne-pale);
+  filter:
+    drop-shadow(0 8px 20px rgba(var(--nxs-tint), 0.4))
+    drop-shadow(0 0 26px rgba(var(--nxs-tint), 0.28));
+}
+
+.nc-root .nxs-door__mark::before {
+  content: "";
+  position: absolute;
+  inset: -16px;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, rgba(var(--nxs-tint), 0.24), transparent 68%);
+  filter: blur(7px);
+  pointer-events: none;
+}
+
+.nc-root .nxs-door__mark svg { display: block; width: 100%; height: 100%; }
+
+.nc-root .nxs-door__title { font-size: 27px; line-height: 1.2; color: var(--nc-text); }
+
+.nc-root .nxs-door__body {
+  max-width: 26ch;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--nc-text-2);
+}
+
+.nc-root .nxs-door__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  margin-top: 4px;
+  padding: 8px 20px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid rgba(var(--nxs-tint), 0.45);
+  background: rgba(9, 10, 9, 0.55);
+  color: var(--nc-champagne-pale);
+  font-size: 12.5px;
+}
+
+/* THE SUMMARY. One per door: two facts and the line of roles that runs it. */
+.nc-root .nxs-sum {
+  display: grid;
+  gap: 8px;
+  padding: 11px 13px;
+  border-radius: 18px;
+  border: 1px solid var(--nc-border);
+  background: linear-gradient(180deg, rgba(17, 19, 17, 0.72), rgba(7, 8, 7, 0.78));
+  box-shadow: var(--nc-inner-light);
+  backdrop-filter: blur(var(--nc-blur-2));
+}
+
+.nc-root .nxs-sum__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nc-root .nxs-sum__fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--nc-border);
+  background: var(--nc-glass-1);
+}
+
+.nc-root .nxs-sum__value {
+  font-size: 19px;
+  line-height: 1;
+  color: var(--nc-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.nc-root .nxs-sum__label { font-size: 11px; color: var(--nc-text-3); }
+
+.nc-root .nxs-sum__team {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--nc-text-2);
+}
+
+.nc-root .nxs-sum__team-mark {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 9px;
+  color: var(--nc-champagne-pale);
+  border: 1px solid var(--nc-border-2);
+  background: var(--nc-glass-2);
+}
+
+.nc-root .nxs-hero__foot {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--nc-text-2);
+}
+
+.nc-root .nxs-hero__line {
+  flex: 0 1 90px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(246, 219, 173, 0.45), transparent);
+}
+
+.nc-root .nxs-hero__pill {
+  padding: 4px 11px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-mint-line);
+  background: var(--nc-mint-soft);
+  color: var(--nc-mint-pale);
+  font-size: 10.5px;
+}
+
+.nc-root .nxs-footer { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.nc-root .nxs-footer__note { margin-inline-start: auto; font-size: 10.5px; color: var(--nc-text-4); }
+
+/* ── The room: two columns ──────────────────────────────────────────────── */
+
+.nc-root .nxs-room {
+  display: grid;
+  grid-template-columns: minmax(238px, 292px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.nc-root .nxs-dec {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-color: var(--nc-border-2);
+}
+
+.nc-root .nxs-task {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 11px;
+  border-radius: var(--nc-r-2);
+  border: 1px solid var(--nc-border);
+  background: var(--nc-glass-2);
+}
+
+.nc-root .nxs-task__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--nc-mint);
+  box-shadow: 0 0 9px var(--nc-mint-glow);
+}
+
+.nc-root .nxs-task__icon { color: var(--nc-champagne-pale); display: grid; place-items: center; }
+
+.nc-root .nxs-task__copy { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.nc-root .nxs-task__label { font-size: 10px; color: var(--nc-text-3); }
+.nc-root .nxs-task__title { font-size: 13px; font-weight: 600; color: var(--nc-text); }
+
+.nc-root .nxs-dec__kv {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+
+.nc-root .nxs-dec__row {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.nc-root .nxs-dec__row dt { font-size: 11px; color: var(--nc-text-3); }
+
+.nc-root .nxs-dec__row dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--nc-text-2);
+}
+
+.nc-root .nxs-dec__next { color: var(--nc-text); }
+.nc-root .nxs-dec__next svg { flex: 0 0 auto; color: var(--nc-champagne); }
+
+.nc-root .nxs-dec__inspect {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--nc-text-3);
+}
+
+.nc-root .nxs-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.nc-root .nxs-disc {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-size: 10.5px;
+  color: var(--nc-champagne-pale);
+  background: radial-gradient(circle at 32% 22%, rgba(246, 219, 173, 0.2), rgba(9, 10, 9, 0.92));
+  border: 1px solid var(--nc-champagne-line);
+}
+
+.nc-root .nxs-disc--sm { width: 22px; height: 22px; font-size: 9px; }
+
+/* ── The stage ──────────────────────────────────────────────────────────── */
+
+.nc-root .nxs-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--nc-r-3);
+  border: 1px solid var(--nc-border-2);
+  background:
+    radial-gradient(120% 90% at 72% -10%, rgba(246, 219, 173, 0.08), transparent 62%),
+    linear-gradient(180deg, rgba(24, 25, 22, 0.74), rgba(8, 9, 8, 0.68));
+  box-shadow: var(--nc-shadow-3), var(--nc-inner-light);
+  backdrop-filter: blur(var(--nc-blur-2));
+  overflow: hidden;
+}
+
+.nc-root .nxs-stage__banner {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 15px;
+  border-radius: var(--nc-r-pill);
+  font-size: 12px;
+  color: var(--nc-text);
+  background: var(--nc-glass-3);
+  border: 1px solid var(--nc-champagne-line);
+  box-shadow: var(--nc-inner-light);
+}
+
+.nc-root .nxs-stage__banner i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nc-mint);
+  box-shadow: 0 0 9px var(--nc-mint-glow);
+}
+
+.nc-root .nxs-deck {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 8px 2px 2px;
+}
+
+/* The floor: ONE decorative plane. Absolute, so it can never take a row from
+   the stations, and rotated on the X axis so the stations read as standing on
+   something rather than floating on a background. */
+.nc-root .nxs-platform {
+  position: absolute;
+  inset: 14% 3% -18%;
+  border-radius: 22px;
+  transform: perspective(900px) rotateX(56deg);
+  transform-origin: 50% 0%;
+  background: linear-gradient(180deg, rgba(246, 219, 173, 0.11), rgba(246, 219, 173, 0.015) 70%);
+  border: 1px solid var(--nc-border-2);
+  box-shadow: 0 40px 70px -34px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+}
+
+.nc-root .nxs-stations {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nc-root .nxs-stations__item { position: relative; }
+
+/* The connector between stations: a hairline, so the row reads as a route. */
+.nc-root .nxs-stations__item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 44%;
+  inset-inline-end: -10px;
+  width: 10px;
+  height: 1px;
+  background: var(--nc-champagne-line);
+  pointer-events: none;
+}
+
+.nc-root .nxs-station {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 13px 10px;
+  border-radius: var(--nc-r-2);
+  border: 1px solid var(--nc-border-2);
+  background: linear-gradient(180deg, rgba(35, 36, 32, 0.9), rgba(12, 13, 12, 0.84));
+  box-shadow: var(--nc-shadow-1), var(--nc-inner-light);
+  color: var(--nc-text-2);
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.nc-root .nxs-station:hover { transform: translateY(-2px); border-color: var(--nc-champagne-line); }
+
+.nc-root .nxs-station[data-open="true"] {
+  border-color: var(--nc-champagne-pale);
+  box-shadow: 0 0 0 1px rgba(246, 219, 173, 0.18), var(--nc-shadow-2);
+}
+
+.nc-root .nxs-station[data-status="working"] { --nxs-state: var(--nc-mint); }
+.nc-root .nxs-station[data-status="approval"] { --nxs-state: var(--nc-approval); }
+.nc-root .nxs-station[data-status="ready"] { --nxs-state: var(--nc-champagne); }
+.nc-root .nxs-station[data-status="waiting"] { --nxs-state: var(--nc-waiting); }
+.nc-root .nxs-station[data-status="done"] { --nxs-state: var(--nc-mint); }
+
+.nc-root .nxs-station__disc {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-block-end: 2px;
+  border-radius: 12px;
+  color: var(--nxs-state, var(--nc-champagne));
+  background: radial-gradient(circle at 34% 24%, rgba(255, 244, 226, 0.12), rgba(9, 10, 9, 0.9));
+  border: 1px solid var(--nc-border-2);
+}
+
+.nc-root .nxs-station__label {
+  font-size: 12.5px;
+  color: var(--nc-text);
+  text-align: center;
+}
+
+.nc-root .nxs-station__role {
+  font-size: 10.5px;
+  color: var(--nc-text-3);
+  text-align: center;
+}
+
+.nc-root .nxs-station__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  padding: 2px 8px;
+  border-radius: var(--nc-r-pill);
+  font-size: 10.5px;
+  color: var(--nxs-state, var(--nc-text-2));
+  border: 1px solid var(--nc-border);
+  background: rgba(9, 10, 9, 0.5);
+}
+
+.nc-root .nxs-station__status i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.nc-root .nxs-gate {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-champagne-line);
+  background: var(--nc-champagne-soft);
+  color: var(--nc-champagne-pale);
+  font-size: 11.5px;
+  text-decoration: none;
+}
+
+.nc-root .nxs-gate:hover { color: var(--nc-champagne-pale); border-color: var(--nc-champagne-pale); }
+
+/* ── The team strip ─────────────────────────────────────────────────────── */
+
+.nc-root .nxs-team__list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nc-root .nxs-member {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--nc-r-2);
+  border: 1px solid var(--nc-border);
+  background: var(--nc-glass-1);
+}
+
+.nc-root .nxs-member[data-owner="true"] {
+  border-color: var(--nc-champagne-line);
+  background: var(--nc-glass-2);
+}
+
+.nc-root .nxs-member__copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nc-root .nxs-member__name { font-size: 12px; color: var(--nc-text); }
+
+.nc-root .nxs-member__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--nc-text-3);
+}
+
+.nc-root .nxs-member__status i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.nc-root .nxs-member__status[data-status="working"],
+.nc-root .nxs-member__status[data-status="done"] { color: var(--nc-mint); }
+.nc-root .nxs-member__status[data-status="approval"] { color: var(--nc-approval); }
+.nc-root .nxs-member__status[data-status="ready"] { color: var(--nc-champagne); }
+
+/* ── The journey rail and the step panel ────────────────────────────────── */
+
+.nc-root .nxs-rail {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nc-root .nxs-step {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--nc-r-2);
+  border: 1px solid var(--nc-border);
+  background: var(--nc-glass-1);
+  color: var(--nc-text-2);
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color 180ms ease, background 180ms ease;
+}
+
+.nc-root .nxs-step:hover { border-color: var(--nc-border-2); }
+
+.nc-root .nxs-step[data-state="current"] {
+  border-color: var(--nc-champagne-line);
+  background: var(--nc-glass-2);
+}
+
+.nc-root .nxs-step[data-state="done"] { border-color: var(--nc-mint-line); }
+
+.nc-root .nxs-step__index {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 10px;
+  color: var(--nc-text-2);
+  border: 1px solid var(--nc-border-2);
+}
+
+.nc-root .nxs-step[data-state="current"] .nxs-step__index {
+  color: #16120d;
+  background: var(--nc-champagne-pale);
+  border-color: transparent;
+}
+
+.nc-root .nxs-step[data-state="done"] .nxs-step__index {
+  color: var(--nc-mint);
+  border-color: var(--nc-mint-line);
+}
+
+.nc-root .nxs-step__copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nc-root .nxs-step__title { font-size: 11.5px; line-height: 1.5; color: var(--nc-text-2); }
+.nc-root .nxs-step__owner { font-size: 10.5px; color: var(--nc-text-3); }
+
+.nc-root .nxs-panel {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: var(--nc-r-2);
+  border: 1px solid var(--nc-border-2);
+  background: linear-gradient(180deg, rgba(20, 21, 19, 0.72), rgba(8, 9, 8, 0.62));
+}
+
+.nc-root .nxs-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.nc-root .nxs-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--nc-text);
+}
+
+.nc-root .nxs-panel__index {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 10.5px;
+  color: var(--nc-champagne-pale);
+  border: 1px solid var(--nc-champagne-line);
+}
+
+.nc-root .nxs-panel__owner {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-border-2);
+  color: var(--nc-text-3);
+}
+
+.nc-root .nxs-panel__note {
+  margin: 8px 0 10px;
+  font-size: 11.5px;
+  line-height: 1.75;
+  color: var(--nc-text-3);
+}
+
+.nc-root .nxs-panel__foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--nc-border);
+}
+
+.nc-root .nxs-panel__hint { font-size: 10.5px; color: var(--nc-text-4); }
+.nc-root .nxs-done { font-size: 11.5px; color: var(--nc-mint); }
+
+.nc-root .nxs-preview {
+  padding: 12px;
+  border-radius: var(--nc-r-2);
+  border: 1px dashed var(--nc-champagne-line);
+  background: var(--nc-champagne-soft);
+}
+
+.nc-root .nxs-preview__title { margin: 0 0 6px; font-size: 12px; color: var(--nc-champagne-pale); }
+.nc-root .nxs-preview__line { margin: 2px 0; font-size: 12px; color: var(--nc-text-2); }
+.nc-root .nxs-preview__note { margin: 8px 0 0; font-size: 11px; line-height: 1.7; color: var(--nc-text-3); }
+
+.nc-root .nxs-preview__links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+/* ── The composer ───────────────────────────────────────────────────────── */
+
+.nc-root .nxs-ask {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--nc-r-3);
+  border: 1px solid var(--nc-border-2);
+  background: linear-gradient(180deg, rgba(26, 27, 24, 0.72), rgba(10, 11, 10, 0.62));
+  box-shadow: var(--nc-shadow-2), var(--nc-inner-light);
+  backdrop-filter: blur(var(--nc-blur-2));
+}
+
+.nc-root .nxs-ask__form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.nc-root .nxs-ask__input { flex: 1 1 auto; min-width: 0; }
+
+.nc-root .nxs-ask__icon,
+.nc-root .nxs-ask__send {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--nc-border-2);
+  background: var(--nc-glass-2);
+  color: var(--nc-text-2);
+  cursor: pointer;
+}
+
+.nc-root .nxs-ask__send {
+  color: #16120d;
+  border-color: transparent;
+  background: linear-gradient(180deg, rgba(246, 219, 173, 0.95), rgba(208, 173, 137, 0.88));
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 1180px) {
+  .nc-root .nxs-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .nc-root .nxs-team__list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* The room's two columns hold down to ~900px: the decisions card is 292px and
+   the stage needs the rest, and a 960px laptop is exactly the review width this
+   composition was drawn for. Below 900 the stage leads and the card follows,
+   because on a narrow screen the picture is the thing being read first. */
+@media (max-width: 900px) {
+  .nc-root .nxs-room { grid-template-columns: minmax(0, 1fr); }
+  .nc-root .nxs-dec { order: 2; }
+  .nc-root .nxs-stage { order: 1; }
+}
+
+/* The gateway holds TWO doors side by side all the way down to 620px, because
+   both doors are the choice and the side panel this page is reviewed in is about
+   720px wide. The panes shrink in steps instead of stacking. */
+@media (max-width: 1180px) {
+  .nc-root .nxs-hero { padding: 20px 10px 7px; }
+  .nc-root .nxs-door { min-height: 272px; padding: 26px 18px 22px; }
+  .nc-root .nxs-door__title { font-size: 25px; }
+  .nc-root .nxs-door__mark { width: 84px; height: 84px; }
+  .nc-root .nxs-hero__limb { width: 48%; left: -14%; }
+}
+
+@media (max-width: 900px) {
+  .nc-root .nxs-hero { gap: 10px; padding: 16px 8px 6px; }
+  .nc-root .nxs-hero__doors { gap: 10px; }
+  .nc-root .nxs-door { min-height: 232px; padding: 20px 12px 18px; border-radius: 20px; gap: 8px; }
+  .nc-root .nxs-door__mark { width: 76px; height: 76px; }
+  .nc-root .nxs-door__title { font-size: 20px; }
+  .nc-root .nxs-door__body { font-size: 11.5px; line-height: 1.65; }
+  .nc-root .nxs-door__cta { min-height: 32px; padding: 6px 14px; font-size: 11.5px; }
+  .nc-root .nxs-sum { padding: 9px 10px; gap: 6px; border-radius: 15px; }
+  .nc-root .nxs-sum__fact { padding: 6px 8px; }
+  .nc-root .nxs-sum__value { font-size: 16px; }
+  .nc-root .nxs-sum__label { font-size: 10.5px; }
+  .nc-root .nxs-sum__team { font-size: 10.5px; }
+  .nc-root .nxs-hero__foot { font-size: 11px; }
+  .nc-root .nxs-hero__line { flex-basis: 50px; }
+}
+
+@media (max-width: 760px) {
+  .nc-root .nxs-page,
+  .nc-root .nxs-room-page { gap: 11px; padding-block-end: 24px; }
+
+  .nc-root .nxs-head { flex-direction: column; align-items: stretch; gap: 10px; padding: 12px; }
+  .nc-root .nxs-head__side { flex-direction: row; align-items: center; justify-content: space-between; }
+  .nc-root .nxs-head__title { font-size: 19px; }
+  .nc-root .nxs-head__blurb { font-size: 12px; }
+
+  /* One column, and the floor stops being a plane: at this width a tilted
+     surface behind a single column of cards reads as a smudge, not depth. */
+  .nc-root .nxs-stations,
+  .nc-root .nxs-rail,
+  .nc-root .nxs-team__list { grid-template-columns: minmax(0, 1fr); }
+
+  .nc-root .nxs-footer__note { margin-inline-start: 0; }
+  .nc-root .nxs-platform { display: none; }
+  .nc-root .nxs-stations__item::after { display: none; }
+
+  .nc-root .nxs-dec__row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .nc-root .nxs-dec__next { font-size: 12.5px; }
+
+  .nc-root .nxs-station { flex-direction: row; align-items: center; gap: 10px; text-align: start; }
+  .nc-root .nxs-station__disc { margin: 0; }
+  .nc-root .nxs-station__label,
+  .nc-root .nxs-station__role { text-align: start; }
+  .nc-root .nxs-station__status { margin-inline-start: auto; }
+
+  .nc-root .nxs-btn,
+  .nc-root .nxs-chip { min-height: 42px; }
+
+  .nc-root .nxs-panel { padding: 12px; }
+  .nc-root .nxs-ask { padding: 9px 10px; }
+  .nc-root .nxs-ask__icon { display: none; }
+}
+
+/* Only a phone stacks the doors: below ~620px two panes would be narrower than
+   their own icons, so the stage becomes one column and the planet drops behind
+   the first door. */
+@media (max-width: 620px) {
+  .nc-root .nxs-hero__doors { grid-template-columns: minmax(0, 1fr); }
+  .nc-root .nxs-hero { padding: 14px 8px 6px; }
+  .nc-root .nxs-door { min-height: 224px; padding: 24px 16px 20px; border-radius: 22px; }
+  .nc-root .nxs-door__mark { width: 60px; height: 60px; border-radius: 17px; }
+  .nc-root .nxs-door__title { font-size: 22px; }
+  .nc-root .nxs-door__cta { min-height: 42px; }
+  .nc-root .nxs-door__mark { width: 88px; height: 88px; }
+  .nc-root .nxs-hero__ring { height: 76%; top: 12%; }
+  .nc-root .nxs-hero__foot { font-size: 11px; }
+  .nc-root .nxs-hero__line { flex-basis: 34px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nc-root .nxs-btn,
+  .nc-root .nxs-door,
+  .nc-root .nxs-station,
+  .nc-root .nxs-step { transition: none; }
+  .nc-root .nxs-door:hover,
+  .nc-root .nxs-station:hover { transform: none; }
+}
+
+/* Without backdrop blur the glass must still separate from what is behind it. */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  .nc-root .nxs-head,
+  .nc-root .nxs-card,
+  .nc-root .nxs-door,
+  .nc-root .nxs-stage,
+  .nc-root .nxs-ask,
+  .nc-root .nxs-sum { background-color: rgba(14, 15, 14, 0.94); }
+}

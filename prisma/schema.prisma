@@ -1073,6 +1073,12 @@ model AiExecutionRecord {
   replayed            Boolean   @default(false)
   startedAt           DateTime
   updatedAt           DateTime
+  /// The RECOVERY ROTATION key (Step 5A-4, fifth review): when a recovery sweep
+  /// last OBSERVED this attempt. NULL = never swept, which is the FRONT of the
+  /// queue. Written only by `markRecoverySwept` — deliberately NOT `updatedAt`,
+  /// which is the attempt's real activity and feeds Recent Activity. Proposed in
+  /// `prisma/proposed-migrations/AI_WORKFORCE_PHASE_5/`.
+  recoverySweptAt     DateTime?
   completedAt         DateTime?
   durationMs          Int?
   /// The structured result. `output` is the parsed shape; `outputText` the raw
@@ -1101,6 +1107,7 @@ model AiExecutionRecord {
   @@index([missionId])
   @@index([taskId])
   @@index([updatedAt])
+  @@index([recoverySweptAt])
   @@map("ai_execution_records")
 }
 
@@ -1253,6 +1260,11 @@ model AiExecutionClaim {
   leaseExpiresAt    DateTime?
   /// Bounded, non-secret explanation of the current state.
   detail            String?
+  /// The RECOVERY ROTATION key (Step 5A-4, fifth review): when a recovery sweep
+  /// last OBSERVED this row. NULL = never swept, which is the FRONT of the queue.
+  /// Written only by `markRecoverySwept`, never by a state transition and never by
+  /// `updatedAt`. Proposed in `prisma/proposed-migrations/AI_WORKFORCE_PHASE_5/`.
+  recoverySweptAt   DateTime?
   claimedAt         DateTime
   updatedAt         DateTime
 
@@ -1260,5 +1272,6 @@ model AiExecutionClaim {
   @@index([missionId])
   @@index([state])
   @@index([leaseExpiresAt])
+  @@index([recoverySweptAt])
   @@map("ai_execution_claims")
 }

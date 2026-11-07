@@ -1,0 +1,1370 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEXUP COMMAND — OPERATING LAYER (Pass 3 · design-direction correction)
+   ───────────────────────────────────────────────────────────────────────
+   Imported LAST by src/app/command/layout.tsx, after every other layer. Like
+   each layer before it, every rule is scoped under `.nc-root`, it redefines no
+   token, and it touches no legacy NEXUP surface.
+
+   WHY IT IS LAST. This pass retunes the COMPOSITION of the chrome it owns (the
+   home, the action row, the department cards, the phone shell). Those elements
+   already have rules in earlier layers — `reference.css` for the command-center
+   chrome, `locale.css` for the cards and the phone bar — so the correction has
+   to be the final word. It is still additive: it redefines no token, removes no
+   surface and overrides no page's own reading.
+
+   WHAT IT CHANGES, ALL IN ONE DIRECTION — calm:
+     · less glow, fewer borders, one accent per element, more space;
+     · a compact heading instead of an introductory banner;
+     · three figures instead of five, two priority panels instead of two tables
+       buried under a graph, and six balanced department cards;
+     · one primary action in the page's own flow instead of a fixed bar;
+     · a purpose-built phone composition with a four-destination bottom bar,
+       a sheet for everything else, and safe-area-aware padding.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1 · ROOM RHYTHM + QUIETER AMBIENT
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nc-room {
+  gap: 18px;
+  padding: 10px 30px 34px;
+}
+
+/* The environment is a backdrop, not a light show: the window and the bokeh
+   both step back so the plates read as the brightest thing on the screen. */
+.nc-root .nc-ambient__window { opacity: 0.5; }
+.nc-root .nc-ambient__bokeh { opacity: 0.45; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2 · COMPACT PAGE HEADING — the banner is gone
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nc-op-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 8px 2px 16px;
+  border-bottom: 1px solid var(--nc-border);
+}
+
+.nc-root .nc-op-head__id { min-width: 0; flex: 1 1 360px; }
+
+.nc-root .nc-op-head__kicker {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+
+/* The company scope inside the kicker: a SECOND fact, separated from the brand
+   sub by a dot. It used to sit flush against it — "CommandAll Companies" —
+   which read as one nonsense word in both languages. The dot is decoration; the
+   space that keeps the two apart for a screen reader lives in the markup. */
+.nc-root .nc-op-head__scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: 5px;
+  color: var(--nc-text-3);
+}
+.nc-root .nc-op-head__scope::before {
+  content: "";
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+
+.nc-root .nc-op-head__title {
+  margin: 8px 0 0;
+  font-size: clamp(20px, 1.5vw, 25px);
+  font-weight: 660;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  color: var(--nc-text);
+}
+
+.nc-root .nc-op-head__sub {
+  margin: 7px 0 0;
+  max-width: 64ch;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--nc-text-3);
+}
+
+.nc-root .nc-op-head__side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Company scope — a quiet plate, not a coloured chip: it is context, and the
+   page's colour is spent on what needs a human. */
+.nc-root .nc-op-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 13px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-1);
+  color: var(--nc-text-2);
+  transition: border-color var(--nc-dur-micro) var(--nc-ease-standard),
+    color var(--nc-dur-micro) var(--nc-ease-standard);
+}
+.nc-root .nc-op-scope:hover { border-color: var(--nc-hairline-2); color: var(--nc-text); }
+.nc-root .nc-op-scope__label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+.nc-root .nc-op-scope__value { font-size: 12.5px; font-weight: 620; }
+
+.nc-root .nc-op-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-hairline-2);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--nc-text-2);
+}
+.nc-root .nc-op-back:hover { color: var(--nc-text); }
+
+/* The two readings. One control, two equally weighted states. */
+.nc-root .nc-op-views {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-hairline);
+  background: rgba(9, 13, 22, 0.5);
+}
+.nc-root .nc-op-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--nc-r-pill);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--nc-text-3);
+  transition: color var(--nc-dur-micro) var(--nc-ease-standard),
+    background var(--nc-dur-micro) var(--nc-ease-standard);
+}
+.nc-root .nc-op-view:hover { color: var(--nc-text-2); }
+.nc-root .nc-op-view[data-active="true"] {
+  background: var(--nc-glass-3);
+  color: var(--nc-text);
+  box-shadow: var(--nc-inner-light);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3 · ONE PRIMARY ACTION + CONTEXTUAL SECONDARIES (in the page's flow)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nc-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-radius: var(--nc-r-3);
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-plate);
+  box-shadow: var(--nc-inner-light);
+  animation: nc-rise var(--nc-dur-quick) var(--nc-ease-out) both;
+}
+
+.nc-root .nc-actions__primary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* The Executive control reads as the ONE primary action: a lit plate, its own
+   material, and the only element in this row that carries the accent edge. */
+.nc-root .nc-actions .nc-exec-lead {
+  padding: 4px 14px 4px 4px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-lime-line);
+  background: linear-gradient(180deg, rgba(163, 230, 53, 0.1), rgba(255, 255, 255, 0.02) 64%);
+}
+.nc-root .nc-actions .nc-exec-lead__orb { width: 34px; height: 34px; }
+.nc-root .nc-actions .nc-exec-lead__title { font-size: 12.5px; }
+.nc-root .nc-actions .nc-exec-lead__hint { font-size: 9.5px; color: var(--nc-text-4); }
+
+.nc-root .nc-actions__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-hairline-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--nc-text-3);
+}
+.nc-root .nc-actions__back:hover { color: var(--nc-text); }
+
+.nc-root .nc-actions__context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-inline-start: auto;
+}
+
+.nc-root .nc-actions__cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-1);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--nc-text-2);
+  transition: color var(--nc-dur-micro) var(--nc-ease-standard),
+    border-color var(--nc-dur-micro) var(--nc-ease-standard),
+    background var(--nc-dur-micro) var(--nc-ease-standard);
+}
+.nc-root .nc-actions__cell svg { color: var(--nc-text-4); }
+.nc-root .nc-actions__cell:hover {
+  color: var(--nc-text);
+  border-color: var(--nc-hairline-2);
+  background: var(--nc-glass-2);
+}
+.nc-root .nc-actions__cell:hover svg { color: var(--nc-accent, var(--nc-text-2)); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4 · THREE SUMMARY FIGURES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nc-op-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.nc-root .nc-op-metric {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 15px 17px 15px 20px;
+  border-radius: var(--nc-r-3);
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-plate);
+  text-decoration: none;
+  overflow: hidden;
+  transition: border-color var(--nc-dur-micro) var(--nc-ease-standard);
+}
+/* One accent per figure, as a two-pixel edge rather than a glow: the plate
+   stays dark and the meaning stays legible. */
+.nc-root .nc-op-metric::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 2px;
+  background: var(--nc-accent, var(--nc-text-3));
+  opacity: 0.85;
+}
+.nc-root .nc-op-metric:hover { border-color: var(--nc-hairline-2); }
+.nc-root .nc-op-metric__value {
+  font-size: 26px;
+  font-weight: 680;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--nc-text);
+  font-variant-numeric: tabular-nums;
+}
+.nc-root .nc-op-metric__label { font-size: 12.5px; font-weight: 620; color: var(--nc-text-2); }
+.nc-root .nc-op-metric__note { font-size: 11px; color: var(--nc-text-4); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5 · THE TWO PRIORITY PANELS — what needs you, what is moving
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nc-op-priority {
+  display: grid;
+  grid-template-columns: minmax(0, 1.06fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.nc-root .nc-op-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: var(--nc-r-3);
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-plate);
+  box-shadow: var(--nc-inner-light);
+  overflow: hidden;
+}
+/* The decision panel is the reason the screen exists: one accent edge, and one
+   step up in material. Nothing else on the page competes with it. */
+.nc-root .nc-op-panel--action { border-color: rgba(240, 180, 41, 0.24); }
+
+.nc-root .nc-op-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--nc-hairline);
+}
+
+.nc-root .nc-op-panel__mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-2);
+  color: var(--nc-text-3);
+}
+.nc-root .nc-op-panel--action .nc-op-panel__mark {
+  color: var(--nc-approval);
+  border-color: rgba(240, 180, 41, 0.3);
+  background: rgba(240, 180, 41, 0.1);
+}
+
+.nc-root .nc-op-panel__title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--nc-text);
+  white-space: nowrap;
+}
+.nc-root .nc-op-panel__count {
+  font-size: 11px;
+  font-weight: 650;
+  padding: 2px 8px;
+  border-radius: var(--nc-r-pill);
+  background: var(--nc-glass-2);
+  color: var(--nc-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.nc-root .nc-op-panel__hint {
+  font-size: 11px;
+  color: var(--nc-text-4);
+  margin-inline-end: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* One clear action per panel. */
+.nc-root .nc-op-panel__action,
+.nc-root .nc-op-panel__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 13px;
+  border-radius: var(--nc-r-pill);
+  font-size: 12px;
+  font-weight: 620;
+  white-space: nowrap;
+}
+.nc-root .nc-op-panel__action {
+  border: 1px solid rgba(240, 180, 41, 0.36);
+  background: rgba(240, 180, 41, 0.12);
+  color: #f3cd7a;
+}
+.nc-root .nc-op-panel__action:hover { background: rgba(240, 180, 41, 0.2); }
+.nc-root .nc-op-panel__link { border: 1px solid var(--nc-hairline-2); color: var(--nc-text-2); }
+.nc-root .nc-op-panel__link:hover { color: var(--nc-text); border-color: var(--nc-border-3); }
+
+.nc-root .nc-op-empty {
+  margin: 0;
+  padding: 16px;
+  font-size: 12.5px;
+  color: var(--nc-text-3);
+}
+
+.nc-root .nc-op-rows { display: flex; flex-direction: column; }
+
+.nc-root .nc-op-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 16px;
+  border-top: 1px solid var(--nc-hairline);
+  text-decoration: none;
+  color: inherit;
+  transition: background var(--nc-dur-micro) var(--nc-ease-standard);
+}
+.nc-root .nc-op-row:first-child { border-top: 0; }
+.nc-root .nc-op-row:hover { background: var(--nc-glass-1); }
+/* The mission rows carry two trailing cells (load, then state). */
+.nc-root .nc-op-row[data-variant="mission"] {
+  grid-template-columns: 30px minmax(0, 1fr) auto auto;
+}
+
+.nc-root .nc-op-row__mark {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--nc-accent, var(--nc-text-3));
+  background: color-mix(in srgb, var(--nc-accent, var(--nc-text-3)) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--nc-accent, var(--nc-text-3)) 28%, transparent);
+  unicode-bidi: isolate;
+}
+
+.nc-root .nc-op-row__stack { min-width: 0; }
+.nc-root .nc-op-row__title {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--nc-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nc-root .nc-op-row__meta {
+  display: block;
+  font-size: 11px;
+  color: var(--nc-text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nc-root .nc-op-tag {
+  font-size: 10.5px;
+  font-weight: 620;
+  padding: 3px 9px;
+  border-radius: var(--nc-r-pill);
+  white-space: nowrap;
+  color: var(--nc-accent);
+  background: color-mix(in srgb, var(--nc-accent) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--nc-accent) 30%, transparent);
+}
+
+.nc-root .nc-op-row__figures { display: inline-flex; align-items: center; gap: 9px; }
+.nc-root .nc-op-meter {
+  width: 66px;
+  height: 4px;
+  border-radius: var(--nc-r-pill);
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.nc-root .nc-op-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--nc-accent, var(--nc-text-3));
+}
+.nc-root .nc-op-meter__pct {
+  font-size: 11px;
+  color: var(--nc-text-3);
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
+}
+
+.nc-root .nc-op-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 620;
+  white-space: nowrap;
+  color: var(--nc-accent, var(--nc-text-3));
+}
+.nc-root .nc-op-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nc-accent, var(--nc-text-3));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6 · THE SIX DEPARTMENTS — balanced cards
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nc-op-spaces { display: flex; flex-direction: column; gap: 14px; }
+
+.nc-root .nc-op-spaces__head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.nc-root .nc-op-spaces__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 660;
+  letter-spacing: -0.015em;
+  color: var(--nc-text);
+}
+.nc-root .nc-op-spaces__hint { font-size: 12px; color: var(--nc-text-4); }
+
+/* Three across, two rows: the six spaces read as a balanced set rather than an
+   auto-flowed mosaic. */
+.nc-root .nc-op-spaces .nc-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0;
+}
+.nc-root .nc-op-spaces .nc-cards__note { display: none; }
+
+.nc-root .nc-op-spaces .nc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 17px;
+  border-radius: var(--nc-r-3);
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-plate);
+  box-shadow: var(--nc-inner-light);
+}
+.nc-root .nc-op-spaces .nc-card:hover {
+  border-color: var(--nc-hairline-2);
+  background: var(--nc-glass-plate-strong);
+}
+
+/* ONE row: mark · identity · one status line. Nothing overlaps, in either
+   direction, at any width: the identity column shrinks and the status keeps its
+   own cell. */
+.nc-root .nc-op-spaces .nc-card__head {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-areas: "mark id status";
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.nc-root .nc-op-spaces .nc-card__mark { grid-area: mark; }
+.nc-root .nc-op-spaces .nc-card__id {
+  grid-area: id;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.nc-root .nc-op-spaces .nc-card__name {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  color: var(--nc-text);
+}
+.nc-root .nc-op-spaces .nc-card__cap {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--nc-text-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nc-root .nc-op-spaces .nc-card__status {
+  grid-area: status;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-1);
+  font-size: 10px;
+  font-weight: 620;
+  letter-spacing: 0.04em;
+  color: var(--nc-text-3);
+  white-space: nowrap;
+  unicode-bidi: isolate;
+}
+.nc-root .nc-op-spaces .nc-card__led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nc-accent, var(--nc-idle));
+}
+.nc-root .nc-op-spaces .nc-card[data-attention="true"] .nc-card__led { background: var(--nc-approval); }
+
+/* The current work line: one or two lines, reserving its height so the six
+   cards keep a common baseline. */
+.nc-root .nc-op-spaces .nc-card__job {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--nc-text-2);
+  min-height: 2.9em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.nc-root .nc-op-spaces .nc-card--core .nc-card__job { color: var(--nc-text-3); }
+
+.nc-root .nc-op-spaces .nc-card__figures {
+  display: flex;
+  gap: 20px;
+  margin-top: auto;
+}
+.nc-root .nc-op-spaces .nc-card__figure { display: flex; flex-direction: column; gap: 2px; }
+.nc-root .nc-op-spaces .nc-card__figure b {
+  font-size: 17px;
+  font-weight: 660;
+  letter-spacing: -0.02em;
+  color: var(--nc-text);
+  unicode-bidi: isolate;
+}
+.nc-root .nc-op-spaces .nc-card__figure span { font-size: 10px; color: var(--nc-text-4); }
+.nc-root .nc-op-spaces .nc-card__figure[data-attention="true"] b { color: var(--nc-approval); }
+
+.nc-root .nc-op-spaces .nc-card__meter {
+  height: 3px;
+  border-radius: var(--nc-r-pill);
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+.nc-root .nc-op-spaces .nc-card__meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--nc-accent, var(--nc-text-3));
+  opacity: 0.75;
+}
+
+/* The card foot (director + bottleneck) moved to the department workspace: it is
+   actionable there and it was noise here. */
+.nc-root .nc-op-spaces .nc-card__foot { display: none; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   7 · THE ORGANIZATION — the default reading
+   ═══════════════════════════════════════════════════════════════════════════
+   The composition is no longer a secondary, optional band: it is the reading
+   the home opens on. What changed here is only its FRAME, because a reading that
+   is the default must not look like an appendix:
+
+     · it is a SECTION with its own title and one line of instruction — the same
+       head pattern the cards and list readings use, so switching between the
+       three moves the content and nothing else;
+     · the selection strip (what is selected, and how to let it go) sits directly
+       under the page's action row, where the reader's hand already is, rather
+       than floating over the composition;
+     · the stage keeps the height the nodes need (below).
+
+   The scene itself, the six spaces and the wiring are unchanged — this layer
+   only frames them. */
+
+.nc-root .nc-ov {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.nc-root .nc-ov__head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.nc-root .nc-ov__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 660;
+  letter-spacing: -0.015em;
+  color: var(--nc-text);
+}
+.nc-root .nc-ov__hint { font-size: 12px; color: var(--nc-text-4); }
+
+/* THE STAGE IS SIZED BY THE NODES THAT STAND ON IT, NOT BY TASTE.
+   The six spaces sit in two banks of three, at 22% / 50% / 78% of the stage's
+   height — a 28% pitch. At the shell's default stage height that pitch is 121px
+   while a node is 140px tall, so every node's foot was painted over by the node
+   beneath it: the name's second line, the capability and the figures were all
+   "there" and unreadable. The pitch is a share of the stage, so the stage is what
+   has to grow: 0.28 × 580px = 162px, which leaves a node its full height plus a
+   22px gap. Overridden by selector (not by token) because the height lives on the
+   shared `.nc-room__stage` rule this layer cannot retune. */
+.nc-root .nc-ov__stage { height: clamp(580px, 64vh, 700px); }
+
+/* ── The selection strip ────────────────────────────────────────────────────
+   Selection is reversible from the composition's own frame, not only from the
+   panel that opened with it: a reader who selected a space must be able to let it
+   go without hunting for the thing that reacted. One quiet plate, one lime line
+   (lime is the ACTIVE state, and a selection is an active state), one button. */
+.nc-root .nc-ov__selected {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 9px 12px 9px 14px;
+  border-radius: var(--nc-r-2);
+  border: 1px solid var(--nc-lime-line);
+  background: linear-gradient(90deg, var(--nc-lime-soft), transparent 62%);
+}
+.nc-root .nc-ov__selected::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--nc-active);
+  box-shadow: 0 0 0 4px var(--nc-lime-glow);
+}
+.nc-root .nc-ov__selected-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--nc-text-2);
+}
+.nc-root .nc-ov__selected-clear {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-hairline-2);
+  background: var(--nc-glass-1);
+  font-size: 11.5px;
+  font-weight: 620;
+  color: var(--nc-text-2);
+  cursor: pointer;
+}
+.nc-root .nc-ov__selected-clear:hover { color: var(--nc-text); border-color: var(--nc-border-3); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   8 · OPERATING DETAIL — the band, closed by default
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nc-op-detail {
+  margin-top: 6px;
+  padding: 18px 18px 20px;
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-3);
+  background: var(--nc-glass-plate);
+  box-shadow: var(--nc-inner-light);
+}
+
+.nc-root .nc-op-detail__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 18px;
+  align-items: start;
+}
+.nc-root .nc-op-detail__title {
+  grid-column: 1;
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--nc-text);
+}
+.nc-root .nc-op-detail__blurb {
+  grid-column: 1;
+  margin: 0;
+  max-width: 76ch;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--nc-text-3);
+}
+.nc-root .nc-op-detail__toggle {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-hairline-2);
+  font-size: 12.5px;
+  font-weight: 620;
+  color: var(--nc-text-2);
+  white-space: nowrap;
+}
+.nc-root .nc-op-detail__toggle:hover { color: var(--nc-text); border-color: var(--nc-border-3); }
+.nc-root .nc-op-detail__toggle svg { transition: transform var(--nc-dur-quick) var(--nc-ease-standard); }
+.nc-root .nc-op-detail__toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+.nc-root .nc-op-detail__body { margin-top: 18px; }
+.nc-root .nc-op-detail .nl-band__inner { gap: 16px; }
+.nc-root .nc-op-detail .nl-panel {
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-1);
+  box-shadow: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   9 · MOBILE — the phone composition (≤760px)
+   The desktop room stands down; this is the whole product on a phone.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nc-mo__head { display: flex; align-items: center; gap: 10px; }
+
+.nc-root .nc-mo__brand { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.nc-root .nc-mo__brand-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--nc-text);
+}
+.nc-root .nc-mo__brand-sub {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--nc-text-4);
+}
+
+.nc-root .nc-mo__scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-1);
+  font-size: 12px;
+  font-weight: 620;
+  color: var(--nc-text-2);
+  max-width: 46vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The scope's limitation, under the phone's own scope control. Same sentence,
+   same place, both languages — a selector that only renames things must not
+   look like business isolation on the screen where the control is most
+   reachable. */
+.nc-root .nc-mo__scope-note {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--nc-text-3);
+  text-align: end;
+}
+
+.nc-root .nc-mo__account {
+  margin-inline-start: auto;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-1);
+  text-decoration: none;
+}
+.nc-root .nc-mo__account:active { background: var(--nc-glass-2); }
+
+/* The screen's ONE primary action. */
+.nc-root .nc-mo__exec {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  padding: 15px 16px;
+  border-radius: var(--nc-r-3);
+  border: 1px solid var(--nc-lime-line);
+  background: linear-gradient(180deg, rgba(163, 230, 53, 0.1), rgba(255, 255, 255, 0.02) 62%);
+  box-shadow: var(--nc-inner-light);
+  text-align: start;
+}
+.nc-root .nc-mo__exec:active { background: rgba(163, 230, 53, 0.16); }
+.nc-root .nc-mo__exec-orb {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: var(--nc-lime);
+  border: 1px solid var(--nc-lime-line);
+  background: rgba(255, 255, 255, 0.03);
+}
+.nc-root .nc-mo__exec-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nc-root .nc-mo__exec-title { font-size: 15px; font-weight: 680; color: var(--nc-text); }
+.nc-root .nc-mo__exec-hint { font-size: 11.5px; color: var(--nc-text-3); }
+
+.nc-root .nc-mo__section { display: flex; flex-direction: column; gap: 10px; }
+.nc-root .nc-mo__section-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.nc-root .nc-mo__section-title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 660;
+  letter-spacing: -0.01em;
+  color: var(--nc-text);
+  white-space: nowrap;
+}
+.nc-root .nc-mo__section-count {
+  font-size: 11px;
+  font-weight: 650;
+  padding: 1px 7px;
+  border-radius: var(--nc-r-pill);
+  background: var(--nc-glass-2);
+  color: var(--nc-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.nc-root .nc-mo__section-hint {
+  font-size: 11px;
+  color: var(--nc-text-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nc-root .nc-mo__section-action {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 620;
+  color: var(--nc-text-2);
+  white-space: nowrap;
+}
+
+.nc-root .nc-mo__list { display: flex; flex-direction: column; gap: 8px; }
+.nc-root .nc-mo__row {
+  /* A 44px minimum target, and nothing hidden behind a hover. */
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--nc-r-2);
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-1);
+  text-decoration: none;
+  color: inherit;
+}
+.nc-root .nc-mo__row:active { background: var(--nc-glass-2); }
+.nc-root .nc-mo__row[data-tone="attention"] { border-color: rgba(240, 180, 41, 0.28); }
+.nc-root .nc-mo__row-stack { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.nc-root .nc-mo__row-title {
+  font-size: 13.5px;
+  font-weight: 620;
+  color: var(--nc-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nc-root .nc-mo__row-meta {
+  font-size: 11.5px;
+  color: var(--nc-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nc-root .nc-mo__row-tag {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 620;
+  padding: 3px 9px;
+  border-radius: var(--nc-r-pill);
+  border: 1px solid rgba(240, 180, 41, 0.3);
+  background: rgba(240, 180, 41, 0.1);
+  color: #f3cd7a;
+}
+.nc-root .nc-mo__row-meter {
+  flex: none;
+  width: 54px;
+  height: 4px;
+  border-radius: var(--nc-r-pill);
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.nc-root .nc-mo__row-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--nc-network, var(--nc-thinking));
+}
+
+.nc-root .nc-mo__empty {
+  margin: 0;
+  padding: 14px;
+  border-radius: var(--nc-r-2);
+  border: 1px dashed var(--nc-hairline-2);
+  font-size: 12.5px;
+  color: var(--nc-text-3);
+}
+
+.nc-root .nc-mo__depts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.nc-root .nc-mo__dept {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 13px 13px 14px;
+  border-radius: var(--nc-r-2);
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-plate);
+  text-decoration: none;
+  min-height: 104px;
+}
+.nc-root .nc-mo__dept:active { background: var(--nc-glass-plate-strong); }
+.nc-root .nc-mo__dept-icon { color: var(--nc-accent, var(--nc-text-2)); }
+.nc-root .nc-mo__dept-name {
+  font-size: 13px;
+  font-weight: 640;
+  line-height: 1.25;
+  color: var(--nc-text);
+}
+.nc-root .nc-mo__dept-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 620;
+  color: var(--nc-accent, var(--nc-text-3));
+  white-space: nowrap;
+}
+.nc-root .nc-mo__dept-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nc-accent, var(--nc-idle));
+}
+.nc-root .nc-mo__dept-flag {
+  margin-top: auto;
+  font-size: 10.5px;
+  font-weight: 620;
+  color: var(--nc-approval);
+}
+
+.nc-root .nc-mo__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  border-radius: var(--nc-r-2);
+  border: 1px solid var(--nc-hairline-2);
+  background: var(--nc-glass-1);
+  font-size: 13px;
+  font-weight: 620;
+  color: var(--nc-text-2);
+  text-decoration: none;
+}
+
+/* ── The More sheet ─────────────────────────────────────────────────────── */
+
+.nc-root .nc-sheet { display: none; }
+
+.nc-root .nc-sheet__panel {
+  width: 100%;
+  max-height: 76%;
+  overflow-y: auto;
+  padding: 14px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--nc-hairline);
+  border-start-start-radius: 20px;
+  border-start-end-radius: 20px;
+  background: linear-gradient(180deg, rgba(19, 24, 34, 0.99), rgba(7, 9, 14, 1));
+  box-shadow: var(--nc-shadow-4);
+  animation: nc-reveal-up var(--nc-dur-quick) var(--nc-ease-out) both;
+}
+.nc-root .nc-sheet__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--nc-hairline);
+}
+.nc-root .nc-sheet__title { font-size: 14px; font-weight: 660; color: var(--nc-text); }
+.nc-root .nc-sheet__close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--nc-hairline);
+  color: var(--nc-text-2);
+}
+.nc-root .nc-sheet__body { display: flex; flex-direction: column; gap: 16px; padding-top: 14px; }
+.nc-root .nc-sheet__exec {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 14px;
+  border-radius: var(--nc-r-2);
+  border: 1px solid var(--nc-lime-line);
+  background: rgba(163, 230, 53, 0.08);
+  color: var(--nc-lime);
+  font-size: 13.5px;
+  font-weight: 650;
+  text-decoration: none;
+}
+.nc-root .nc-sheet__group { display: flex; flex-direction: column; gap: 9px; }
+.nc-root .nc-sheet__links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.nc-root .nc-sheet__link {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 13px;
+  border-radius: var(--nc-r-2);
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-1);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--nc-text-2);
+  text-decoration: none;
+}
+.nc-root .nc-sheet__link[aria-current="page"] {
+  color: var(--nc-text);
+  border-color: var(--nc-hairline-2);
+  background: var(--nc-glass-2);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   10 · RESPONSIVE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 1240px) {
+  .nc-root .nc-op-priority { grid-template-columns: minmax(0, 1fr); }
+  .nc-root .nc-op-head { align-items: flex-start; }
+  .nc-root .nc-op-head__side { justify-content: flex-start; }
+
+  /* THE COLUMN IS GONE — SO THE TRACK GOES WITH IT.
+     Below this width `command.css` hides the context column and sets
+     `--nc-context-w: 0px` on `.nc-root`, but `command.css` ALSO sets
+     `--nc-context-w: 56px` directly on `.nc-shell[data-right="collapsed"]`, and a
+     value set on the element beats the one it would inherit. The shell therefore
+     kept reserving a 56px track for a column that is `display: none`, which left
+     a dead strip down the trailing edge of every page. It is reset here, in the
+     layer that runs last, for both rail states. */
+  .nc-root .nc-shell,
+  .nc-root .nc-shell[data-right="collapsed"],
+  .nc-root .nc-shell[data-right="expanded"] {
+    --nc-context-w: 0px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .nc-root .nc-room { padding: 8px 20px 26px; }
+  .nc-root .nc-op-head__side { width: 100%; }
+}
+
+/* Phones: the desktop composition stands down entirely. */
+@media (max-width: 760px) {
+  .nc-root .nc-op { display: none; }
+
+  .nc-root .nc-main__scroll { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+
+  .nc-root .nc-mobile-command {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    /* Room for the bottom bar, and for the software keyboard: the shell's own
+       scroll container is what moves, so nothing is trapped under the bar. */
+    padding: 8px 15px calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .nc-root .nc-mobilebar__item {
+    min-height: 54px;
+    font-size: 10.5px;
+    border-radius: 10px;
+  }
+
+  /* One floating affordance over the content is one too many: the sheet is
+     anchored, the bar is reserved for, and the page scrolls under neither. */
+  .nc-root .nc-sheet {
+    position: absolute;
+    inset: 0;
+    z-index: 70;
+    display: flex;
+    align-items: flex-end;
+  }
+  .nc-root .nc-sheet__scrim {
+    position: absolute;
+    inset: 0;
+    background: rgba(2, 4, 9, 0.66);
+  }
+}
+
+/* Tablet: two department columns and no phone chrome. */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .nc-root .nc-op-spaces .nc-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 761px) {
+  .nc-root .nc-mobile-command,
+  .nc-root .nc-sheet { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   11 · RTL CORRECTIONS THIS LAYER OWNS
+   The locale layer corrects the shell and the surfaces it was written for; these
+   are the ones this layer's own geometry introduces. Every one of them is a
+   PHYSICAL placement that has to follow the reading direction.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root[dir="rtl"] .nc-op-view svg { transform: none; }
+.nc-root[dir="rtl"] .nc-op-metric { padding: 15px 20px 15px 17px; }
+.nc-root[dir="rtl"] .nc-op-metric::before { inset-inline-start: 0; }
+
+/* A Latin identifier inside an Arabic row keeps its own direction. */
+.nc-root[dir="rtl"] .nc-op-row__mark,
+.nc-root[dir="rtl"] .nc-op-meter__pct,
+.nc-root[dir="rtl"] .nc-op-metric__value,
+.nc-root[dir="rtl"] .nc-mo__section-count {
+  unicode-bidi: isolate;
+}
+
+/* The eyebrow rule sits on the leading edge of the text. */
+.nc-root[dir="rtl"] .nc-sheet__links { direction: rtl; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   12 · SHARED SERVICES BAND (Pass 4)
+   Knowledge, memory, skills and models are read by every department, so they are
+   drawn as ONE BAND under the organization rather than as a seventh node: an
+   eighth card in the grid, or a pod in the room, would have said "a department",
+   and the placement is the whole statement. Everything here is logical
+   (inline-axis) so the band needs no RTL correction of its own.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root .nc-shared {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  margin-top: 20px;
+}
+
+.nc-root .nc-shared__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.nc-root .nc-shared__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--nc-text);
+}
+
+.nc-root .nc-shared__note { font-size: 11.5px; color: var(--nc-text-3); }
+
+.nc-root .nc-shared__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nc-root .nc-shared__link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--nc-border-2);
+  border-radius: var(--nc-r-2);
+  background: rgba(255, 255, 255, 0.015);
+  color: inherit;
+  text-decoration: none;
+  transition: background var(--nc-dur-quick) var(--nc-ease-standard);
+}
+
+.nc-root .nc-shared__link:hover { background: rgba(255, 255, 255, 0.042); }
+.nc-root .nc-shared__link:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 2px; }
+
+.nc-root .nc-shared__mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: var(--nc-accent);
+  background: color-mix(in srgb, var(--nc-accent) 13%, transparent);
+}
+
+.nc-root .nc-shared__stack { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+
+.nc-root .nc-shared__name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--nc-text);
+}
+
+/* The one word that stops the band being read as a department. */
+.nc-root .nc-shared__kind {
+  padding: 1px 7px;
+  border: 1px solid var(--nc-border-2);
+  border-radius: var(--nc-r-pill);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nc-text-3);
+}
+
+.nc-root .nc-shared__brief { font-size: 11.5px; line-height: 1.45; color: var(--nc-text-3); }
+
+.nc-root .nc-shared__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.nc-root .nc-shared__chip {
+  padding: 2px 8px;
+  border-radius: var(--nc-r-pill);
+  background: rgba(255, 255, 255, 0.055);
+  font-size: 10px;
+  color: var(--nc-text-2);
+  white-space: nowrap;
+}
+
+/* Phone: the band keeps its own row, wraps its chips under the name, and sits
+   inside the mobile composition's own padding rather than adding a second one. */
+@media (max-width: 760px) {
+  .nc-root .nc-mobile-command .nc-shared { margin-top: 0; }
+  .nc-root .nc-mobile-command .nc-shared__list { grid-template-columns: minmax(0, 1fr); }
+  .nc-root .nc-shared__link { flex-wrap: wrap; }
+  .nc-root .nc-shared__chips { width: 100%; justify-content: flex-start; padding-inline-start: 42px; }
+}

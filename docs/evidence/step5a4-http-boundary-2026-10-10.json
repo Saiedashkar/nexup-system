@@ -1,0 +1,273 @@
+{
+  "proof": "the AI Workforce HTTP boundary, exercised against a RUNNING next start server with real signed session cookies, on a throwaway database inside the isolated development cluster",
+  "generatedAt": "2026-10-18T13:55:36.737Z",
+  "exitStatus": "0",
+  "counts": {
+    "testFiles": 3,
+    "tests": 16,
+    "passed": 16,
+    "failed": 0,
+    "skipped": 0
+  },
+  "assertions": [
+    {
+      "title": "STEP 5 — the AI Workforce HTTP routes, against a running server refuses an unauthenticated request with 401, and says nothing else",
+      "status": "passed"
+    },
+    {
+      "title": "STEP 5 — the AI Workforce HTTP routes, against a running server refuses a signed-in user with no workforce access (403), before any lifecycle work",
+      "status": "passed"
+    },
+    {
+      "title": "STEP 5 — the AI Workforce HTTP routes, against a running server CASE A — refuses an unrouted runtime attempt by BUDGET, with zero provider execution",
+      "status": "passed"
+    },
+    {
+      "title": "STEP 5 — the AI Workforce HTTP routes, against a running server CASE B — executes a read-only deterministic capability, persists its output, and creates no AiJob/AiRun",
+      "status": "passed"
+    },
+    {
+      "title": "STEP 5 — the AI Workforce HTTP routes, against a running server returns the SAME mission for an idempotent retry, and creates no second execution",
+      "status": "passed"
+    },
+    {
+      "title": "STEP 5 — the AI Workforce HTTP routes, against a running server refuses a reused idempotency key carrying a DIFFERENT command (409)",
+      "status": "passed"
+    },
+    {
+      "title": "STEP 5 — the AI Workforce HTTP routes, against a running server rejects malformed input without touching the lifecycle",
+      "status": "passed"
+    },
+    {
+      "title": "STEP 5 — the AI Workforce HTTP routes, against a running server reads a mission, settles it over HTTP, and completes it with a human decision",
+      "status": "passed"
+    },
+    {
+      "title": "STEP 5 — the AI Workforce HTTP routes, against a running server STEP 5 — business scope over real signed sessions persists the CANONICAL Business.id and keeps the user/actor vocabularies apart",
+      "status": "passed"
+    },
+    {
+      "title": "STEP 5 — the AI Workforce HTTP routes, against a running server STEP 5 — business scope over real signed sessions reads its own business's mission",
+      "status": "passed"
+    },
+    {
+      "title": "STEP 5 — the AI Workforce HTTP routes, against a running server STEP 5 — business scope over real signed sessions hides a cross-business mission behind the SAME 404-alike as a missing one",
+      "status": "passed"
+    },
+    {
+      "title": "STEP 5 — the AI Workforce HTTP routes, against a running server STEP 5 — business scope over real signed sessions refuses to advance/drain another business's mission (404-alike)",
+      "status": "passed"
+    },
+    {
+      "title": "STEP 5 — the AI Workforce HTTP routes, against a running server STEP 5 — business scope over real signed sessions hides a cross-business review behind the same 404-alike as a missing one",
+      "status": "passed"
+    },
+    {
+      "title": "STEP 5 — the AI Workforce HTTP routes, against a running server STEP 5 — business scope over real signed sessions records a same-business decision as the RESOLVED human actor, not actor_founder",
+      "status": "passed"
+    },
+    {
+      "title": "STEP 5 — the AI Workforce HTTP routes, against a running server STEP 5 — business scope over real signed sessions refuses payload actor/owner/business widening",
+      "status": "passed"
+    },
+    {
+      "title": "STEP 5 — the AI Workforce HTTP routes, against a running server never leaks a database URL, a bridge endpoint or a secret in an error body",
+      "status": "passed"
+    }
+  ],
+  "testedCommit": "4ecc1a7fd1a28f2a45d2dfbd32a878914133356f",
+  "workingTreeDirty": true,
+  "workingTreeChanges": [
+    "M docs/evidence/step5-app-acceptance-2026-10-07.json",
+    "M prisma/schema.prisma",
+    "M scripts/dev-db.mjs",
+    "M scripts/run-api-http-proof.sh",
+    "M scripts/run-app-proof.sh",
+    "M scripts/run-persistence-proof.sh",
+    "M scripts/write-app-proof-evidence.mjs",
+    "M src/app/api/ai-workforce/decisions/route.ts",
+    "M src/app/api/ai-workforce/missions/[id]/route.ts",
+    "M src/app/api/ai-workforce/missions/route.ts",
+    "M src/modules/ai-workforce/core/errors.ts",
+    "M src/modules/ai-workforce/registry/capability-lookup.ts",
+    "M src/modules/workforce/application/command-service.ts",
+    "M src/modules/workforce/application/composition.ts",
+    "M src/modules/workforce/application/runtime.ts",
+    "M src/modules/workforce/execution/capability-execution-contracts.ts",
+    "M src/modules/workforce/execution/execution-authority.ts",
+    "M src/modules/workforce/execution/execution-claim.ts",
+    "M src/modules/workforce/execution/execution-reconciler.ts",
+    "M src/modules/workforce/execution/execution-record.ts",
+    "M src/modules/workforce/index.ts",
+    "M src/modules/workforce/orchestration/mission-orchestrator.ts",
+    "M src/modules/workforce/persistence/index.ts",
+    "M src/modules/workforce/persistence/prisma-execution-claim-repository.ts",
+    "M src/modules/workforce/persistence/prisma-lifecycle-repositories.ts",
+    "M src/modules/workforce/runtimes/agent-runtime.ts",
+    "M tests/process/app-process-a.test.ts",
+    "M tests/process/app-process-b.test.ts",
+    "M tests/process/app-process-c.test.ts",
+    "M tests/process/app-process-e.test.ts",
+    "M tests/process/support.ts",
+    "M tests/workforce-api-http.test.ts",
+    "M tests/workforce-command-center-queries.test.ts",
+    "M tests/workforce-step5-adoption.test.ts",
+    "M tests/workforce-step5-app-integration.test.ts",
+    "M tests/workforce-step5-app-restart.test.ts",
+    "M tests/workforce-step5-live-durability.test.ts",
+    "M tests/workforce-step5-mission.test.ts",
+    "M tests/workforce-step5-persistence.test.ts",
+    "M tests/workforce-step5a-claim.test.ts",
+    "M tests/workforce-step5a-durable-claim.test.ts",
+    "?? docs/AI_WORKFORCE_ADR_0002_ENGINEERING_PLANE_AND_BUDGET_BOUNDARY.md",
+    "?? docs/evidence/step5a4-http-boundary-2026-10-10.json",
+    "?? docs/evidence/step5a4-http-proof-safety-2026-10-13.json",
+    "?? docs/evidence/step5a4-p1-corrections-2026-10-11.md",
+    "?? docs/evidence/step5a4-recovery-round5-2026-10-13.json",
+    "?? docs/evidence/step5a4-sixth-review-corrections-2026-10-15.md",
+    "?? prisma/proposed-migrations/AI_WORKFORCE_PHASE_5/",
+    "?? scripts/evidence-manifest.mjs",
+    "?? scripts/process-lineage.mjs",
+    "?? scripts/run-http-proof-safety.sh",
+    "?? scripts/run-recovery-proof.sh",
+    "?? scripts/verify-evidence-manifest.mjs",
+    "?? scripts/write-recovery-proof-evidence.mjs",
+    "?? src/modules/workforce/execution/capability-execution-service.ts",
+    "?? src/modules/workforce/execution/execution-claim-receipt.ts",
+    "?? src/modules/workforce/execution/governed-deterministic-invoker.ts",
+    "?? src/modules/workforce/execution/workforce-read-only-capabilities.ts",
+    "?? src/modules/workforce/orchestration/create-mission-orchestrator.ts",
+    "?? src/modules/workforce/persistence/prisma-execution-attempt-committer.ts",
+    "?? tests/workforce-boundary-budget-guard.test.ts",
+    "?? tests/workforce-step5a4-authority-correction.test.ts",
+    "?? tests/workforce-step5a4-correction-p1.test.ts",
+    "?? tests/workforce-step5a4-execution-cutover.test.ts",
+    "?? tests/workforce-step5a4-recovery-evidence.test.ts"
+  ],
+  "environment": {
+    "server": "next start PINNED to 127.0.0.1 (-H), built from this tree",
+    "database": "the throwaway 'nexup_http_proof' database inside the isolated development cluster (127.0.0.1)",
+    "productionDatabase": "NOT touched: DATABASE_URL was pointed at the development cluster too, so not even the legacy pool could reach Supabase",
+    "runtime": "the deterministic TEST transport, which the application only honours for a verified loopback database",
+    "auth": "a fixed, obviously-fake AUTH_SECRET used only to sign this proof's own cookies"
+  },
+  "howToReproduce": [
+    "bash scripts/run-api-http-proof.sh    # allocates its own free ports and proof database, and creates its own cluster unless DEV_DB_PORT is set",
+    "# or, against a cluster you already run: DEV_DB_PORT=5501 bash scripts/run-api-http-proof.sh"
+  ],
+  "resourceOwnership": "the proof server ran on an OS-allocated free port, PINNED to 127.0.0.1, with a per-port database name, and the development cluster was created by THIS run in its own data directory under a run directory that carries this run's ownership marker (unless DEV_DB_PORT was supplied, in which case the caller's cluster was used and left running). Ownership is decided in ONE pid namespace: the tree this run starts is translated to its WINDOWS pid through the platform's own mapping (`ps -W`, whose WINPID column is the OS's own table) at start time, because Git Bash's `$!` counts in MSYS pids and a `$!` handed to `taskkill` would address an unrelated Windows process — and a listener that answered the readiness probe but is not in the started tree fails the run before any work is done on it. Cleanup stopped only the process TREE this run started — ownership is decided by process LINEAGE, never by the port number, so a foreign listener that won the race for the allocated port is reported and left running — checked the exit status of every stop, and VERIFIED termination before deleting anything. When termination could not be verified the run directory and the cluster data directory were PRESERVED and the failure was reported; `node scripts/dev-db.mjs destroy` refuses the same thing for the same reason. Termination and preservation are exercised by `bash scripts/run-http-proof-safety.sh`.",
+  "manifest": {
+    "format": "nexup-evidence-manifest/1",
+    "hashAlgorithm": "sha256",
+    "digestAlgorithm": "sha256",
+    "canonicalForm": "one line per file, sorted by `path` (ascending byte order, `/` separators): \"<sha256>  <bytes>  <path>\\n\" — two spaces as the separator, size in bytes as decimal, LF line endings, no trailing blank line — hashed with sha256",
+    "files": [
+      {
+        "path": "src/modules/workforce/execution/execution-claim.ts",
+        "present": true,
+        "sha256": "707dbc0b44b939982acbae93273b5e066e0b3b0302d1dbea199ce829579cdfca",
+        "bytes": 68191,
+        "tracked": true
+      },
+      {
+        "path": "src/modules/workforce/execution/execution-reconciler.ts",
+        "present": true,
+        "sha256": "0106a6dd9250d20474784ba5a5f6c536dc891f4754a22df194b78f16ad9908c5",
+        "bytes": 50316,
+        "tracked": true
+      },
+      {
+        "path": "src/modules/workforce/execution/capability-execution-service.ts",
+        "present": true,
+        "sha256": "f895de0745ab7c8ffe21423b9baf68d5e156b74c0a8e6dad23e50f268e63e857",
+        "bytes": 94351,
+        "tracked": false
+      },
+      {
+        "path": "src/modules/workforce/persistence/prisma-execution-claim-repository.ts",
+        "present": true,
+        "sha256": "ce40f1c2d50ea9c5edc282e19f741f389e1494b0df279b7886638ef2a9183871",
+        "bytes": 47724,
+        "tracked": true
+      },
+      {
+        "path": "src/modules/workforce/application/command-service.ts",
+        "present": true,
+        "sha256": "698ff3bfcbc743d477968f48da1ab372895bcae09a39431e69434f9823620438",
+        "bytes": 13984,
+        "tracked": true
+      },
+      {
+        "path": "src/app/api/ai-workforce/missions/route.ts",
+        "present": true,
+        "sha256": "2beddcb3194b39b3f23ad568e56494499fc1814805d055a90e1fb6a6403c4367",
+        "bytes": 6268,
+        "tracked": true
+      },
+      {
+        "path": "src/app/api/ai-workforce/decisions/route.ts",
+        "present": true,
+        "sha256": "6a132eb1d496e769d554f2f901de39a7b234c78a94b06f20d6cbd39ec454c251",
+        "bytes": 5036,
+        "tracked": true
+      },
+      {
+        "path": "src/app/api/ai-workforce/missions/[id]/route.ts",
+        "present": true,
+        "sha256": "36560cd76d142c9859e8d5a2427f2f31b8ae41bd8de7899c5d58b306a21240aa",
+        "bytes": 4045,
+        "tracked": true
+      },
+      {
+        "path": "tests/workforce-api-http.test.ts",
+        "present": true,
+        "sha256": "3927d07994f08ed58b17eb5c1a1ce361a0e703b293a0393251db716605f43884",
+        "bytes": 30280,
+        "tracked": true
+      },
+      {
+        "path": "scripts/run-api-http-proof.sh",
+        "present": true,
+        "sha256": "75bbf0259dc4eaf4e700585b54eb3d95050153c66d864882f7492324e1aaa8a6",
+        "bytes": 34331,
+        "tracked": true
+      },
+      {
+        "path": "scripts/run-http-proof-safety.sh",
+        "present": true,
+        "sha256": "095e51806846da1682b81c245f5547122823cebf57e762c903cf6503a7842326",
+        "bytes": 48168,
+        "tracked": false
+      },
+      {
+        "path": "scripts/dev-db.mjs",
+        "present": true,
+        "sha256": "377cc9d12fb0ace3dc681ee3a5860c1abe24685cf17534bc8bb14ffe989822cf",
+        "bytes": 60770,
+        "tracked": true
+      },
+      {
+        "path": "scripts/process-lineage.mjs",
+        "present": true,
+        "sha256": "b056d6f87284b78a672e6fe166fded25c8c1997c8fb02d4ac140030b235b313e",
+        "bytes": 5479,
+        "tracked": false
+      },
+      {
+        "path": "scripts/evidence-manifest.mjs",
+        "present": true,
+        "sha256": "d9c942ceceb13a9e64fb0a4f31ab0f88d1048cc0e0b82727a191b90d44ba6ad9",
+        "bytes": 6128,
+        "tracked": false
+      },
+      {
+        "path": "scripts/verify-evidence-manifest.mjs",
+        "present": true,
+        "sha256": "f835892fbdcbe8c57093b9884b38275bb1ca1274b75f8d242e7ec1728841294a",
+        "bytes": 2527,
+        "tracked": false
+      }
+    ],
+    "digest": "bba5cb59367b410f4f2edd2dae99b845584c45646ab9a19f62b1723bc2fa28c7"
+  }
+}

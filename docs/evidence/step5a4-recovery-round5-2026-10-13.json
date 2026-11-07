@@ -1,0 +1,345 @@
+{
+  "proof": "the Step 5A-4 third- through SIXTH-review RECOVERY proofs, against a disposable PostgreSQL cluster: a partial multi-task cancellation that rolls its reservations back (and races a concurrent execute()), recovery through the application entry points, the finalizer-versus-markUnverified claim CAS, more than 50 unresolved claims with mission-scoped recovery beyond the first global page, the fourth review's starvation scenario (700 permanent unresolved claims, the target at row 625, 60 new claims before each sweep, reached within a bound of ceil(625/25)+1 = 26 sweeps through the UNSEEN window, both globally and inside ONE mission), the fifth review's DURABLE-PROGRESS corrections (a three-sweep stale-write interleaving that cannot clear, rewind or lose progress; 70 mission scopes continued by a SECOND process; and a record page that filters non-terminal attempts in the QUERY before LIMIT so 50 newer finished attempts cannot hide an older open one), and the SIXTH review's REPEATED-RECOVERY correction: the sweep's budget is split into THREE DISJOINT windows, so an ALREADY-OBSERVED row is revisited under 60 arrivals per sweep for claims and 55 per sweep for records (the review reproduced that as starvation), a live DISPATCHING claim observed before its owner's crash reaches UNVERIFIED, an observed record that is still open gains a RECONCILED audit event, and global and mission-scoped traffic cannot starve each other's observed rows",
+  "generatedAt": "2026-10-18T13:57:19.364Z",
+  "exitStatus": "0",
+  "runnerSaidSuccess": true,
+  "counts": {
+    "testFiles": 2,
+    "tests": 13,
+    "passed": 13,
+    "failed": 0,
+    "skipped": 0
+  },
+  "testedCommit": "4ecc1a7fd1a28f2a45d2dfbd32a878914133356f",
+  "workingTreeDirty": true,
+  "workingTreeCounts": {
+    "total": 65,
+    "tracked": 41,
+    "modified": 41,
+    "untracked": 24,
+    "staged": 0,
+    "deleted": 0,
+    "renamed": 0,
+    "other": 0
+  },
+  "workingTreeChanges": [
+    " M docs/evidence/step5-app-acceptance-2026-10-07.json",
+    " M prisma/schema.prisma",
+    " M scripts/dev-db.mjs",
+    " M scripts/run-api-http-proof.sh",
+    " M scripts/run-app-proof.sh",
+    " M scripts/run-persistence-proof.sh",
+    " M scripts/write-app-proof-evidence.mjs",
+    " M src/app/api/ai-workforce/decisions/route.ts",
+    " M src/app/api/ai-workforce/missions/[id]/route.ts",
+    " M src/app/api/ai-workforce/missions/route.ts",
+    " M src/modules/ai-workforce/core/errors.ts",
+    " M src/modules/ai-workforce/registry/capability-lookup.ts",
+    " M src/modules/workforce/application/command-service.ts",
+    " M src/modules/workforce/application/composition.ts",
+    " M src/modules/workforce/application/runtime.ts",
+    " M src/modules/workforce/execution/capability-execution-contracts.ts",
+    " M src/modules/workforce/execution/execution-authority.ts",
+    " M src/modules/workforce/execution/execution-claim.ts",
+    " M src/modules/workforce/execution/execution-reconciler.ts",
+    " M src/modules/workforce/execution/execution-record.ts",
+    " M src/modules/workforce/index.ts",
+    " M src/modules/workforce/orchestration/mission-orchestrator.ts",
+    " M src/modules/workforce/persistence/index.ts",
+    " M src/modules/workforce/persistence/prisma-execution-claim-repository.ts",
+    " M src/modules/workforce/persistence/prisma-lifecycle-repositories.ts",
+    " M src/modules/workforce/runtimes/agent-runtime.ts",
+    " M tests/process/app-process-a.test.ts",
+    " M tests/process/app-process-b.test.ts",
+    " M tests/process/app-process-c.test.ts",
+    " M tests/process/app-process-e.test.ts",
+    " M tests/process/support.ts",
+    " M tests/workforce-api-http.test.ts",
+    " M tests/workforce-command-center-queries.test.ts",
+    " M tests/workforce-step5-adoption.test.ts",
+    " M tests/workforce-step5-app-integration.test.ts",
+    " M tests/workforce-step5-app-restart.test.ts",
+    " M tests/workforce-step5-live-durability.test.ts",
+    " M tests/workforce-step5-mission.test.ts",
+    " M tests/workforce-step5-persistence.test.ts",
+    " M tests/workforce-step5a-claim.test.ts",
+    " M tests/workforce-step5a-durable-claim.test.ts",
+    "?? docs/AI_WORKFORCE_ADR_0002_ENGINEERING_PLANE_AND_BUDGET_BOUNDARY.md",
+    "?? docs/evidence/step5a4-http-boundary-2026-10-10.json",
+    "?? docs/evidence/step5a4-http-proof-safety-2026-10-13.json",
+    "?? docs/evidence/step5a4-p1-corrections-2026-10-11.md",
+    "?? docs/evidence/step5a4-recovery-round5-2026-10-13.json",
+    "?? docs/evidence/step5a4-sixth-review-corrections-2026-10-15.md",
+    "?? prisma/proposed-migrations/AI_WORKFORCE_PHASE_5/",
+    "?? scripts/evidence-manifest.mjs",
+    "?? scripts/process-lineage.mjs",
+    "?? scripts/run-http-proof-safety.sh",
+    "?? scripts/run-recovery-proof.sh",
+    "?? scripts/verify-evidence-manifest.mjs",
+    "?? scripts/write-recovery-proof-evidence.mjs",
+    "?? src/modules/workforce/execution/capability-execution-service.ts",
+    "?? src/modules/workforce/execution/execution-claim-receipt.ts",
+    "?? src/modules/workforce/execution/governed-deterministic-invoker.ts",
+    "?? src/modules/workforce/execution/workforce-read-only-capabilities.ts",
+    "?? src/modules/workforce/orchestration/create-mission-orchestrator.ts",
+    "?? src/modules/workforce/persistence/prisma-execution-attempt-committer.ts",
+    "?? tests/workforce-boundary-budget-guard.test.ts",
+    "?? tests/workforce-step5a4-authority-correction.test.ts",
+    "?? tests/workforce-step5a4-correction-p1.test.ts",
+    "?? tests/workforce-step5a4-execution-cutover.test.ts",
+    "?? tests/workforce-step5a4-recovery-evidence.test.ts"
+  ],
+  "manifest": {
+    "format": "nexup-evidence-manifest/1",
+    "hashAlgorithm": "sha256",
+    "digestAlgorithm": "sha256",
+    "canonicalForm": "one line per file, sorted by `path` (ascending byte order, `/` separators): \"<sha256>  <bytes>  <path>\\n\" — two spaces as the separator, size in bytes as decimal, LF line endings, no trailing blank line — hashed with sha256",
+    "files": [
+      {
+        "path": "prisma/schema.prisma",
+        "present": true,
+        "sha256": "79a0c35806f4825ee4518d5bdb4a0975a00ad8b96c387788c4a3530f57b540b4",
+        "bytes": 47883,
+        "tracked": true
+      },
+      {
+        "path": "prisma/proposed-migrations/AI_WORKFORCE_PHASE_5/migration.sql",
+        "present": true,
+        "sha256": "cfe87e36da0f0f8f5666f067768ecdf3753f4bd1c92044c1127bff20c6f12b9c",
+        "bytes": 5627,
+        "tracked": false
+      },
+      {
+        "path": "src/modules/workforce/execution/execution-claim.ts",
+        "present": true,
+        "sha256": "707dbc0b44b939982acbae93273b5e066e0b3b0302d1dbea199ce829579cdfca",
+        "bytes": 68191,
+        "tracked": true
+      },
+      {
+        "path": "src/modules/workforce/execution/execution-claim-receipt.ts",
+        "present": true,
+        "sha256": "cf5d2a4ce25c8ee5f5721db32f932463fe909eb476208e010b3f5705fedd4e92",
+        "bytes": 10414,
+        "tracked": false
+      },
+      {
+        "path": "src/modules/workforce/execution/execution-record.ts",
+        "present": true,
+        "sha256": "21970bc8b495a0e44e03cdb83496610865ae9d38f3076e34d845b142a7951bbf",
+        "bytes": 24903,
+        "tracked": true
+      },
+      {
+        "path": "src/modules/workforce/execution/execution-reconciler.ts",
+        "present": true,
+        "sha256": "0106a6dd9250d20474784ba5a5f6c536dc891f4754a22df194b78f16ad9908c5",
+        "bytes": 50316,
+        "tracked": true
+      },
+      {
+        "path": "src/modules/workforce/execution/capability-execution-service.ts",
+        "present": true,
+        "sha256": "f895de0745ab7c8ffe21423b9baf68d5e156b74c0a8e6dad23e50f268e63e857",
+        "bytes": 94351,
+        "tracked": false
+      },
+      {
+        "path": "src/modules/workforce/persistence/prisma-execution-claim-repository.ts",
+        "present": true,
+        "sha256": "ce40f1c2d50ea9c5edc282e19f741f389e1494b0df279b7886638ef2a9183871",
+        "bytes": 47724,
+        "tracked": true
+      },
+      {
+        "path": "src/modules/workforce/persistence/prisma-lifecycle-repositories.ts",
+        "present": true,
+        "sha256": "bfd80a22ae0385b6c90915a15441f17234c4ebdbdae804f32e4480959398e766",
+        "bytes": 28222,
+        "tracked": true
+      },
+      {
+        "path": "src/modules/workforce/index.ts",
+        "present": true,
+        "sha256": "d588be923bbc69f8904df54a1a8f7e19ce5dc8ab52d3abd2eee13ee0f6672335",
+        "bytes": 12362,
+        "tracked": true
+      },
+      {
+        "path": "tests/workforce-step5a4-correction-p1.test.ts",
+        "present": true,
+        "sha256": "3e0c180e9dfcb694a4c72f636c35930c66c0f13a5ea9e9e342dc7033e09ee404",
+        "bytes": 92725,
+        "tracked": false
+      },
+      {
+        "path": "tests/workforce-step5a4-recovery-evidence.test.ts",
+        "present": true,
+        "sha256": "b4ed20d9bcd4ff235135c39ce8f3531ce33ddf4b3f64410f47867053f366350a",
+        "bytes": 77369,
+        "tracked": false
+      },
+      {
+        "path": "scripts/run-persistence-proof.sh",
+        "present": true,
+        "sha256": "e9fbf6d581b553abd4285fddad93e96543999f2de1ee0d33bd157ac1276de3f1",
+        "bytes": 9870,
+        "tracked": true
+      },
+      {
+        "path": "scripts/run-recovery-proof.sh",
+        "present": true,
+        "sha256": "f6b66c90a76740f10daa01f7835e9f470b22a973172bf4e9ebc3702081669f9d",
+        "bytes": 10683,
+        "tracked": false
+      },
+      {
+        "path": "scripts/run-api-http-proof.sh",
+        "present": true,
+        "sha256": "75bbf0259dc4eaf4e700585b54eb3d95050153c66d864882f7492324e1aaa8a6",
+        "bytes": 34331,
+        "tracked": true
+      },
+      {
+        "path": "scripts/run-http-proof-safety.sh",
+        "present": true,
+        "sha256": "095e51806846da1682b81c245f5547122823cebf57e762c903cf6503a7842326",
+        "bytes": 48168,
+        "tracked": false
+      },
+      {
+        "path": "scripts/dev-db.mjs",
+        "present": true,
+        "sha256": "377cc9d12fb0ace3dc681ee3a5860c1abe24685cf17534bc8bb14ffe989822cf",
+        "bytes": 60770,
+        "tracked": true
+      },
+      {
+        "path": "scripts/process-lineage.mjs",
+        "present": true,
+        "sha256": "b056d6f87284b78a672e6fe166fded25c8c1997c8fb02d4ac140030b235b313e",
+        "bytes": 5479,
+        "tracked": false
+      },
+      {
+        "path": "scripts/evidence-manifest.mjs",
+        "present": true,
+        "sha256": "d9c942ceceb13a9e64fb0a4f31ab0f88d1048cc0e0b82727a191b90d44ba6ad9",
+        "bytes": 6128,
+        "tracked": false
+      },
+      {
+        "path": "scripts/verify-evidence-manifest.mjs",
+        "present": true,
+        "sha256": "f835892fbdcbe8c57093b9884b38275bb1ca1274b75f8d242e7ec1728841294a",
+        "bytes": 2527,
+        "tracked": false
+      },
+      {
+        "path": "scripts/write-recovery-proof-evidence.mjs",
+        "present": true,
+        "sha256": "f1a848cf80272656e189530d158a0704559e1e25009d30366d2e2a4b78f36aa6",
+        "bytes": 16005,
+        "tracked": false
+      }
+    ],
+    "digest": "d5c5e91c07436b7b59ba2f78512ca0bb313c596b47549500b85126dd2f45f7a7"
+  },
+  "environment": {
+    "database": "a DISPOSABLE PostgreSQL cluster created by `initdb` for this single run, on an auto-allocated loopback port with a unique data directory; the proof creates and drops its own database inside it",
+    "productionDatabase": "NOT touched. No proof here reads DATABASE_URL.",
+    "runtime": "the real Hermes runtime adapter over the DETERMINISTIC test transport (explicit allowTestTransport), so the proofs spend no provider turn",
+    "synchronization": "no sleeps: races are produced with Promise.all over operations that contend on a unique index, a single-statement CAS or a transaction, and asserted as invariants"
+  },
+  "howToReproduce": [
+    "bash scripts/run-recovery-proof.sh"
+  ],
+  "skips": {
+    "count": 0,
+    "tests": [],
+    "gate": "a skip in these suites is a REAL-POSTGRESQL section: the in-memory suites keep those tests inside a `describeIfDatabase` block, which is `describe.skip` until AI_WORKFORCE_TEST_DATABASE_URL names a database. They are not disabled — they are RUN by `scripts/run-recovery-proof.sh` (and by any run with that variable set) against a disposable cluster. The durable file this runner measures, `tests/workforce-step5a4-recovery-evidence.test.ts`, is itself entirely inside such a block and reports ZERO skips when it runs, so `skipped: 0` there is the absence of a gate rather than the absence of tests."
+  },
+  "knownLimitationsRecordedByThisRun": [
+    "FAIRNESS BOUNDS, WITH THEIR ASSUMPTIONS — including the one the sixth review found MISSING. A sweep spends a 50-row budget as THREE DISJOINT WINDOWS: 25 never-observed rows oldest first, 20 previously-observed rows least-recently-observed first, 5 never-observed rows newest first. So (a) an unresolved row that NO sweep has observed is reached within ceil(unseen / 25) sweeps of the scope, because that window is FIFO and arrivals queue behind the rows already in it; and (b) an unresolved row that HAS been observed — the case the review proved unbounded, a live `DISPATCHING` claim whose owner then crashed — is reached within ceil(observed / 20) sweeps, because arrivals are never-observed rows BY DEFINITION and cannot enter that window at all. Both bounds assume only that sweeps REPEAT and that the DATABASE clock advances between them (true in PostgreSQL, where each sweep is its own transaction). Neither assumes an arrival rate: sustained traffic lengthens the unseen and observed sets and each bound grows with the set it drains, which is queueing — what it can no longer do is push a row that is already waiting behind an UNBOUNDED number of newer rows. The earlier statement that overload means `latency, never invisibility` was FALSE for previously-observed rows and is WITHDRAWN.",
+    "THE DURABLE ROTATION NEEDS ONE COLUMN THAT IS NOT APPLIED TO ANY SHARED DATABASE. `recoverySweptAt` (nullable, no default, one index each) is proposed in `prisma/proposed-migrations/AI_WORKFORCE_PHASE_5/` on `ai_execution_claims` and `ai_execution_records`, and it is NOT applied to the dev, staging or production database by this work, nor registered in `prisma/migrations/`. The literal claim that it was `not applied to any database` was inaccurate and is corrected: the DISPOSABLE proof clusters create it deliberately (this file's own test suite lists PHASE_5 in MIGRATIONS and applies it with `psql -f`), because a sweep cannot be proved against a schema its own columns are missing from. Every existing column was rejected for the role: `updatedAt` is the row's real ACTIVITY (it is what the command centre's Recent Activity feed orders by), so a sweep that wrote it would make an observation indistinguishable from an execution that happened.",
+    "ACTIVATION REQUIREMENTS, preserved because this run does NOT establish them: PHASE_5 must be REGISTERED AND APPROVED through the project's real migration workflow and APPLIED BEFORE this code is deployed (the adapters read and write `recoverySweptAt`; a deployment that carries the code without the column cannot run the rotation at all); Prisma Client must be generated during that deploy build; the two indexes are SINGLE COLUMN and are NOT claimed to be optimal for a page that also orders by `claimedAt`/`id` and filters on state/status and `missionId`, so realistic `EXPLAIN (ANALYZE, BUFFERS)` evidence and a decision about non-concurrent index creation are owed at activation; and recovery should be SCHEDULED and MONITORED only after that, never assumed from a green test run.",
+    "THE RECORDS ROTATION PAGES WHAT IS ELIGIBLE WHEN IT READS. `listRecoverable` filters non-terminal statuses in the QUERY, before LIMIT; an attempt that becomes terminal between that read and its adoption is reported as ALREADY_TERMINAL (news, and never thrown), and it is stamped, so it does not head the queue again.",
+    "THE ROTATION KEY IS A ROTATION KEY, NOT A CURSOR. It records THAT a sweep observed a row, from the database clock; it is deliberately not a generation or a scope position, so two instances sweeping the same scope may duplicate work on the same page — idempotent, and the same trade a single-statement CAS makes everywhere else in this ledger.",
+    "The engineering-plane boundary checks are STATIC regression tripwires (imports, names, manifest): a specifier assembled at runtime is outside what they can see. The ADR records this limit.",
+    "HERMES: the OFFLINE artifact that exists in this worktree is the NEXUP bridge's pinned-profile and method allowlist (`bridge/src/hermes/allowlist.ts`, `bridge/src/hermes/profile-policy.ts`, `bridge/src/config.ts`), inspected READ-ONLY for this evidence. The profile is PINNED to `saieed` (a caller-supplied profile is rejected), and the seven JSON-RPC methods NEXUP can emit are `gateway.ping` plus the six session methods; `llm.oneshot` is deliberately excluded. NO FreeBuff/engineering invocation method appears in that allowlist, so no NEXUP business path reaches FreeBuff through the bridge. Live Hermes was NOT contacted and no profile was modified.",
+    "HERMES, the residual gap: an export of the LIVE daemon profile's OWN tool list (rather than the bridge's outbound allowlist) does not exist in this worktree. Runtime-WIDE FreeBuff protection inside the Hermes profile is therefore NOT proven here — only that NEXUP's pinned, allowlisted method surface contains no FreeBuff path. That remains an operator-side check against the running daemon."
+  ],
+  "suites": [
+    {
+      "file": "tests/workforce-step5a4-recovery-evidence.test.ts",
+      "status": "passed",
+      "assertions": [
+        {
+          "title": "STEP 5A-4 (rounds 3–5) — recovery evidence on a real PostgreSQL rolls back a multi-task cancellation that can only PARTLY resolve, leaving no task poisoned",
+          "status": "passed",
+          "durationMs": 633.0687999999991
+        },
+        {
+          "title": "STEP 5A-4 (rounds 3–5) — recovery evidence on a real PostgreSQL lets a concurrent cancellation and execute() contend in ONE place, never both",
+          "status": "passed",
+          "durationMs": 445.90589999999975
+        },
+        {
+          "title": "STEP 5A-4 (rounds 3–5) — recovery evidence on a real PostgreSQL finds an entered-but-unidentified attempt through reconcile(), reconcileInFlight() and drain()",
+          "status": "passed",
+          "durationMs": 449.1386000000002
+        },
+        {
+          "title": "STEP 5A-4 (rounds 3–5) — recovery evidence on a real PostgreSQL rolls the execution record back when the finalizer's claim CAS loses to markUnverified",
+          "status": "passed",
+          "durationMs": 179.7535000000007
+        },
+        {
+          "title": "STEP 5A-4 (rounds 3–5) — recovery evidence on a real PostgreSQL never lets the record and the ledger disagree about which side of the race won",
+          "status": "passed",
+          "durationMs": 199.6232
+        },
+        {
+          "title": "STEP 5A-4 (rounds 3–5) — recovery evidence on a real PostgreSQL sweeps more than 50 unresolved claims and recovers a mission's incident beyond the first global page",
+          "status": "passed",
+          "durationMs": 2400.2776000000013
+        },
+        {
+          "title": "STEP 5A-4 (rounds 3–5) — recovery evidence on a real PostgreSQL reaches the row 625 target across sweeps, with 60 arrivals before each — globally and within one mission",
+          "status": "passed",
+          "durationMs": 28254.756800000003
+        },
+        {
+          "title": "STEP 5A-4 (rounds 3–5) — recovery evidence on a real PostgreSQL cannot be rewound or cleared by a stale sweep that writes last — the three-sweep interleaving",
+          "status": "passed",
+          "durationMs": 745.2574999999997
+        },
+        {
+          "title": "STEP 5A-4 (rounds 3–5) — recovery evidence on a real PostgreSQL cannot let 50 newer finished attempts hide an older open one, and pages fairly past the first page",
+          "status": "passed",
+          "durationMs": 685.1593999999968
+        },
+        {
+          "title": "STEP 5A-4 (rounds 3–5) — recovery evidence on a real PostgreSQL carries 70 mission scopes' progress in the LEDGER, and a SECOND instance continues it",
+          "status": "passed",
+          "durationMs": 9044.504699999998
+        },
+        {
+          "title": "STEP 5A-4 (rounds 3–5) — recovery evidence on a real PostgreSQL revisits an observed claim under 60 arrivals per sweep, which cannot spend the revisit window",
+          "status": "passed",
+          "durationMs": 1358.6944000000003
+        },
+        {
+          "title": "STEP 5A-4 (rounds 3–5) — recovery evidence on a real PostgreSQL does not let global and mission traffic starve each other's observed rows",
+          "status": "passed",
+          "durationMs": 8605.433700000001
+        },
+        {
+          "title": "STEP 5A-4 (rounds 3–5) — recovery evidence on a real PostgreSQL revisits an observed but still-open record under 55 eligible arrivals per sweep",
+          "status": "passed",
+          "durationMs": 3071.5204000000012
+        }
+      ]
+    }
+  ]
+}

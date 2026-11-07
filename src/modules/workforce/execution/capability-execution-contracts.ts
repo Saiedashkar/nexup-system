@@ -127,8 +127,18 @@ export type ExecutionAttemptRequest = {
   taskId: TaskId;
   /** 1-based attempt number inside the task. */
   attempt: number;
-  /** Deterministic, server-built: `task:<taskId>:attempt:<attempt>`. */
-  idempotencyKey: string;
+  /**
+   * IGNORED, and kept only so an older caller still type-checks.
+   *
+   * The execution key is DERIVED inside the boundary, unconditionally, as
+   * `executionIdempotencyKeyForAttempt(taskId, attempt)` (Step 5A-4 correction).
+   * A caller-supplied value used to WIN over the derived one, which let a
+   * defective or hostile caller reserve `(task, attempt)` under an arbitrary key
+   * — after which the legitimate orchestration call supplied the canonical key
+   * and was refused with `ATTEMPT_IDEMPOTENCY_MISMATCH`. Caller input is no
+   * longer part of the attempt's identity at all.
+   */
+  idempotencyKey?: string;
   /** The authenticated caller. Never payload-supplied. */
   authority: ExecutionAuthority;
   /** The actor accountable for this task. */
@@ -144,7 +154,42 @@ export type ExecutionAttemptRequest = {
   /** How the attempt was triggered; feeds autonomy/approval evaluation. */
   source?: string;
   /** Extra, non-secret context an adapter MAY read. Never interpreted by policy. */
-  contextRefs?: string[];
+  contextRefs?: readonly string[];
+};
+
+/**
+ * The IMMUTABLE EXECUTION ENVELOPE (Step 5A-4 correction, P1-9).
+ *
+ * WHY IT EXISTS. The preflight deliberately re-reads durable state, `await`ing
+ * several times along the way. The request object it was handed, however, was the
+ * CALLER's: a caller could mutate `request.input` (or swap the authority) after
+ * calling `execute()` and before the deterministic handler consumed it, so the
+ * work that RAN would not be the work that was AUTHORISED. Every awaited check in
+ * between is a window for exactly that.
+ *
+ * The envelope is therefore the boundary's own copy, taken SYNCHRONOUSLY on
+ * entry, deep-cloned and frozen. Authorisation, the receipt, the deterministic
+ * invocation, the runtime submission and finalization all read from it
+ * exclusively, and the caller's object is never consulted again. Mutating the
+ * request afterwards is then provably incapable of changing what executes.
+ */
+export type ExecutionAttemptEnvelope = {
+  missionId: MissionId;
+  taskId: TaskId;
+  attempt: number;
+  /** DERIVED inside the boundary; never taken from the request. */
+  idempotencyKey: string;
+  /** A frozen clone of the authenticated caller. */
+  authority: ExecutionAuthority;
+  assignedActorId: ActorId;
+  requiredCapabilityId: CapabilityId;
+  requiredCapabilityVersion?: string;
+  /** A frozen clone of the canonical input. */
+  input: JsonObject;
+  traceId: TraceId;
+  businessScope?: BusinessScope | null;
+  source?: string;
+  contextRefs?: readonly string[];
 };
 
 /**
@@ -176,6 +221,39 @@ export const EXECUTION_PREFLIGHT_DECISIONS = [
 ] as const;
 export type ExecutionPreflightDecision = (typeof EXECUTION_PREFLIGHT_DECISIONS)[number];
 
+/**
+ * The IMMUTABLE AUTHORITATIVE RESOLUTION a preflight produced (Step 5A-4
+ * correction).
+ *
+ * Everything the execution path later needs — the receipt, the deterministic
+ * invocation, the runtime submission — is read from THIS object and never
+ * reconstructed from nullable caller fields. Authorisation and execution must
+ * therefore describe the same attempt: the actor, capability, version,
+ * assignment and business the policies actually approved, not whatever a later
+ * code path could re-derive (and possibly re-derive differently).
+ *
+ * Every field is derived from DURABLE server-side state re-read during the
+ * preflight; none comes from the request body.
+ */
+export type ExecutionResolution = {
+  missionId: MissionId;
+  taskId: TaskId;
+  attempt: number;
+  actorId: ActorId;
+  capabilityId: CapabilityId;
+  capabilityVersion: string;
+  assignmentId: string | null;
+  businessId: string | null;
+  businessSlug: string | null;
+  /** The runtime identity that would host this attempt (deterministic invoker id for a local leg). */
+  runtimeId: string | null;
+  /** The resolved local handler, when the leg is DETERMINISTIC. */
+  toolDefinitionId: string | null;
+  toolDefinitionVersion: string | null;
+  binding: ExecutionBinding;
+  spend: BudgetSpendClass;
+};
+
 export type ExecutionPreflightResult = {
   capability: {
     id: CapabilityId;
@@ -189,6 +267,11 @@ export type ExecutionPreflightResult = {
     runtimeRequirements: CapabilityRuntimeRequirement;
   };
   /**
+   * The authoritative identity resolved for this attempt. `null` only when no
+   * resolution was reached (an early refusal) — never null on a `DISPATCH`.
+   */
+  resolution: ExecutionResolution | null;
+  /**
    * The descriptor the policies evaluated: the resolved `ToolDefinition` for a
    * TOOL capability, or the synthetic non-executable `RUNTIME_DISPATCH_DEFINITION`
    * for anything else. NEVER null when a decision was reached — a policy decision
@@ -200,6 +283,16 @@ export type ExecutionPreflightResult = {
   permission: PermissionDecision;
   approval: ApprovalEvaluation | null;
   budget: BudgetDecision;
+  /**
+   * Whether the governor ACTUALLY ran.
+   *
+   * An earlier gate may refuse before the budget is reached, and then `budget`
+   * holds the fail-closed placeholder rather than a decision. Without this flag a
+   * reader cannot tell "the governor refused" from "the governor was never
+   * asked", and the durable refusal reason would name whichever gate happened to
+   * fire first.
+   */
+  budgetEvaluated: boolean;
   decision: ExecutionPreflightDecision;
   /** Set for `BLOCKED`/`DENY`: the typed refusal, safe to surface to an operator. */
   blocked?: { code: AiWorkforceErrorCode; message: string };
@@ -270,6 +363,7 @@ export type ExecutionOutcome =
 export type ExecutionHandleRef = {
   runtimeId: RuntimeId;
   handleId: string;
+  /** Its mission execution record, so cancellation can be AUDITED before it is attempted. */
   executionRecordId?: ExecutionRecordId;
   missionId?: MissionId;
   taskId?: TaskId;
@@ -286,14 +380,58 @@ export const EXECUTION_OBSERVATION_KINDS = [
   "UNAVAILABLE",
   /** No runtime is registered for the id the record names. */
   "NO_RUNTIME",
+  /**
+   * THE BOUNDED WAIT ELAPSED (Step 5A-4 correction, P1-2).
+   *
+   * A `RUNTIME_TIMEOUT` is NOT an outage: the runtime answered nothing in time,
+   * but the execution is simply still in flight and almost certainly healthy.
+   * Collapsing it into `UNAVAILABLE` made a caller that had asked to WAIT see a
+   * runtime outage instead, and the orchestrator then threw `RUNTIME_UNAVAILABLE`
+   * — turning "still working" into "we could not reach the provider at all". The
+   * typed kind keeps the two apart, and its `status` carries the last state the
+   * runtime reported, which is NON-TERMINAL.
+   */
+  "TIMEOUT",
 ] as const;
 export type ExecutionObservationKind = (typeof EXECUTION_OBSERVATION_KINDS)[number];
+
+/**
+ * How `observe` should look at an execution.
+ *
+ * The cutover replaced a blocking `dispatcher.waitForExecution` with a single
+ * read, which silently turned `settleTask` into "report whatever is true right
+ * now" — an in-flight run would then be escalated to a human for looking
+ * unfinished. Rather than keep a `waitTimeoutMs` option that no longer did
+ * anything, the governed port states the wait explicitly:
+ *
+ *   waitForTerminal ABSENT/false — report what is known NOW. What a
+ *                                  reconciliation sweep wants.
+ *   waitForTerminal true         — wait for an end state first, bounded by the
+ *                                  runtime's own timeout, or by `waitTimeoutMs`
+ *                                  when the caller supplies one. What `settle`
+ *                                  has always meant.
+ */
+export type ExecutionObserveOptions = {
+  waitForTerminal?: boolean;
+  waitTimeoutMs?: number;
+};
 
 export type ExecutionObservation = {
   kind: ExecutionObservationKind;
   status: AgentExecutionStatus;
   detail: string;
   providerExecutionId?: string;
+  /**
+   * What the provider reported as the RESULT, when it reported one.
+   *
+   * It travels with the observation because the runtime is the only authority
+   * for an execution's output: an observation that dropped it would let a
+   * settled mission lose the very work a human is being asked to review. The
+   * orchestrator persists it onto the same execution record it already updates,
+   * so nothing is written twice and nothing is invented.
+   */
+  output?: unknown;
+  outputText?: string;
   error?: AgentExecutionError;
 };
 
@@ -328,11 +466,50 @@ export interface CapabilityExecutionService {
   execute(request: ExecutionAttemptRequest): Promise<ExecutionOutcome>;
 
   /** Reads what became of an execution an attempt record names. Never dispatches. */
-  observe(ref: ExecutionHandleRef): Promise<ExecutionObservation>;
+  observe(ref: ExecutionHandleRef, options?: ExecutionObserveOptions): Promise<ExecutionObservation>;
 
-  /** Requests cancellation through the runtime port. Never invents a cancelled run. */
-  cancel(ref: ExecutionHandleRef, reason: string): Promise<ExecutionCancellation>;
+  /**
+   * Requests cancellation through the runtime port. Never invents a cancelled
+   * run.
+   *
+   * AN AUTHORITY IS REQUIRED (Step 5A-4): cancellation is an external side
+   * effect, so an unauthenticated or background caller must not be able to reach
+   * a provider by this path. The implementation persists a `CANCEL_REQUESTED`
+   * audit event BEFORE it asks the runtime, so a crash mid-cancel leaves the
+   * intent on the record rather than a silent no-op.
+   */
+  cancel(
+    ref: ExecutionHandleRef,
+    input: { reason: string; authority: ExecutionAuthority },
+  ): Promise<ExecutionCancellation>;
+
+  /**
+   * Cancels the ATTEMPTS of a mission's outstanding tasks, on behalf of an
+   * AUTHORISED caller, and reports which attempts are UNRESOLVED.
+   *
+   * It is the cancellation-side linearization against irreversible dispatch: it
+   * WINS the next attempt's durable claim as `CANCELLED` for a dispatchable task,
+   * so a racing `execute()` finds the attempt dead and cannot reach an external
+   * run; an attempt it can only observe is reported `unresolved` so the mission
+   * is NOT terminalised around a run that may still be starting.
+   */
+  cancelMissionAttempts(input: {
+    missionId: MissionId;
+    tasks: readonly { taskId: TaskId; state: string }[];
+    reason: string;
+    authority: ExecutionAuthority;
+  }): Promise<MissionAttemptCancellation[]>;
 }
+
+/** What cancelling one mission attempt resolved to. See the service for the rules. */
+export type MissionAttemptCancellation = {
+  taskId: TaskId;
+  claimId?: string;
+  state?: string;
+  cancelled: boolean;
+  unresolved: boolean;
+  detail: string;
+};
 
 /**
  * The dependencies an implementation MUST be given.

@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale } from "../i18n/command-locale";
 import { actorsFrom, type Actor } from "../state/actors";
 import { IconAgent, IconHuman } from "../ui/icons";
 import { cssVars } from "../ui/css-vars";
@@ -35,22 +36,23 @@ export function ActorList({ ids, max = 3 }: { ids: readonly string[]; max?: numb
 }
 
 export function ActorChip({ actor }: { actor: Actor }) {
+  const { tc } = useLocale();
   return (
     <span
       className="nc-actor"
       data-kind={actor.kind}
       style={cssVars({ "--nc-actor-accent": `var(${actor.accentVar ?? "--nc-human"})` })}
-      title={`${actor.name} — ${actor.role} (${actor.kind === "ai" ? "AI agent" : "human"})`}
+      title={`${tc(actor.name)} — ${tc(actor.role)} (${tc(actor.kind === "ai" ? "AI agent" : "human")})`}
     >
       <span className="nc-actor__mark" aria-hidden="true">
         {actor.initials}
       </span>
       <span className="nc-actor__text">
         <span className="nc-actor__name" style={{ display: "block" }}>
-          {actor.name}
+          {tc(actor.name)}
         </span>
         <span className="nc-actor__role" style={{ display: "block" }}>
-          {actor.role}
+          {tc(actor.role)}
         </span>
       </span>
       <span className="nc-actor__kind" aria-hidden="true">

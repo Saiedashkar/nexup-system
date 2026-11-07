@@ -15,14 +15,54 @@
  *     the SVG connection layer, so wiring can never drift from the pod it
  *     belongs to, including while the camera moves.
  *
- * SPATIAL LAYOUT
- * The scene is deliberately asymmetric: five pods on one ring reads as a
- * dashboard, so each department carries its own x/y *and* its own depth. Depth
- * is a real translateZ consumed by CSS `perspective`, which is what makes
- * "nearer / further" perceptible instead of merely decorative.
+ * SPATIAL LAYOUT (Pass 2)
+ * Six department surfaces, THREE on each side of the Intelligence Core on
+ * desktop, with the core centred between them. Each department carries its own
+ * x/y *and* its own depth; depth is a real translateZ consumed by CSS
+ * `perspective`, which is what keeps "nearer / further" perceptible instead of
+ * merely decorative, and what stops a balanced 3·3 arrangement from reading as a
+ * plain grid.
+ *
+ * THE APPROVED TAXONOMY (Pass 4). Six WORK-OWNING departments, each a product
+ * grouping and never an organizational authority change: it moves no durable
+ * workforce assignment, approval or execution.
+ *
+ *   operations · Management & Operations      الإدارة والتشغيل
+ *   growth     · Marketing & Sales            التسويق والمبيعات
+ *   client     · Clients & Projects           العملاء والمشاريع
+ *   creative   · Creative & Production        الإبداع والإنتاج
+ *   product    · Technology & Systems         التقنية والأنظمة
+ *   finance    · Finance & Oversight          المالية والرقابة
+ *
+ * Five of those ids are the ids those spaces already had, so their routes are
+ * untouched; `creative` is the one genuinely new surface.
+ *
+ * SHARED SERVICES are NOT a seventh department. `knowledge` — skills, memory
+ * references, model information — is what every department reads from, so it is
+ * modelled as a shared service (`SHARED_SERVICES`, `kind: "shared"`) instead of
+ * a department with a P&L. Its id, route, workspace and modes are all kept: it
+ * simply stops occupying one of the six department slots, which is also why the
+ * overview does not grow a seventh node.
+ *
+ * MARKETING vs PRODUCTION. `growth` is demand for the group's OWN companies;
+ * `creative` is campaign and content production FOR CLIENTS. They are different
+ * work with different owners, so they are different departments rather than two
+ * lines in one brief.
+ *
+ * DISPLAY NAMES are localized, so `name` here is the English source string used
+ * by tests and non-React code; every surface renders the localized name from
+ * `i18n/messages.ts` instead.
  */
 
-export type DepartmentId = "growth" | "client" | "operations" | "product" | "finance";
+export type DepartmentId =
+  | "operations"
+  | "growth"
+  | "client"
+  | "creative"
+  | "product"
+  | "finance"
+  /* A shared service, not a department: see `SHARED_SERVICES`. */
+  | "knowledge";
 
 export type Worker = {
   id: string;
@@ -30,9 +70,31 @@ export type Worker = {
   role: string;
 };
 
+/**
+ * Every action id the six spaces and the organization level can offer.
+ *
+ * Typed as a union on purpose (Pass 2): the deck renders its labels from
+ * `deck.<id>.label` in the dictionary, and this union is what makes that lookup
+ * a compile-checked key instead of an unchecked string.
+ */
+export type DeckActionId =
+  | "build"
+  | "review"
+  | "call"
+  | "workflow"
+  | "lab"
+  | "mission"
+  | "run"
+  | "tool"
+  | "more"
+  | "stack"
+  | "warroom"
+  | "systems"
+  | "control";
+
 /** One command-surface cell. Configuration, never duplicated markup. */
 export type DeckAction = {
-  id: string;
+  id: DeckActionId;
   label: string;
   /** Icon key resolved by the surface from the shared icon set. */
   icon: DeckIconKey;
@@ -58,26 +120,26 @@ export type DeckIconKey =
   | "map"
   | "stack";
 
-export type Department = {
+/**
+ * What a department and a shared service have in common.
+ *
+ * Everything a surface *says* lives here; where a surface *sits* does not, which
+ * is exactly the difference between the two kinds: a department occupies a place
+ * in the room, a shared service spans all of them.
+ */
+export type SurfaceBase = {
   id: DepartmentId;
+  /** English source name. Surfaces render `dept.<id>.name` from the dictionary. */
   name: string;
   short: string;
-  /** What this department is accountable for — shown on focus. */
+  /** What this surface is accountable for — shown on focus. */
   brief: string;
-  /** Short capability line, used when the department has no live work. */
+  /** Short capability line, used when the surface has no live work. */
   capability: string;
-  /** CSS custom property holding this department's restrained identity accent. */
+  /** CSS custom property holding this surface's restrained identity accent. */
   accentVar: string;
-  /** The space's own vocabulary ("Growth floor", "Delivery bay") — spatial, not card-like. */
+  /** The space's own vocabulary ("Studio floor", "Delivery bay") — spatial, not card-like. */
   space: string;
-  /** Pod-centre anchor, in percent of the stage (0-100). Not a ring. */
-  x: number;
-  y: number;
-  /**
-   * Depth in px, consumed as `translateZ` under the stage perspective.
-   * Positive = nearer the viewer. Deliberately uneven across the five pods.
-   */
-  depth: number;
   /** Headline crew size — drives the "+N" overflow on the presence cluster. */
   crew: number;
   workers: Worker[];
@@ -93,9 +155,44 @@ export type Department = {
      in `department-workspace.ts` derives each space's count from the mission list
      that space actually owns, so the node, the rail, the Active Missions panel and
      the top KPI cannot drift away from the workspace. */
-  /** This space's own adaptive deck. */
+  /** This surface's own adaptive deck. */
   deck: DeckAction[];
 };
+
+/** A work-owning department: it holds missions, and it has a place in the room. */
+export type Department = SurfaceBase & {
+  kind: "department";
+  /** Pod-centre anchor, in percent of the stage (0-100). Not a ring. */
+  x: number;
+  y: number;
+  /**
+   * Depth in px, consumed as `translateZ` under the stage perspective.
+   * Positive = nearer the viewer. Deliberately uneven across the six pods.
+   */
+  depth: number;
+};
+
+/**
+ * A shared service: cross-cutting capability the departments read from.
+ *
+ * It carries no place in the room on purpose — `serves` says who reads from it
+ * and `provides` says what it holds, and the overview draws it as one band that
+ * spans the departments rather than as a seventh node competing with them.
+ */
+export type SharedService = SurfaceBase & {
+  kind: "shared";
+  /** Ids of the departments that read from this service. */
+  serves: DepartmentId[];
+  /**
+   * What the service holds, as DISPLAY KEYS rather than English words: the band
+   * renders `t(\`shared.provides.${key}\`)`, so a shared service cannot end up
+   * showing English chips inside Arabic chrome.
+   */
+  provides: Array<"skills" | "memory" | "models">;
+};
+
+/** Any surface in the roster: one department, or one shared service. */
+export type Surface = Department | SharedService;
 
 /* ── Reusable deck presets so five departments don't become five copies ─── */
 
@@ -139,6 +236,22 @@ const DECK_PROCESS: DeckAction[] = [
   { id: "more", label: "More", icon: "more", hint: "More arrives with the Work area", intent: "More actions surface with the Work area." },
 ];
 
+const DECK_STUDIO: DeckAction[] = [
+  { id: "mission", label: "New Brief", icon: "mission", hint: "Open client production work", intent: "Open a client brief inside this space." },
+  { id: "review", label: "Review Output", icon: "review", hint: "Read what the studio produced", intent: "Review the work the studio produced." },
+  { id: "call", label: "Call Studio", icon: "call", hint: "Pull the production team in", intent: "Pull the production team into the conversation." },
+  { id: "run", label: "Publish Campaign", icon: "run", hint: "Release approved work to the client", intent: "Publish approved work to the client's channels." },
+  { id: "lab", label: "Build Lab", icon: "lab", hint: "Build this space's own tools", intent: "Open the lab where this space builds its own tools." },
+];
+
+const DECK_KNOWLEDGE: DeckAction[] = [
+  { id: "review", label: "Review Knowledge", icon: "review", hint: "Read what the organization knows", intent: "Review the knowledge the organization is holding." },
+  { id: "stack", label: "Open Registry", icon: "stack", hint: "Skills, memory and model information", intent: "Open the skills, memory and model registry." },
+  { id: "mission", label: "New Reference", icon: "mission", hint: "Register something worth keeping", intent: "Register a reference the organization should keep." },
+  { id: "call", label: "Call Steward", icon: "call", hint: "Bring the knowledge steward in", intent: "Pull the knowledge steward into the conversation." },
+  { id: "more", label: "More", icon: "more", hint: "More arrives with the Capabilities area", intent: "More actions surface with the Capabilities area." },
+];
+
 /** The organization's own surface, used at the overview level. */
 export const OVERVIEW_DECK: DeckAction[] = [
   { id: "mission", label: "New Mission", icon: "mission", hint: "Turn an idea into execution", intent: "Open a mission and assign a department." },
@@ -153,7 +266,15 @@ export const OVERVIEW_DECK: DeckAction[] = [
  * the focused workspace reserves the slots so entering a space already reads as
  * entering a place with rooms, and a later phase fills them one at a time.
  */
-export type WorkspaceMode = { id: string; label: string; icon: DeckIconKey; hint: string };
+/** The internal rooms a focused space can host. Ids are typed for i18n lookup. */
+export type WorkspaceModeId = "work" | "map" | "flow" | "assets";
+
+export type WorkspaceMode = {
+  id: WorkspaceModeId;
+  label: string;
+  icon: DeckIconKey;
+  hint: string;
+};
 
 export const WORKSPACE_MODES: WorkspaceMode[] = [
   { id: "work", label: "Work", icon: "run", hint: "Current work in this space" },
@@ -165,17 +286,19 @@ export const WORKSPACE_MODES: WorkspaceMode[] = [
 export const DEPARTMENTS: Department[] = [
   {
     id: "operations",
-    name: "Operations",
+    kind: "department",
+    name: "Management & Operations",
     short: "OPS",
-    brief: "The machine that keeps work moving: process, vendors, quality.",
-    capability: "People · Process · Support",
+    brief:
+      "Management and the machine that keeps work moving: process, people, vendors, quality and the runbooks everything else depends on.",
+    capability: "People · Process · Quality",
     accentVar: "--nc-operations",
     space: "Operations floor",
-    /* The composition puts the spaces on the flanks so the Intelligence Core
-       has room to breathe in the middle — a deliberate repositioning for the
-       command-center reading, not a ring. */
-    x: 22,
-    y: 82,
+    /* Pass 2 arrangement: three working spaces in each flank column, the core
+       centred between them. Depth still varies per space, so the two columns
+       read as a room with a near side and a far side rather than a table. */
+    x: 82,
+    y: 22,
     depth: 30,
     crew: 8,
     workers: [
@@ -191,13 +314,14 @@ export const DEPARTMENTS: Department[] = [
   },
   {
     id: "client",
-    name: "Client & Delivery",
-    short: "CLIENT",
-    brief: "Everything a client feels: onboarding, delivery and retention.",
-    capability: "Clients · Projects · QA",
+    kind: "department",
+    name: "Clients & Projects",
+    short: "CLIENTS",
+    brief: "The client relationship and the projects delivered through it: onboarding, project delivery and retention.",
+    capability: "Clients · Projects · Retention",
     accentVar: "--nc-client",
     space: "Delivery bay",
-    x: 17,
+    x: 82,
     y: 50,
     /* Furthest back: the quietest space when nothing is at risk. */
     depth: -70,
@@ -215,14 +339,15 @@ export const DEPARTMENTS: Department[] = [
   },
   {
     id: "product",
-    name: "Product & Tech",
-    short: "PRODUCT",
-    brief: "Building the systems the rest of the organization runs on.",
-    capability: "Build · AI · Automation",
+    kind: "department",
+    name: "Technology & Systems",
+    short: "TECH",
+    brief: "The platforms the organization runs on: product surfaces, agents, automation and the systems behind them.",
+    capability: "Build · AI · Systems",
     accentVar: "--nc-product",
     space: "Build floor",
-    x: 80,
-    y: 26,
+    x: 82,
+    y: 78,
     depth: 55,
     crew: 7,
     workers: [
@@ -239,14 +364,17 @@ export const DEPARTMENTS: Department[] = [
   },
   {
     id: "growth",
-    name: "Growth & Revenue",
-    short: "GROWTH",
-    brief: "Demand, pipeline and revenue generation across every business.",
-    capability: "Leads · Sales · Market",
+    kind: "department",
+    name: "Marketing & Sales",
+    short: "MARKETING",
+    /* Demand for OUR OWN companies — deliberately not client campaign
+       production, which is `creative`. */
+    brief: "Demand, market position and revenue for the group's own companies: brand, pipeline and sales.",
+    capability: "Brand · Market · Sales",
     accentVar: "--nc-growth",
-    space: "Growth floor",
-    x: 20,
-    y: 16,
+    space: "Market floor",
+    x: 18,
+    y: 22,
     /* Nearest the viewer: revenue is the space a founder leans toward. */
     depth: 95,
     crew: 8,
@@ -263,14 +391,15 @@ export const DEPARTMENTS: Department[] = [
   },
   {
     id: "finance",
-    name: "Finance & Control",
+    kind: "department",
+    name: "Finance & Oversight",
     short: "FINANCE",
-    brief: "Money in, money out, and whether any of it is working.",
-    capability: "Money · Margin · Audit",
+    brief: "Money in, money out, and the oversight that keeps both honest: controls, limits and audit.",
+    capability: "Money · Controls · Audit",
     accentVar: "--nc-finance",
     space: "Control room",
-    x: 79,
-    y: 64,
+    x: 18,
+    y: 78,
     depth: -95,
     crew: 4,
     workers: [
@@ -283,6 +412,77 @@ export const DEPARTMENTS: Department[] = [
     insight: "Two payments held for you",
     bottleneck: "Approval limit breach",
     deck: DECK_MONEY,
+  },
+  {
+    id: "creative",
+    kind: "department",
+    name: "Creative & Production",
+    short: "CREATIVE",
+    /* The half of demand that is NOT our own marketing: work produced for a
+       client, under a brief, with an output to review. */
+    brief:
+      "Campaigns and content produced for clients: the brief, the concept, the production and the release.",
+    capability: "Concept · Production · Publish",
+    accentVar: "--nc-creative",
+    space: "Studio floor",
+    /* The client flank's mirror: what a client feels on one side is what the
+       studio makes on the other, and neither is nearer the core than the
+       Intelligence that routes between them. */
+    x: 18,
+    y: 50,
+    depth: 70,
+    crew: 6,
+    workers: [
+      { id: "creative.concept", name: "Concept & Art Direction", role: "Briefs & treatment" },
+      { id: "creative.production", name: "Content Production", role: "Copy · design · edit" },
+      { id: "creative.publish", name: "Media & Scheduling", role: "Placement & cadence" },
+    ],
+    presence: ["human-product-lead", "ai-builder"],
+    director: "Creative Director",
+    insight: "3 client campaigns in production",
+    bottleneck: "Concept review rounds",
+    deck: DECK_STUDIO,
+  },
+];
+
+/**
+ * SHARED SERVICES — what every department reads from.
+ *
+ * These are NOT departments: they own no missions and take no place in the room,
+ * and that is the point. Knowledge, memory, skills and model information are
+ * cross-cutting capability. Giving one of them a department node would either
+ * have made it a seventh surface competing with the six or implied it had its own
+ * P&L, and it has neither.
+ *
+ * `serves` lists every department, because that is literally true: each one reads
+ * the same skills, the same decisions and the same registry. The id, route,
+ * workspace and eight modes all already existed for `knowledge`, so nothing is
+ * lost by moving it here — it is the same surface, correctly labelled.
+ */
+export const SHARED_SERVICES: SharedService[] = [
+  {
+    id: "knowledge",
+    kind: "shared",
+    name: "Knowledge & Models",
+    short: "SHARED",
+    brief:
+      "Shared services every department reads from: skills, memory references and model information, kept in one place instead of rediscovered in six.",
+    capability: "Skills · Memory · Models",
+    accentVar: "--nc-violet",
+    space: "Shared services",
+    crew: 5,
+    workers: [
+      { id: "knowledge.library", name: "Knowledge Library", role: "Skills & references" },
+      { id: "knowledge.memory", name: "Memory Curation", role: "Context & decisions" },
+      { id: "knowledge.registry", name: "Model Registry", role: "Runtimes & quota" },
+    ],
+    presence: ["human-ops-lead", "ai-analyst"],
+    director: "Knowledge steward",
+    insight: "Model registry partly constrained",
+    bottleneck: "Memory references not populated",
+    deck: DECK_KNOWLEDGE,
+    serves: ["operations", "growth", "client", "creative", "product", "finance"],
+    provides: ["skills", "memory", "models"],
   },
 ];
 
@@ -309,7 +509,8 @@ export const FOUNDER = {
  */
 export const EXECUTIVE = {
   id: "executive",
-  label: "Right-Hand Executive",
+  label: "EXEC",
+  longLabel: "Right-Hand Executive",
   short: "EXEC",
   kicker: "Central intelligence · router",
   /** Canonical level name in the spatial hierarchy. */
@@ -333,20 +534,38 @@ export const ORGANIZATION = {
   level: "Organization",
   executive: EXECUTIVE,
   departments: DEPARTMENTS,
+  /** Capability that spans the departments rather than sitting beside them. */
+  sharedServices: SHARED_SERVICES,
   overviewDeck: OVERVIEW_DECK,
 } as const;
 
 export type OrganizationConfig = typeof ORGANIZATION;
 
+/** The six work-owning departments, in configuration order. */
 export const DEPARTMENT_IDS: DepartmentId[] = DEPARTMENTS.map((d) => d.id);
 
-export const DEPARTMENT_BY_ID: Record<string, Department> = DEPARTMENTS.reduce(
-  (acc, department) => {
-    acc[department.id] = department;
+/** The shared services — spanning capability, never a seventh department. */
+export const SHARED_SERVICE_IDS: DepartmentId[] = SHARED_SERVICES.map((service) => service.id);
+
+/**
+ * The whole roster by id: the six departments AND the shared services.
+ *
+ * One map rather than two, because almost every reader holds an id and wants the
+ * words and the accent that go with it — which is the same answer either way. The
+ * FEW readers that need a place in the room ask for the kind first (see
+ * `nodeAnchor`), so a shared service can never be drawn at a department's
+ * coordinates by accident.
+ */
+export const SURFACE_BY_ID: Record<string, Surface> = [...DEPARTMENTS, ...SHARED_SERVICES].reduce(
+  (acc, surface) => {
+    acc[surface.id] = surface;
     return acc;
   },
-  {} as Record<string, Department>,
+  {} as Record<string, Surface>,
 );
+
+/** Kept under its original name for existing call sites — the same roster. */
+export const DEPARTMENT_BY_ID = SURFACE_BY_ID;
 
 /**
  * Resolve any node id to its canvas anchor. The pod layer and the SVG
@@ -356,14 +575,18 @@ export const DEPARTMENT_BY_ID: Record<string, Department> = DEPARTMENTS.reduce(
  */
 export function nodeAnchor(id: string): { x: number; y: number } | null {
   if (id === EXECUTIVE.id) return { x: EXECUTIVE.x, y: EXECUTIVE.y };
-  const department = DEPARTMENT_BY_ID[id];
-  return department ? { x: department.x, y: department.y } : null;
+  const surface = SURFACE_BY_ID[id];
+  /* A shared service is deliberately NOT anchored: it spans the room instead of
+     occupying a place in it, and the caller draws it as a band. */
+  if (!surface || surface.kind !== "department") return null;
+  return { x: surface.x, y: surface.y };
 }
 
 /** Depth for any node id, in px. Used by the pod layer and the wiring layer. */
 export function nodeDepth(id: string): number {
   if (id === EXECUTIVE.id) return EXECUTIVE.depth;
-  return DEPARTMENT_BY_ID[id]?.depth ?? 0;
+  const surface = SURFACE_BY_ID[id];
+  return surface && surface.kind === "department" ? surface.depth : 0;
 }
 
 /** Look up a worker's display data from a `departmentId.workerId` key. */
@@ -420,7 +643,7 @@ export const SYSTEMS: SystemEntry[] = [
     statusKind: "online",
     role: "base",
     perimeter: { x: 95, y: 78 },
-    linkedDepartments: ["finance", "client"],
+    linkedDepartments: ["finance", "client", "creative"],
     href: "/office",
   },
   {
@@ -434,7 +657,9 @@ export const SYSTEMS: SystemEntry[] = [
     statusKind: "running",
     role: "endpoint",
     perimeter: { x: 95, y: 22 },
-    linkedDepartments: ["growth"],
+    /* Distribution serves both halves of demand: our own channels AND the work
+       the studio releases for clients. */
+    linkedDepartments: ["growth", "creative"],
   },
   {
     id: "rebound",
@@ -466,5 +691,7 @@ export const SYSTEMS: SystemEntry[] = [
 
 /** The systems one space reaches. Used by the perimeter layer and the workspace. */
 export function systemsForDepartment(departmentId: DepartmentId): SystemEntry[] {
+  /* The NEXUP business OS holds clients and projects, so the studio writes into
+     it too — a client campaign is delivered through the same book of record. */
   return SYSTEMS.filter((system) => system.linkedDepartments.includes(departmentId));
 }

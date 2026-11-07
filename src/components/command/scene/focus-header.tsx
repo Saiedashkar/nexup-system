@@ -1,10 +1,11 @@
 "use client";
 
 import { useCommand } from "../state/command-store";
+import { useLocale } from "../i18n/command-locale";
 import type { Department } from "../state/organization-model";
 import { cssVars } from "../ui/css-vars";
 import { IconArrowLeft } from "../ui/icons";
-import { STATUS_LABEL, type VisualNodeState } from "../state/visual-state";
+import type { VisualNodeState } from "../state/visual-state";
 
 /**
  * FOCUS HEADER — the destination of a spatial focus (Phase UI-02.1)
@@ -26,6 +27,7 @@ import { STATUS_LABEL, type VisualNodeState } from "../state/visual-state";
  */
 export function FocusHeader({ department, visual }: { department: Department; visual: VisualNodeState }) {
   const { clearFocus } = useCommand();
+  const { t } = useLocale();
 
   return (
     <div
@@ -33,21 +35,27 @@ export function FocusHeader({ department, visual }: { department: Department; vi
       style={cssVars({ "--nc-accent": `var(${department.accentVar})` })}
       role="status"
     >
-      <button type="button" className="nc-focusbar__back" onClick={clearFocus} aria-label="Back to organization overview">
+      <button
+        type="button"
+        className="nc-focusbar__back"
+        onClick={clearFocus}
+        aria-label={t("shell.backToOrganization")}
+        title={t("shell.backToOrganization")}
+      >
         <IconArrowLeft size={14} />
-        Organization
+        {t("common.organization")}
       </button>
 
       <span className="nc-focusbar__divider" aria-hidden="true" />
 
       <span className="nc-focusbar__text">
-        <span className="nc-focusbar__space">{department.space}</span>
-        <span className="nc-focusbar__name">{department.name}</span>
+        <span className="nc-focusbar__space">{t(`dept.${department.id}.space`)}</span>
+        <span className="nc-focusbar__name">{t(`dept.${department.id}.name`)}</span>
       </span>
 
       <span className="nc-focusbar__state">
         <span className="nc-focusbar__led" aria-hidden="true" />
-        {STATUS_LABEL[visual.status]} · {Math.round(visual.activityLevel * 100)}%
+        {t(`status.node.${visual.status}`)} · {Math.round(visual.activityLevel * 100)}%
       </span>
     </div>
   );

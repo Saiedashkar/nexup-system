@@ -52,6 +52,13 @@ export const EXECUTION_AUDIT_EVENT_TYPES = [
   "ACCEPTED",
   "STATUS",
   "TERMINAL",
+  /**
+   * The INTENT to cancel, recorded BEFORE the external cancellation is
+   * attempted (Step 5A-4). Cancellation is an external side effect, so a crash
+   * between "we asked" and "it was accepted" must leave evidence of the ask —
+   * otherwise a silent failure looks like a cancellation nobody requested.
+   */
+  "CANCEL_REQUESTED",
   "CANCELLED",
   "RETRY",
   "REJECTED",
@@ -97,6 +104,17 @@ export type ExecutionRecord = {
   replayed?: boolean;
   startedAt: string;
   updatedAt: string;
+  /**
+   * When a RECOVERY SWEEP last OBSERVED this attempt — the DURABLE rotation key
+   * (Step 5A-4, fifth review). `undefined` = never swept, which sorts FIRST.
+   *
+   * Deliberately NOT `updatedAt`: that is the attempt's real activity timestamp
+   * and the source of the Recent Activity feed, so a sweep that bumped it would
+   * make recovery look like an execution that actually happened and would reshuffle
+   * the operator's feed. This field is written by exactly one operation,
+   * `markRecoverySwept`, which changes nothing else.
+   */
+  recoverySweptAt?: string;
   completedAt?: string;
   durationMs?: number;
   output?: unknown;
@@ -138,6 +156,37 @@ export type ExecutionRecordOpenInput = {
   replayed?: boolean;
 };
 
+/**
+ * One page of the RECOVERY-eligible ledger.
+ *
+ * `limit` is the page, `missionId` narrows the query — and both are applied by the
+ * STORAGE, not by the caller. That distinction is the correction: filtering a page
+ * after it was read (which is what "list a page, then drop the terminal rows"
+ * does) means N terminal rows can consume the whole page and an older OPEN attempt
+ * is never seen at all.
+ */
+export type ExecutionRecoverableQuery = {
+  limit?: number;
+  missionId?: MissionId;
+  /**
+   * The SWEEP's lane (Step 5A-4, sixth review). Like the claim ledger's, it fixes
+   * BOTH membership and direction, so an arriving (never-observed) attempt cannot
+   * consume the revisit window's allocation:
+   *
+   *   NEVER_OBSERVED       `recoverySweptAt IS NULL`, oldest `startedAt` first.
+   *   PREVIOUSLY_OBSERVED  `recoverySweptAt IS NOT NULL`, least recently observed
+   *                        first — the round-robin an observed-but-open attempt
+   *                        gets, and the one the sixth review found unbounded.
+   *
+   * Omitted, the read is the merged "what is next" page (never observed first, then
+   * least recently observed) that the diagnostic surface and the paging tests use.
+   */
+  lane?: ExecutionRecoverableLane;
+};
+
+/** One of the recovery sweep's two record allocations (disjoint by predicate, because a record is either never-observed or previously-observed). */
+export type ExecutionRecoverableLane = "NEVER_OBSERVED" | "PREVIOUSLY_OBSERVED";
+
 export interface ExecutionRecordRepository {
   insert(record: ExecutionRecord): Promise<ExecutionRecord>;
   get(id: ExecutionRecordId): Promise<ExecutionRecord | null>;
@@ -145,14 +194,103 @@ export interface ExecutionRecordRepository {
   listForTask(taskId: TaskId): Promise<ExecutionRecord[]>;
   listForMission(missionId: MissionId): Promise<ExecutionRecord[]>;
   list(limit?: number): Promise<ExecutionRecord[]>;
+
+  /**
+   * The RECOVERY page: attempts that are NOT terminal, one bounded page, in the
+   * DURABLE ROTATION order (least recently swept first — never-swept attempts
+   * first, oldest `startedAt` first).
+   *
+   * The terminal filter is the storage's, BEFORE `LIMIT`, so the page is a page of
+   * ELIGIBLE attempts. This replaces the old "read a page of everything, then
+   * filter in the reconciler", which let a pile of freshly finished attempts hide
+   * an older open one forever.
+   *
+   * A `lane` makes the page ONE of the sweep's two DISJOINT allocations (Step 5A-4,
+   * sixth review): membership is a WHERE predicate on the recovery stamp, so a
+   * never-observed attempt can never occupy the revisit window's share of the
+   * sweep. That is what gives an attempt that was observed once — and that is still
+   * open because its run finished after we stopped looking — a bound.
+   */
+  listRecoverable(query?: ExecutionRecoverableQuery): Promise<ExecutionRecord[]>;
+
+  /**
+   * Records that a RECOVERY SWEEP OBSERVED this attempt — the DURABLE rotation
+   * key. It sets `recoverySweptAt` and NOTHING else: no status, no output, no
+   * audit event, and NOT `updatedAt` (the attempt's activity timestamp). A missing
+   * attempt is `null`.
+   */
+  markRecoverySwept(id: ExecutionRecordId): Promise<ExecutionRecord | null>;
 }
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+/**
+ * The RECOVERY ROTATION ORDER, in one place.
+ *
+ * never-swept first (oldest `startedAt`, then `id`), then least recently swept.
+ * The durable adapter spells the identical rule as
+ * `ORDER BY "recoverySweptAt" ASC NULLS FIRST, "startedAt" ASC, "id" ASC`
+ * inside `listRecoverable`, so the in-memory reference and PostgreSQL cannot
+ * disagree about which attempt is next.
+ */
+export function recoveryRotationCompare(a: ExecutionRecord, b: ExecutionRecord): number {
+  if (a.recoverySweptAt !== b.recoverySweptAt) {
+    if (a.recoverySweptAt === undefined) return -1;
+    if (b.recoverySweptAt === undefined) return 1;
+    return a.recoverySweptAt.localeCompare(b.recoverySweptAt);
+  }
+  return a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id);
+}
+
+/** True when `record` belongs to `lane`. The predicate, in ONE place. */
+export function recordIsInLane(
+  record: Pick<ExecutionRecord, "recoverySweptAt">,
+  lane: ExecutionRecoverableLane,
+): boolean {
+  return lane === "PREVIOUSLY_OBSERVED" ? record.recoverySweptAt !== undefined : record.recoverySweptAt === undefined;
+}
+
+/**
+ * The order of `lane`, as a comparator — the in-memory counterpart of the SQL
+ * `ORDER BY` that lane gets in the durable adapter.
+ *
+ * `NEVER_OBSERVED` is FIFO by `startedAt`; `PREVIOUSLY_OBSERVED` is
+ * `recoveryRotationCompare`, whose `NULLS FIRST` clause cannot fire inside that
+ * lane (a NULL stamp does not satisfy its predicate), leaving least-recently-
+ * observed first — the round-robin.
+ */
+export function compareInRecordLane(lane: ExecutionRecoverableLane): (a: ExecutionRecord, b: ExecutionRecord) => number {
+  if (lane === "NEVER_OBSERVED") {
+    return (a, b) => a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id);
+  }
+  return recoveryRotationCompare;
+}
+
 export class InMemoryExecutionRecordRepository implements ExecutionRecordRepository {
   private readonly rows = new Map<ExecutionRecordId, ExecutionRecord>();
+
+  /**
+   * The clock is INJECTED, exactly as the claim ledger's is, so a test's rotation
+   * stamps are the test's own timestamps rather than wall-clock time. Defaulting to
+   * the system clock keeps every existing construction site working.
+   */
+  constructor(private readonly deps: { now?: Clock } = {}) {}
+
+  /** The last recovery stamp written, so a sweep's stamp always advances. */
+  private lastStamp = Number.NEGATIVE_INFINITY;
+
+  /**
+   * A stamp STRICTLY LATER than every stamp this ledger has already written — see
+   * the equivalent note on the claim ledger's `stamp`. The rotation's guarantee is
+   * that successive sweeps stamp LATER, and a fixed test clock would otherwise
+   * freeze the front of the queue.
+   */
+  private stamp(): string {
+    this.lastStamp = Math.max((this.deps.now?.() ?? new Date()).getTime(), this.lastStamp + 1);
+    return new Date(this.lastStamp).toISOString();
+  }
 
   async insert(record: ExecutionRecord): Promise<ExecutionRecord> {
     this.rows.set(record.id, clone(record));
@@ -190,6 +328,41 @@ export class InMemoryExecutionRecordRepository implements ExecutionRecordReposit
 
   async list(limit = 100): Promise<ExecutionRecord[]> {
     return [...this.rows.values()].map(clone).slice(0, limit);
+  }
+
+  /**
+   * The RECOVERY page: non-terminal attempts, in the durable rotation order.
+   *
+   * The rotation rule is the same one the durable adapter spells in SQL — rows a
+   * sweep has never observed first (oldest `startedAt` first), then the least
+   * recently swept — and it is the reason a page boundary cannot hide an older
+   * open attempt behind finished ones or behind attempts already looked at.
+   */
+  async listRecoverable(query: ExecutionRecoverableQuery = {}): Promise<ExecutionRecord[]> {
+    const { limit = 100, missionId, lane } = query;
+    const eligible = [...this.rows.values()]
+      .filter((row) => !isTerminalExecutionStatus(row.status))
+      .filter((row) => missionId === undefined || row.missionId === missionId);
+    // The LANE, when named: predicate FIRST (so the window can only hold rows that
+    // belong to it), then that lane's own order — the same two-statement shape the
+    // durable adapter uses.
+    if (lane) {
+      return eligible
+        .filter((row) => recordIsInLane(row, lane))
+        .sort(compareInRecordLane(lane))
+        .slice(0, limit)
+        .map(clone);
+    }
+    return eligible.sort(recoveryRotationCompare).slice(0, limit).map(clone);
+  }
+
+  /** Stamps the rotation key and leaves `updatedAt` — activity — untouched. */
+  async markRecoverySwept(id: ExecutionRecordId): Promise<ExecutionRecord | null> {
+    const existing = this.rows.get(id);
+    if (!existing) return null;
+    const next: ExecutionRecord = { ...existing, recoverySweptAt: this.stamp() };
+    this.rows.set(next.id, next);
+    return clone(next);
   }
 
   count(): number {
@@ -284,6 +457,29 @@ export class ExecutionRecorder {
       this.push(next, "STATUS", arriving, "provider reported a different terminal state after the fact");
     }
 
+    return this.deps.records.save(next);
+  }
+
+  /**
+   * Records the INTENT to cancel, durably, BEFORE the external call is made.
+   *
+   * It deliberately does NOT change the status: an intent is not an outcome, and
+   * a record that claims to be CANCELLED before the runtime answered would be
+   * asserting something we do not yet know.
+   */
+  async recordCancellationRequested(
+    recordId: ExecutionRecordId,
+    input: { requestedBy: string; origin: string; reason: string },
+  ): Promise<ExecutionRecord> {
+    const existing = await this.require(recordId);
+    const at = this.deps.now().toISOString();
+    const next: ExecutionRecord = { ...existing, updatedAt: at };
+    this.push(
+      next,
+      "CANCEL_REQUESTED",
+      next.status,
+      `requested by ${input.requestedBy} (${input.origin}): ${input.reason}`,
+    );
     return this.deps.records.save(next);
   }
 

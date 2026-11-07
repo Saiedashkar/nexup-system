@@ -10,6 +10,26 @@ import { createWorkforcePrismaClient, type WorkforcePrismaHandle } from "@/modul
 import { createHermesRuntime, type HermesRuntimeConfig } from "@/modules/workforce";
 import { createWorkforceApplication, getWorkforceApplication, workforceApplicationStatus } from "@/modules/workforce/application";
 import { DeterministicHermesTransport } from "@/modules/workforce/runtimes/hermes/testing/deterministic-transport";
+import type { BudgetGovernor } from "@/modules/ai-workforce/policies/budget-governor";
+
+/**
+ * The explicit test-only budget governor, per
+ * `docs/AI_WORKFORCE_STEP5A_REMEDIATION_DESIGN.md` §0.2. The parent composes a
+ * real Hermes adapter over a deterministic transport to VERIFY the rows; a
+ * RUNTIME leg is `VARIABLE_PROVIDER_COST`, which the shipped DENY governor
+ * refuses. The default is untouched.
+ */
+const restartProofTestGovernor: BudgetGovernor = {
+  policyRef: "test.app-restart.allow",
+  async evaluate(input) {
+    return {
+      allowed: true,
+      reason: "ALLOWED_ATTESTED_INCLUDED_ROUTE",
+      policyRef: "test.app-restart.allow",
+      spend: input.spend,
+    };
+  },
+};
 
 /**
  * STEP 5/8 — PROCESS-RESTART / REHYDRATION, through the APPLICATION boundary.
@@ -48,6 +68,11 @@ const MIGRATIONS = [
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_1B/migration.sql",
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_2/migration.sql",
   "prisma/proposed-migrations/AI_WORKFORCE_PHASE_3/migration.sql",
+  // Step 5A-4: the application owns the DURABLE execution claim now.
+  "prisma/proposed-migrations/AI_WORKFORCE_PHASE_4/migration.sql",
+  // Fifth review: recovery progress lives in the ROWS (`recoverySweptAt`), which
+  // the durable repositories select, so the database carries PHASE_5 as well.
+  "prisma/proposed-migrations/AI_WORKFORCE_PHASE_5/migration.sql",
 ];
 
 const describeIfDatabase = BASE_URL ? describe : describe.skip;
@@ -125,6 +150,7 @@ describeIfDatabase("STEP 5 — the application rehydrates a mission after a REAL
     return createWorkforceApplication(handle, {
       ids,
       now,
+      budget: restartProofTestGovernor,
       runtime: createHermesRuntime(hermesConfig(), {
         transport: new DeterministicHermesTransport({ statusSequence: ["succeeded"] }),
         ids,

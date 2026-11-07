@@ -13,6 +13,8 @@ import {
 } from "../runtimes/hermes";
 import { DeterministicHermesTransport } from "../runtimes/hermes/testing/deterministic-transport";
 import { prismaBusinessScopeResolver } from "../persistence/prisma-business-scope";
+import { prismaWorkforcePorts } from "@/modules/ai-workforce/adapters/prisma-read-ports";
+import { createWorkforceReadOnlyToolRegistry } from "../execution/workforce-read-only-capabilities";
 
 import { createWorkforceApplication, type WorkforceApplication } from "./composition";
 
@@ -298,6 +300,15 @@ export function getWorkforceApplication(): Promise<WorkforceApplication> {
             ? { humanActorSeeds: parseProofHumanActors(process.env[WORKFORCE_PROOF_HUMAN_ACTORS_ENV]) }
             : {}),
           businessScope: prismaBusinessScopeResolver,
+          // ── The safe, executable deterministic leg (P1-7). ──
+          // A FRESH read-only registry over the three Phase-1A read-only
+          // capabilities, backed by the existing Prisma read ports. The budget
+          // default is untouched: this leg is NO_VARIABLE_COST and genuinely
+          // executable, while every runtime leg stays VARIABLE_PROVIDER_COST and
+          // denied.
+          tools: createWorkforceReadOnlyToolRegistry(),
+          ports: prismaWorkforcePorts,
+          registerReadOnlyCapabilities: true,
         });
         return { ...application, disconnect: handle.disconnect };
       } catch (error) {

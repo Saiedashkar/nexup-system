@@ -1,0 +1,755 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEXUP COMMAND — ORBIT · the home composition
+   ───────────────────────────────────────────────────────────────────────────
+   The owner-approved company overview, in the product's own components: a
+   balanced six-department orbit around the approved EXEC character, the two
+   concise summaries underneath it, and everything else behind a disclosure.
+
+   This file is imported AFTER `foundation.css` and is scoped to the home
+   surface (`data-surface="home"`, set by `command-shell.tsx` from the route).
+   It therefore replaces the superseded violet home layer in place rather than
+   layering another opinion on top of it: `violet.css` is deleted, and nothing
+   here re-states a rule that the foundation already owns.
+
+   THE COMPOSITION, TOP TO BOTTOM (desktop)
+     1. heading             — compact; scope, title, and the readings switcher
+     2. the ORBIT STAGE     — six plates, three a side, around EXEC at the
+                              centre, with champagne rings and pearl orbits
+     3. the SUMMARIES       — "needs your decision" and "current work", the two
+                              answers this screen exists to give, each one tap
+                              from the surface that acts on it
+     4. the DISCLOSURE      — operating detail: the figures, the row-level
+                              panels, the verb row, the legend and the shared
+                              services. Present, reachable, and off the first
+                              screen, which is what "no dashboard clutter" means
+     5. the composer        — shell chrome, above, where it already was
+
+   NOTHING HERE IS AN IMAGE. The rings, the pearls, the glass and the light are
+   gradients, borders and transforms. The one raster in the composition is the
+   approved EXEC character asset, and where it comes from is documented in
+   `public/exec-lab/README.md`.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1 · GEOMETRY — the home reads its own numbers
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root[data-surface="home"] {
+  /* The stage is the composition, so it is tall enough to hold three rows of
+     plates with air between them, and it never becomes a full-viewport scroll
+     of its own. */
+  /* 54vh keeps the composition AND the two summaries inside the first screen at
+     1440×900 — the summaries are part of the reading, not something to scroll
+     for. */
+  --nc-orbit-h: clamp(430px, 54vh, 600px);
+  /* Plates: wider and shorter than a card, so six of them read as radar
+     returns around a centre rather than as a card grid. */
+  --nc-pod-w: clamp(228px, 17.4vw, 300px);
+  --nc-pod-h: 84px;
+  /* A lozenge, not a stadium: the reference's plates are generously rounded but
+     they still read as plates, and a full pill turns six cards into six ovals. */
+  --nc-pod-radius: 36px;
+  /* The character seat. The approved reference puts the character at roughly a
+     fifth of the frame's width; this is that proportion, expressed against the
+     column rather than the window, and it is the largest single object in the
+     composition because it IS the centre. */
+  --nc-seat: clamp(132px, 13.6vw, 196px);
+  --nc-pod-face: 0deg;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2 · THE STAGE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root[data-surface="home"] .nc-room__stage {
+  height: var(--nc-orbit-h);
+  border-color: var(--nc-hairline);
+  border-radius: var(--nc-r-4);
+  background:
+    radial-gradient(64% 58% at 50% 42%, var(--nc-champagne-soft), transparent 68%),
+    radial-gradient(120% 120% at 50% 48%, rgba(28, 27, 24, 0.5), rgba(8, 8, 7, 0.9) 72%),
+    linear-gradient(180deg, rgba(14, 14, 13, 0.9), rgba(8, 8, 7, 0.96));
+  box-shadow: var(--nc-shadow-3), var(--nc-inner-light);
+}
+/* The stage's own horizon arc, in champagne instead of blue. */
+.nc-root[data-surface="home"] .nc-room__stage::before {
+  background: radial-gradient(circle at 50% 0%, rgba(243, 173, 73, 0.12), transparent 52%);
+}
+
+/* The quiet space behind the content: stars at low opacity and the concentric
+   ring family. Decoration only — every mark is under 0.06 alpha and nothing
+   here is focusable. */
+.nc-root[data-surface="home"] .nc-scene__stage::before {
+  background:
+    radial-gradient(58% 58% at 50% 44%, rgba(246, 219, 173, 0.05), transparent 66%),
+    radial-gradient(1.6px 1.6px at 14% 26%, rgba(255, 246, 230, 0.4), transparent),
+    radial-gradient(1.4px 1.4px at 78% 16%, rgba(255, 246, 230, 0.32), transparent),
+    radial-gradient(1.4px 1.4px at 88% 66%, rgba(255, 246, 230, 0.3), transparent),
+    radial-gradient(1.6px 1.6px at 26% 78%, rgba(255, 246, 230, 0.3), transparent),
+    radial-gradient(1.2px 1.2px at 60% 86%, rgba(255, 246, 230, 0.24), transparent),
+    radial-gradient(1.2px 1.2px at 42% 10%, rgba(255, 246, 230, 0.24), transparent);
+}
+.nc-root[data-surface="home"] .nc-scene__stage::after {
+  background:
+    repeating-radial-gradient(circle, rgba(246, 219, 173, 0.055) 0 1px, transparent 1px 38px),
+    radial-gradient(circle, rgba(243, 173, 73, 0.05), transparent 62%);
+  mask-image: radial-gradient(circle, #000 26%, transparent 72%);
+  -webkit-mask-image: radial-gradient(circle, #000 26%, transparent 72%);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3 · THE ORBITS — rings, pearls and travelling light
+   Three elliptical ring families centred on the character seat, each with a
+   handful of pearl nodes and each turning at its own slow rate. Nothing here
+   is a canvas or an image, and nothing here is required to understand the
+   screen: it is the approved composition's atmosphere.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-orbit {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.nc-orbit__ring {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px solid rgba(246, 219, 173, 0.13);
+  pointer-events: none;
+}
+.nc-orbit__ring[data-ring="outer"] {
+  width: 74%;
+  height: 56%;
+  border-style: dashed;
+  border-color: rgba(246, 219, 173, 0.14);
+}
+.nc-orbit__ring[data-ring="mid"] {
+  width: 58%;
+  height: 44%;
+  border-color: rgba(246, 219, 173, 0.2);
+}
+.nc-orbit__ring[data-ring="inner"] {
+  width: 38%;
+  height: 29%;
+  border-color: rgba(246, 219, 173, 0.26);
+  box-shadow: inset 0 0 40px rgba(243, 173, 73, 0.06);
+}
+
+/* A pearl orbit: one scaled circle, so rotating it draws an ellipse, and the
+   pearls stay round because each pre-compensates for the parent's squash. */
+.nc-orbit__pearls {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  width: 58%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%) scaleY(0.76);
+  transform-origin: 50% 50%;
+  animation: nc-orbit-turn var(--nc-dur-orbit) linear infinite;
+}
+.nc-orbit__pearls[data-band="outer"] {
+  width: 74%;
+  animation-duration: calc(var(--nc-dur-orbit) * 1.6);
+  animation-direction: reverse;
+}
+.nc-orbit__pearls[data-band="far"] {
+  width: 84%;
+  animation-duration: calc(var(--nc-dur-orbit) * 2.1);
+}
+.nc-orbit__pearls i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #fff7e8, var(--nc-champagne) 58%, rgba(124, 101, 68, 0.35));
+  box-shadow: 0 0 10px rgba(246, 219, 173, 0.34);
+  transform: rotate(calc(var(--a) * 1deg)) translateY(-50%) scaleY(1.316);
+}
+/* The travelling light: one pearl that is brighter and moves faster, which is
+   what makes the ring read as circulating rather than as a static ellipse. */
+.nc-orbit__pearls i[data-live="true"] {
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  background: radial-gradient(circle at 34% 30%, #ffffff, var(--nc-champagne-pale) 60%, rgba(243, 173, 73, 0.4));
+  box-shadow: 0 0 16px rgba(246, 219, 173, 0.5);
+}
+
+/* The veil: the soft champagne bloom that seats the character and keeps the
+   ring crossings from reading as geometry. */
+.nc-orbit__veil {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  width: 46%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(243, 173, 73, 0.1), transparent 66%);
+  mask-image: radial-gradient(circle, #000 20%, transparent 72%);
+  -webkit-mask-image: radial-gradient(circle, #000 20%, transparent 72%);
+}
+
+@keyframes nc-orbit-turn {
+  from { transform: translate(-50%, -50%) scaleY(0.76) rotate(0deg); }
+  to { transform: translate(-50%, -50%) scaleY(0.76) rotate(360deg); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4 · THE EXEC SEAT — the approved character, where the conversation begins
+   It stays what it has always been: a real LINK to EXEC's own workspace, so it
+   is focusable, middle-clickable and copyable. This file dresses it; it does
+   not become a second chat surface (Agent Studio owns that).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The core box IS the seat's box. The seat overflows a 140px core, so the
+   character used to sit off-centre with its identity underneath its chin.
+   Sizing the box to the seat keeps the figure, halo and nameplate concentric. */
+.nc-root[data-surface="home"] .nc-core {
+  display: grid;
+  place-items: center;
+  width: calc(var(--nc-seat) * 1.34);
+  height: calc(var(--nc-seat) * 1.34);
+  z-index: 3;
+}
+.nc-root[data-surface="home"] .nc-core__halo {
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--nc-seat) * 1.6);
+  height: calc(var(--nc-seat) * 1.6);
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(243, 173, 73, 0.14), transparent 64%);
+}
+.nc-root[data-surface="home"] .nc-core__rings,
+.nc-root[data-surface="home"] .nc-core__globe,
+.nc-root[data-surface="home"] .nc-core__dots,
+.nc-root[data-surface="home"] .nc-core__limb { display: none; }
+
+/* The seat: the character's own disc, and the character itself. */
+.nc-execseat {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: calc(var(--nc-seat) * 1.34);
+  height: calc(var(--nc-seat) * 1.34);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 34%, rgba(246, 232, 208, 0.07), transparent 62%),
+    radial-gradient(circle, rgba(10, 10, 9, 0.55), rgba(10, 10, 9, 0) 72%);
+}
+.nc-execseat::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(246, 219, 173, 0.2);
+  box-shadow:
+    0 0 0 1px rgba(255, 244, 226, 0.03) inset,
+    0 22px 50px -26px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+}
+/* The character asset, at the approved proportion. `draggable={false}` and a
+   fixed aspect ratio so a missing or late file cannot shift the layout. */
+.nc-execseat__figure {
+  position: relative;
+  z-index: 1;
+  width: calc(var(--nc-seat) * 1.06);
+  height: calc(var(--nc-seat) * 1.06);
+  object-fit: contain;
+  filter: drop-shadow(0 16px 30px rgba(0, 0, 0, 0.66)) saturate(1.02);
+  animation: nc-seat-float calc(var(--nc-dur-orbit) / 6) var(--nc-ease-standard) infinite alternate;
+}
+.nc-execseat__fallback {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: calc(var(--nc-seat) * 1.06);
+  height: calc(var(--nc-seat) * 1.06);
+  border-radius: 50%;
+  border: 1px dashed var(--nc-champagne-line);
+  color: var(--nc-champagne);
+  font-size: 10px;
+  letter-spacing: var(--nc-track-mid);
+  text-align: center;
+  text-transform: uppercase;
+  padding: 0 12px;
+}
+@keyframes nc-seat-float {
+  from { transform: translateY(-3px); }
+  to { transform: translateY(3px); }
+}
+
+/* The focus ring for the seat, since the previous core's ring was attached to an
+   element this markup no longer has. Focus is never a colour change: it is a
+   champagne ring around the whole seat, plus the halo. */
+.nc-root[data-surface="home"] .nc-core:focus-visible { outline: none; }
+.nc-root[data-surface="home"] .nc-core:focus-visible .nc-execseat::before {
+  border-color: var(--nc-champagne-pale);
+  box-shadow:
+    0 0 0 3px rgba(246, 219, 173, 0.22),
+    0 22px 50px -26px rgba(0, 0, 0, 0.9);
+}
+
+/* The identity under the seat: EXEC and its one-line role, the same two facts
+   the entry has always stated, in the reference's own position. */
+.nc-root[data-surface="home"] .nc-core__identity {
+  top: calc(50% + var(--nc-seat) * 0.67 + 10px);
+  transform: translateX(-50%);
+  gap: 2px;
+}
+.nc-root[data-surface="home"] .nc-core__title {
+  font-size: 15px;
+  font-weight: 560;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  color: var(--nc-text);
+}
+.nc-root[data-surface="home"] .nc-core__role {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--nc-champagne);
+}
+
+/* The state readout stays — a word, with a dot, on the object itself. */
+.nc-root[data-surface="home"] .nc-core__readout {
+  top: calc(50% + var(--nc-seat) * 0.78 + 42px);
+  border-color: var(--nc-hairline);
+  background: rgba(10, 10, 9, 0.7);
+  color: var(--nc-text-2);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5 · THE SIX PLATES — icon, name, one status
+   The reference's plate is a wide smoked-glass lozenge with the disc on the
+   OUTER edge (away from the centre) and two lines of type inside. Selection is
+   a lift and a champagne edge, never a colour change, and it never moves a
+   plate: the panel on the right reads the selection.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-root[data-surface="home"] .nc-pod {
+  transform: translate(-50%, -50%) translateZ(var(--nc-pod-z, 0px));
+}
+.nc-root[data-surface="home"] .nc-pod__plate {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--nc-s-3);
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--nc-s-4);
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-pod-radius, var(--nc-r-pill));
+  background: var(--nc-glass-plate);
+  box-shadow: var(--nc-shadow-2), var(--nc-inner-light);
+  backdrop-filter: blur(var(--nc-blur-2));
+  text-align: start;
+  transition:
+    transform var(--nc-dur-quick) var(--nc-ease-out),
+    border-color var(--nc-dur-quick) var(--nc-ease-standard),
+    background var(--nc-dur-quick) var(--nc-ease-standard),
+    box-shadow var(--nc-dur-quick) var(--nc-ease-standard);
+}
+/* The disc sits on the INNER edge, facing EXEC — that is how the approved
+   overview draws all six plates. Physical sides, not logical ones: the plate
+   left of centre keeps its disc on its right in BOTH languages, and the plate
+   right of centre on its left. `flex-direction` depends on the writing mode, so
+   the choice is stated per direction; otherwise Arabic would mirror the discs
+   to the outside and the composition would disagree with itself by locale.
+   DOM order is untouched: the disc is always first in the accessible name. */
+.nc-root[data-surface="home"][dir="ltr"] .nc-pod[data-side="left"] .nc-pod__plate { flex-direction: row-reverse; }
+.nc-root[data-surface="home"][dir="ltr"] .nc-pod[data-side="right"] .nc-pod__plate { flex-direction: row; }
+.nc-root[data-surface="home"][dir="rtl"] .nc-pod[data-side="left"] .nc-pod__plate { flex-direction: row; }
+.nc-root[data-surface="home"][dir="rtl"] .nc-pod[data-side="right"] .nc-pod__plate { flex-direction: row-reverse; }
+
+.nc-root[data-surface="home"] .nc-pod__plate:hover,
+.nc-root[data-surface="home"] .nc-pod[data-hovered="true"] .nc-pod__plate {
+  border-color: var(--nc-champagne-line);
+  background: var(--nc-glass-plate-strong);
+  transform: translateY(-2px);
+  box-shadow: var(--nc-shadow-3), var(--nc-inner-light);
+}
+.nc-root[data-surface="home"] .nc-pod[data-selected="true"] .nc-pod__plate {
+  border-color: var(--nc-champagne-line);
+  box-shadow:
+    var(--nc-shadow-3),
+    var(--nc-inner-light),
+    0 0 0 1px var(--nc-champagne-soft);
+}
+.nc-root[data-surface="home"] .nc-pod[data-dim="true"] .nc-pod__plate { opacity: 0.5; }
+.nc-root[data-surface="home"] .nc-pod[data-dim="true"] { pointer-events: auto; }
+
+/* The identity disc: a smoked circular plate with a champagne rim. */
+.nc-root[data-surface="home"] .nc-pod__badge {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--nc-champagne-line);
+  background:
+    radial-gradient(circle at 40% 26%, rgba(255, 246, 230, 0.1), transparent 58%),
+    linear-gradient(180deg, rgba(43, 42, 38, 0.9), rgba(18, 18, 17, 0.86));
+  color: var(--nc-champagne-pale);
+  box-shadow: 0 8px 20px -12px rgba(0, 0, 0, 0.8), var(--nc-inner-light);
+  transition: border-color var(--nc-dur-quick) var(--nc-ease-standard);
+}
+.nc-root[data-surface="home"] .nc-pod[data-hovered="true"] .nc-pod__badge,
+.nc-root[data-surface="home"] .nc-pod[data-selected="true"] .nc-pod__badge { border-color: var(--nc-champagne-pale); }
+
+.nc-root[data-surface="home"] .nc-pod__head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.nc-root[data-surface="home"] .nc-pod__namerow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nc-s-2);
+  min-width: 0;
+}
+.nc-root[data-surface="home"] .nc-pod__name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--nc-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nc-root[data-surface="home"] .nc-pod__code {
+  font-family: var(--nc-font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--nc-text-4);
+}
+.nc-root[data-surface="home"] .nc-pod__state { color: var(--nc-text-2); }
+.nc-root[data-surface="home"] .nc-pod__state-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The port: where the wiring docks, and the one place a plate touches the
+   network. It is decoration for the eye and `aria-hidden` for everyone else. */
+.nc-root[data-surface="home"] .nc-pod__port {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--nc-champagne-pale);
+  box-shadow: 0 0 0 3px rgba(246, 219, 173, 0.12);
+  opacity: 0.5;
+}
+.nc-root[data-surface="home"] .nc-pod__port[data-side="left"] { right: -14px; }
+.nc-root[data-surface="home"] .nc-pod__port[data-side="right"] { left: -14px; }
+.nc-root[data-surface="home"] .nc-pod[data-hovered="true"] .nc-pod__port,
+.nc-root[data-surface="home"] .nc-pod[data-selected="true"] .nc-pod__port { opacity: 1; }
+
+/* ── The wiring: hairline champagne, quieter than any node ────────────────
+   Quiet is not invisible. The idle routes are what make the six plates read as
+   ONE organization rather than six cards, so they keep enough stroke to be
+   seen at rest (0.4 of a 0.34 stroke) and the live route is the only one that
+   moves. */
+.nc-root[data-surface="home"] .nc-route__line { stroke: rgba(246, 219, 173, 0.34); }
+.nc-root[data-surface="home"] .nc-route__glow { stroke: rgba(243, 173, 73, 0.16); }
+.nc-root[data-surface="home"] .nc-route[data-state="idle"] .nc-route__line { stroke-opacity: 0.4; }
+.nc-root[data-surface="home"] .nc-route[data-state="idle"] .nc-route__glow { stroke-opacity: 0.06; }
+.nc-root[data-surface="home"] .nc-route[data-state="live"] .nc-route__line,
+.nc-root[data-surface="home"] .nc-route[data-state="hover"] .nc-route__line,
+.nc-root[data-surface="home"] .nc-route[data-state="focus"] .nc-route__line { stroke: var(--nc-champagne-pale); }
+.nc-root[data-surface="home"] .nc-route__flow { stroke: var(--nc-champagne); }
+.nc-root[data-surface="home"] .nc-route__port { fill: var(--nc-champagne-pale); }
+
+/* The single infrastructure layer keeps its place and loses its colour. */
+.nc-root[data-surface="home"] .nc-sysnode {
+  border-color: var(--nc-hairline);
+  background: var(--nc-glass-1);
+  color: var(--nc-text-3);
+}
+
+/* ── The in-room legend, quiet and below the composition ────────────────── */
+.nc-root[data-surface="home"] .nc-room__key {
+  border-color: var(--nc-hairline);
+  background: rgba(12, 12, 11, 0.66);
+  color: var(--nc-text-3);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6 · THE TWO SUMMARIES
+   The reference's own two-strip row: an icon disc, a label with its sub-label,
+   the count, and a chevron. Each strip IS the link to the surface that acts on
+   it, and every number is read from the same demo dataset that surface reads,
+   so the home can never disagree with the page it opens.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nc-sum {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nc-s-4);
+}
+
+.nc-sum__cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--nc-s-4);
+  padding: var(--nc-s-4) var(--nc-s-5);
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-3);
+  background: var(--nc-glass-plate);
+  box-shadow: var(--nc-shadow-2), var(--nc-inner-light);
+  backdrop-filter: blur(var(--nc-blur-2));
+  color: inherit;
+  text-decoration: none;
+  transition:
+    border-color var(--nc-dur-quick) var(--nc-ease-standard),
+    background var(--nc-dur-quick) var(--nc-ease-standard),
+    transform var(--nc-dur-quick) var(--nc-ease-out);
+}
+.nc-sum__cell:hover {
+  border-color: var(--nc-champagne-line);
+  background: var(--nc-glass-plate-strong);
+  transform: translateY(-2px);
+}
+.nc-sum__cell[data-tone="attention"] .nc-sum__disc { color: var(--nc-champagne-pale); border-color: var(--nc-champagne-line); }
+
+.nc-sum__disc {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--nc-hairline-2);
+  background: var(--nc-glass-2);
+  color: var(--nc-text-2);
+}
+
+.nc-sum__stack { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.nc-sum__label { font-size: 14px; font-weight: 620; color: var(--nc-text); }
+.nc-sum__sub { font-size: 11.5px; color: var(--nc-text-3); }
+
+.nc-sum__count {
+  font-family: var(--nc-font-mono);
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 500;
+  color: var(--nc-text);
+  font-variant-numeric: tabular-nums;
+}
+.nc-sum__chev { color: var(--nc-text-4); display: grid; place-items: center; }
+
+/* ── The disclosure: operating detail, one tap away ─────────────────────── */
+.nc-detail {
+  border: 1px solid var(--nc-hairline);
+  border-radius: var(--nc-r-3);
+  background: var(--nc-glass-1);
+  overflow: hidden;
+}
+.nc-detail__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--nc-s-3);
+  padding: var(--nc-s-4) var(--nc-s-5);
+  cursor: pointer;
+  list-style: none;
+  color: var(--nc-text-2);
+  font-size: 12.5px;
+  font-weight: 560;
+}
+.nc-detail__summary::-webkit-details-marker { display: none; }
+.nc-detail__summary::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  margin-inline-start: auto;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform var(--nc-dur-quick) var(--nc-ease-standard);
+}
+.nc-detail[open] .nc-detail__summary::after { transform: rotate(-135deg); }
+.nc-detail__summary:hover { color: var(--nc-text); }
+.nc-detail__note { color: var(--nc-text-4); font-size: 11.5px; }
+.nc-detail__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-s-5);
+  padding: 0 var(--nc-s-5) var(--nc-s-5);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   7 · THE HOME'S OWN CHROME
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The heading is a heading: one line of context, the title, one line of
+   purpose, and the readings switcher. No banner, no globe, no band. */
+.nc-root[data-surface="home"] .nc-op-head {
+  border-bottom-color: var(--nc-hairline);
+  padding-bottom: var(--nc-s-4);
+}
+.nc-root[data-surface="home"] .nc-op-head__sub { color: var(--nc-text-2); }
+.nc-root[data-surface="home"] .nc-op-head__scope { color: var(--nc-champagne); }
+.nc-root[data-surface="home"] .nc-op-views { border-color: var(--nc-hairline); }
+.nc-root[data-surface="home"] .nc-op-view[data-active="true"] {
+  background: var(--nc-glass-3);
+  color: var(--nc-text);
+  box-shadow: var(--nc-inner-light);
+}
+.nc-root[data-surface="home"] .nc-op-view { color: var(--nc-text-3); }
+
+/* Figures keep their reading in the disclosure, so they only need to be
+   readable there — and the accent edge becomes champagne. */
+.nc-root[data-surface="home"] .nc-op-metric { border-color: var(--nc-hairline); }
+.nc-root[data-surface="home"] .nc-op-metric:hover { border-color: var(--nc-champagne-line); }
+.nc-root[data-surface="home"] .nc-op-metric::before { background: var(--nc-champagne); }
+.nc-root[data-surface="home"] .nc-op-metric__value { color: var(--nc-text); }
+.nc-root[data-surface="home"] .nc-op-panel { border-color: var(--nc-hairline); }
+.nc-root[data-surface="home"] .nc-op-row__mark {
+  border: 1px solid var(--nc-hairline);
+  background: var(--nc-glass-2);
+  color: var(--nc-champagne-pale);
+}
+.nc-root[data-surface="home"] .nc-shared__item { border-color: var(--nc-hairline); }
+
+/* The selection notice: a strip, not a panel. */
+.nc-root[data-surface="home"] .nc-ov__selected {
+  border-color: var(--nc-champagne-line);
+  background: var(--nc-champagne-soft);
+  color: var(--nc-text-2);
+}
+.nc-root[data-surface="home"] .nc-ov__selected-clear { color: var(--nc-champagne-pale); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   8 · TABLET — the composition holds, the plates narrow
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 1240px) {
+  .nc-root[data-surface="home"] {
+    --nc-pod-w: clamp(196px, 21vw, 250px);
+    --nc-pod-h: 78px;
+    --nc-pod-radius: 32px;
+    --nc-seat: clamp(120px, 12.6vw, 164px);
+  }
+  .nc-root[data-surface="home"] .nc-pod__name { font-size: 13.5px; }
+  .nc-root[data-surface="home"] .nc-pod__badge { width: 38px; height: 38px; }
+  .nc-root[data-surface="home"] .nc-room__stage { --nc-orbit-h: clamp(420px, 56vh, 560px); }
+  .nc-sum { gap: var(--nc-s-3); }
+  .nc-sum__cell { padding: var(--nc-s-3) var(--nc-s-4); }
+}
+
+@media (max-width: 1000px) {
+  .nc-root[data-surface="home"] {
+    --nc-pod-w: clamp(178px, 24vw, 220px);
+    --nc-pod-h: 72px;
+    --nc-pod-radius: 28px;
+  }
+  .nc-root[data-surface="home"] .nc-pod__name { font-size: 12.5px; }
+  .nc-root[data-surface="home"] .nc-pod__code { display: none; }
+  .nc-root[data-surface="home"] .nc-orbit__ring[data-ring="outer"] { width: 84%; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   9 · PHONE — a deliberate recomposition, never a shrunken canvas
+   The desktop orbit stands down entirely (`system.css` hides `.nc-room`), and
+   the phone gets its own reading of one product: the character seat, the two
+   summaries a thumb reaches for, the six departments as readable rows, and the
+   composer and the bottom bar anchored to the dynamic viewport so both stay
+   usable with the keyboard open.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 760px) {
+  .nc-root[data-surface="home"] .nc-room__stage { height: auto; }
+
+  /* The scroll area's clearance for the bottom bar is NOT set here: it belongs to
+     the shell (`foundation.css`), and this layer setting it too meant the home
+     kept a 84px reservation chosen for the old 62px bar while every other phone
+     surface got the foundation's value — the same shell, two numbers. The last
+     row of content still clears navigation on every surface. */
+  .nc-root .nc-mobile-command {
+    gap: var(--nc-s-5);
+    padding: 0 var(--nc-s-1) var(--nc-s-3);
+  }
+
+  /* ── The seat, compact: the character, the greeting, and the way in ───── */
+  .nc-mo__seat {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-s-4);
+    padding: var(--nc-s-3);
+    border: 1px solid var(--nc-hairline);
+    border-radius: var(--nc-r-3);
+    background: var(--nc-glass-plate);
+    box-shadow: var(--nc-shadow-2), var(--nc-inner-light);
+    width: 100%;
+    text-align: start;
+    cursor: pointer;
+  }
+  .nc-mo__seat:active { background: var(--nc-glass-plate-strong); }
+  .nc-mo__seat-disc {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 1px solid var(--nc-champagne-line);
+    background:
+      radial-gradient(circle at 50% 30%, rgba(255, 246, 230, 0.08), transparent 60%),
+      linear-gradient(180deg, rgba(40, 39, 35, 0.9), rgba(16, 16, 15, 0.86));
+  }
+  .nc-mo__seat-figure { width: 62px; height: 62px; object-fit: contain; }
+  .nc-mo__seat-stack { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
+  .nc-mo__seat-title { font-size: 15px; font-weight: 620; color: var(--nc-text); }
+  .nc-mo__seat-hint { font-size: 12px; color: var(--nc-text-3); }
+  .nc-mo__seat-chev { color: var(--nc-text-4); flex: none; }
+
+  /* ── The two summaries, stacked and tappable ───────────────────────────── */
+  .nc-root .nc-mobile-command .nc-sum { grid-template-columns: minmax(0, 1fr); gap: var(--nc-s-3); }
+  .nc-root .nc-mobile-command .nc-sum__cell { padding: var(--nc-s-3) var(--nc-s-4); }
+  .nc-root .nc-mobile-command .nc-sum__count { font-size: 24px; }
+  .nc-root .nc-mobile-command .nc-sum__disc { width: 34px; height: 34px; border-radius: 10px; }
+
+  /* ── Departments: readable rows, not shrunken plates ───────────────────── */
+  .nc-root .nc-mo__depts { grid-template-columns: minmax(0, 1fr); gap: var(--nc-s-2); }
+  .nc-root .nc-mo__dept {
+    border: 1px solid var(--nc-hairline);
+    border-radius: var(--nc-r-2);
+    background: var(--nc-glass-1);
+    min-height: 62px;
+  }
+  .nc-root .nc-mo__dept-name { font-size: 14px; }
+
+  /* THE BAR'S HEIGHT AND THE CONSOLE'S OFFSET ARE NOT SET HERE ANY MORE.
+     This layer did set them, and being imported after `foundation.css` it was
+     the last word on shell chrome — which meant the foundation's own phone
+     rules (the 68px bar with room for its four labels, the keyboard-aware
+     `--nc-kb` offset) were silently inert on this one surface. Two owners for
+     one number is how a design system rots: the bar and the console are SHELL,
+     so their geometry lives in `foundation.css`, and this file keeps only what
+     is genuinely the home's composition — the seat, the plates, the summaries
+     and the department rows. */
+}
+
+/* Narrow phones (360px): one column, tighter chrome, nothing clipped. */
+@media (max-width: 400px) {
+  .nc-root .nc-mobile-command { gap: var(--nc-s-4); }
+  .nc-root .nc-mo__seat-disc { width: 60px; height: 60px; }
+  .nc-root .nc-mo__seat-figure { width: 52px; height: 52px; }
+  .nc-root .nc-mo__seat-title { font-size: 14px; }
+  .nc-root .nc-sum__count { font-size: 22px; }
+}

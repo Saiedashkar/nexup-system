@@ -1,0 +1,147 @@
+{
+  "proof": "the HTTP boundary proof runner's failure-injection safety checks",
+  "generatedAt": "2026-10-18T13:49:22.337Z",
+  "checksPassed": 102,
+  "checksFailed": 0,
+  "cases": [
+    {
+      "name": "inject-cluster",
+      "exitStatus": 7,
+      "note": "injected failure at the cluster stage; cleanup unwound"
+    },
+    {
+      "name": "inject-migration",
+      "exitStatus": 7,
+      "note": "injected failure at the migration stage; cleanup unwound"
+    },
+    {
+      "name": "inject-build",
+      "exitStatus": 7,
+      "note": "injected failure at the build stage; cleanup unwound"
+    },
+    {
+      "name": "inject-start",
+      "exitStatus": 7,
+      "note": "injected failure at the start stage; cleanup unwound"
+    },
+    {
+      "name": "port-collision",
+      "exitStatus": 1,
+      "note": "foreign listener on port 57994 survived; the runner failed and cleaned up"
+    },
+    {
+      "name": "failed-shutdown",
+      "exitStatus": 7,
+      "note": "run directory and cluster preserved and reported"
+    },
+    {
+      "name": "destroy-guard-live",
+      "exitStatus": 1,
+      "note": "refused to delete a data directory whose postmaster is alive"
+    },
+    {
+      "name": "destroy-ordinary",
+      "exitStatus": 0,
+      "note": "a stopped data directory is still deletable"
+    },
+    {
+      "name": "ownership-stale-lockfile",
+      "exitStatus": 1,
+      "note": "a stale lock file naming a foreign postmaster refused the delete, killed nothing and was preserved"
+    },
+    {
+      "name": "ownership-pid-gone",
+      "exitStatus": 0,
+      "note": "a stale lock file whose pid no longer exists does not block the delete"
+    },
+    {
+      "name": "ownership-owned-cluster",
+      "exitStatus": 0,
+      "note": "a live cluster identified as this script's own is still stopped and deleted"
+    },
+    {
+      "name": "prefix-path-refusals",
+      "exitStatus": 1,
+      "note": "a …/dat lock file naming the live postmaster of …/data was refused by destroy, down and restart"
+    },
+    {
+      "name": "prefix-path-reverse",
+      "exitStatus": 1,
+      "note": "…/vault naming the live postmaster of …/vault-old was refused and preserved"
+    },
+    {
+      "name": "owned-cluster-lifecycle",
+      "exitStatus": 0,
+      "note": "start, down and restart of an owned cluster with a spaced path all work"
+    },
+    {
+      "name": "port-tie-refusal",
+      "exitStatus": 1,
+      "note": "a live server reporting our data_directory did not authorize a different pid: the start-time tie refused it"
+    }
+  ],
+  "callerOwnedFile": {
+    "sha256Before": "ac0f0706818b83f132e7e35dd845ec5a7adab2b5eb12452794c93ed75c85fe6e",
+    "sha256After": "ac0f0706818b83f132e7e35dd845ec5a7adab2b5eb12452794c93ed75c85fe6e",
+    "unchanged": true
+  },
+  "publishedEvidence": {
+    "path": "docs/evidence/step5a4-http-boundary-2026-10-10.json",
+    "sha256": "a500b1c74ad54ab354834226bfa637dc490061594c13a634eab01053f84ed6f1",
+    "rewritten": false
+  },
+  "howToReproduce": [
+    "bash scripts/run-http-proof-safety.sh"
+  ],
+  "manifest": {
+    "format": "nexup-evidence-manifest/1",
+    "hashAlgorithm": "sha256",
+    "digestAlgorithm": "sha256",
+    "canonicalForm": "one line per file, sorted by `path` (ascending byte order, `/` separators): \"<sha256>  <bytes>  <path>\\n\" — two spaces as the separator, size in bytes as decimal, LF line endings, no trailing blank line — hashed with sha256",
+    "files": [
+      {
+        "path": "scripts/run-api-http-proof.sh",
+        "present": true,
+        "sha256": "75bbf0259dc4eaf4e700585b54eb3d95050153c66d864882f7492324e1aaa8a6",
+        "bytes": 34331,
+        "tracked": true
+      },
+      {
+        "path": "scripts/run-http-proof-safety.sh",
+        "present": true,
+        "sha256": "095e51806846da1682b81c245f5547122823cebf57e762c903cf6503a7842326",
+        "bytes": 48168,
+        "tracked": false
+      },
+      {
+        "path": "scripts/dev-db.mjs",
+        "present": true,
+        "sha256": "377cc9d12fb0ace3dc681ee3a5860c1abe24685cf17534bc8bb14ffe989822cf",
+        "bytes": 60770,
+        "tracked": true
+      },
+      {
+        "path": "scripts/process-lineage.mjs",
+        "present": true,
+        "sha256": "b056d6f87284b78a672e6fe166fded25c8c1997c8fb02d4ac140030b235b313e",
+        "bytes": 5479,
+        "tracked": false
+      },
+      {
+        "path": "scripts/evidence-manifest.mjs",
+        "present": true,
+        "sha256": "d9c942ceceb13a9e64fb0a4f31ab0f88d1048cc0e0b82727a191b90d44ba6ad9",
+        "bytes": 6128,
+        "tracked": false
+      },
+      {
+        "path": "scripts/verify-evidence-manifest.mjs",
+        "present": true,
+        "sha256": "f835892fbdcbe8c57093b9884b38275bb1ca1274b75f8d242e7ec1728841294a",
+        "bytes": 2527,
+        "tracked": false
+      }
+    ],
+    "digest": "e8203cd62a3c9b8395f332361c239ddedfc957283599aa7c57478ce2eb2829f3"
+  }
+}

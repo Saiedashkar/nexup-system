@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useCommand } from "./state/command-store";
+import { useLocale, type MessageKey } from "./i18n/command-locale";
 import { FOUNDER } from "./state/organization-model";
 import { totalMissions } from "./state/department-workspace";
 import { IconChevronRight, IconSpark } from "./ui/icons";
@@ -27,39 +28,48 @@ import { IconChevronRight, IconSpark } from "./ui/icons";
  * effect, so there is no state cascade; `suppressHydrationWarning` covers the one
  * case where the render server and the browser disagree about the hour.
  */
-function greetingForHour(hour: number) {
-  if (hour < 12) return "Good morning,";
-  if (hour < 18) return "Good afternoon,";
-  return "Good evening,";
+/*
+ * Exported because the phone's EXEC seat greets the founder the same way this
+ * overlay does. One function, one answer: two surfaces can never disagree about
+ * what time of day it is, and the phone does not grow a second copy of the
+ * boundary hours.
+ */
+export function greetingKeyForHour(hour: number): MessageKey {
+  if (hour < 12) return "room.morning";
+  if (hour < 18) return "room.afternoon";
+  return "room.evening";
 }
 
 export function RoomIdentity() {
   const { notify } = useCommand();
-  const [greeting] = useState(() => greetingForHour(new Date().getHours()));
+  const { t, tc } = useLocale();
+  const [greetingKey] = useState(() => greetingKeyForHour(new Date().getHours()));
 
   return (
-    <div className="nc-ident" aria-label="Founder context">
+    <div className="nc-ident" aria-label={t("room.contextAria")}>
       <div className="nc-ident__copy">
         <span className="nc-ident__greeting" suppressHydrationWarning>
-          {greeting}
+          {t(greetingKey)}
         </span>
         <h1 className="nc-ident__name">{FOUNDER.name}</h1>
-        <p className="nc-ident__tagline">Build. Automate. Scale. What&apos;s next?</p>
+        <p className="nc-ident__tagline">{t("room.tagline")}</p>
       </div>
 
       <button
         type="button"
         className="nc-ident__focus"
-        onClick={() => notify("Today's Focus opens the mission view in a later phase.")}
+        onClick={() => notify(t("room.focusToast"))}
       >
         <span className="nc-ident__focus-icon">
           <IconSpark size={16} />
         </span>
         <span className="nc-ident__focus-copy">
-          <span className="nc-ident__focus-label">{FOUNDER.focus.label}</span>
+          <span className="nc-ident__focus-label">{tc(FOUNDER.focus.label)}</span>
           {/* Derived, not configured: this line and the Active Missions KPI read the
               same mission lists, so the room cannot greet you with a stale total. */}
-          <span className="nc-ident__focus-value">{totalMissions()} active missions</span>
+          <span className="nc-ident__focus-value">
+            {t("room.activeMissions", { count: totalMissions() })}
+          </span>
         </span>
         <span className="nc-ident__focus-chev">
           <IconChevronRight size={16} />

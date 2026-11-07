@@ -19,6 +19,7 @@ import {
   type ExecIconKey,
   type RouteEdge,
 } from "../state/exec-model";
+import { useLocale } from "../i18n/command-locale";
 import { cssVars } from "../ui/css-vars";
 import {
   EXEC_ICONS,
@@ -55,6 +56,14 @@ import {
 
 const AREA_ICONS: Record<ExecIconKey, ComponentType<{ size?: number; className?: string }>> = EXEC_ICONS;
 
+/** The four starting intents the command composer offers. Content, not chrome. */
+const EXEC_INTENTS = [
+  "Route the Q4 offer",
+  "What needs me today?",
+  "Call the Growth team",
+  "Start a war room",
+];
+
 /* ── Mission Routing canvas ───────────────────────────────────────────────
    Positions are derived from the configuration, never hand-placed, so adding a
    node or an edge is a data change. The SVG shares ONE coordinate space with
@@ -62,6 +71,7 @@ const AREA_ICONS: Record<ExecIconKey, ComponentType<{ size?: number; className?:
    STATE, not just a colour.                                                 */
 
 function RouteCanvas() {
+  const { t, tc } = useLocale();
   const { nodes, edges, mission } = MISSION_ROUTE;
 
   const byColumn = useMemo(() => {
@@ -125,17 +135,14 @@ function RouteCanvas() {
                 style={cssVars({ left: `${a.x}%`, top: `${a.y}%` })}
               >
                 <span className="nc-ex-rnode__plate" aria-hidden="true" />
-                <span className="nc-ex-rnode__label">{node.label}</span>
-                <span className="nc-ex-rnode__detail">{node.detail}</span>
+                <span className="nc-ex-rnode__label">{tc(node.label)}</span>
+                <span className="nc-ex-rnode__detail">{tc(node.detail)}</span>
               </div>
             );
           })}
         </div>
       </div>
-      <p className="nc-ex-note">
-        {mission} — every line is a relationship, and its dash rhythm says what that relationship is doing. Routing is mocked; nothing is
-        executed.
-      </p>
+      <p className="nc-ex-note">{t("exw.routeNote", { mission: tc(mission) })}</p>
     </div>
   );
 }
@@ -147,18 +154,16 @@ function AreaBody({ area, onSend, value, setValue }: {
   setValue: (v: string) => void;
 }) {
   const { notify } = useCommand();
+  const { t, tc } = useLocale();
 
   switch (area) {
     case "command":
       return (
         <div className="nc-ex-grid nc-ex-grid--command">
           <section className="nc-glass nc-glass--lit nc-ex-panel nc-ex-panel--wide">
-            <span className="nc-eyebrow">Command surface</span>
-            <h3 className="nc-ex-panel__title">Say what you want the organization to do.</h3>
-            <p className="nc-ex-panel__lede">
-              EXEC takes a direction, decides which departments and actors own it, and holds it until it is done. You never address the
-              organization directly — EXEC does.
-            </p>
+            <span className="nc-eyebrow">{t("exw.commandSurface")}</span>
+            <h3 className="nc-ex-panel__title">{t("exw.commandTitle")}</h3>
+            <p className="nc-ex-panel__lede">{t("exw.commandLede")}</p>
             <form
               className="nc-ex-composer"
               onSubmit={(event) => {
@@ -170,44 +175,42 @@ function AreaBody({ area, onSend, value, setValue }: {
                 className="nc-ex-composer__input"
                 value={value}
                 onChange={(event) => setValue(event.target.value)}
-                placeholder="Direct EXEC… e.g. “Push the Q4 enterprise offer this week.”"
-                aria-label="Direct EXEC"
+                placeholder={t("exw.commandPlaceholder")}
+                aria-label={t("exw.commandInputAria")}
                 autoComplete="off"
               />
-              <div className="nc-ex-composer__tools" role="group" aria-label="Attach or speak">
-                <button type="button" className="nc-ex-tool" onClick={() => notify("Attachments arrive in a later phase — mock only.")} aria-label="Attach file">
+              <div className="nc-ex-composer__tools" role="group" aria-label={t("exw.toolsAria")}>
+                <button type="button" className="nc-ex-tool" onClick={() => notify(t("exw.attachToast"))} aria-label={t("exw.attachFile")}>
                   <IconPlus size={15} />
                 </button>
-                <button type="button" className="nc-ex-tool" onClick={() => notify("Image and screenshot context arrives in a later phase — mock only.")} aria-label="Add image">
+                <button type="button" className="nc-ex-tool" onClick={() => notify(t("exw.imageToast"))} aria-label={t("exw.addImage")}>
                   <IconTool size={15} />
                 </button>
-                <button type="button" className="nc-ex-tool" onClick={() => notify("Voice arrives in a later phase — mock only.")} aria-label="Speak">
+                <button type="button" className="nc-ex-tool" onClick={() => notify(t("exw.voiceToast"))} aria-label={t("exw.speak")}>
                   <IconMic size={15} />
                 </button>
               </div>
               <button type="submit" className="nc-btn nc-btn--lime" disabled={!value.trim()}>
                 <IconSend size={14} />
-                Send
+                {t("exw.send")}
               </button>
             </form>
             <div className="nc-ex-intents">
-              {["Route the Q4 offer", "What needs me today?", "Call the Growth team", "Start a war room"].map((intent) => (
-                <button key={intent} type="button" className="nc-ex-intent" onClick={() => setValue(intent)}>
-                  {intent}
+              {EXEC_INTENTS.map((intent) => (
+                <button key={intent} type="button" className="nc-ex-intent" onClick={() => setValue(tc(intent))}>
+                  {tc(intent)}
                 </button>
               ))}
             </div>
           </section>
 
           <section className="nc-glass nc-ex-panel">
-            <span className="nc-eyebrow">Current direction</span>
-            <p className="nc-ex-panel__quote">
-              “Land the Q4 enterprise offer without discounting below 18% margin, and bring me anything that breaks that.”
-            </p>
+            <span className="nc-eyebrow">{t("exw.currentDirection")}</span>
+            <p className="nc-ex-panel__quote">{t("exw.directionQuote")}</p>
             <ul className="nc-ex-flags">
-              <li><span className="nc-ex-flag" data-tone="active" /> Routed to Growth &amp; Revenue</li>
-              <li><span className="nc-ex-flag" data-tone="approval" /> Finance holds one approval</li>
-              <li><span className="nc-ex-flag" data-tone="handoff" /> 1 handoff to Delivery</li>
+              <li><span className="nc-ex-flag" data-tone="active" /> {t("exw.flagRouted")}</li>
+              <li><span className="nc-ex-flag" data-tone="approval" /> {t("exw.flagApproval")}</li>
+              <li><span className="nc-ex-flag" data-tone="handoff" /> {t("exw.flagHandoff")}</li>
             </ul>
           </section>
         </div>
@@ -217,8 +220,8 @@ function AreaBody({ area, onSend, value, setValue }: {
       return (
         <div className="nc-ex-grid">
           <section className="nc-glass nc-ex-panel nc-ex-panel--wide">
-            <span className="nc-eyebrow">Summon · one</span>
-            <p className="nc-ex-panel__lede">Bring a single actor into the conversation. Humans and agents are summoned the same way.</p>
+            <span className="nc-eyebrow">{t("exw.summonOne")}</span>
+            <p className="nc-ex-panel__lede">{t("exw.summonOneLede")}</p>
             <div className="nc-ex-summon">
               {SUMMON_TARGETS.filter((t) => t.kind !== "many").map((target) => (
                 <div key={target.id} className="nc-glass-data nc-ex-summon__row">
@@ -234,11 +237,15 @@ function AreaBody({ area, onSend, value, setValue }: {
                       <span className="nc-ex-summon__name">{target.label}</span>
                     )}
                     <span className="nc-ex-summon__detail">
-                      {summonKindLabel(target.kind)} · {target.detail}
+                      {tc(summonKindLabel(target.kind))} · {tc(target.detail)}
                     </span>
                   </span>
-                  <button type="button" className="nc-btn nc-btn--sm" onClick={() => notify(`${target.label} summoned (mock). Nothing is contacted.`)}>
-                    Summon
+                  <button
+                    type="button"
+                    className="nc-btn nc-btn--sm"
+                    onClick={() => notify(t("exw.summonToast", { name: tc(target.label) }))}
+                  >
+                    {t("exw.summon")}
                   </button>
                 </div>
               ))}
@@ -246,8 +253,8 @@ function AreaBody({ area, onSend, value, setValue }: {
           </section>
 
           <section className="nc-glass nc-ex-panel">
-            <span className="nc-eyebrow">Summon · a group</span>
-            <p className="nc-ex-panel__lede">Bring several workers in at once — EXEC keeps them on the same mission.</p>
+            <span className="nc-eyebrow">{t("exw.summonMany")}</span>
+            <p className="nc-ex-panel__lede">{t("exw.summonManyLede")}</p>
             <div className="nc-ex-summon">
               {SUMMON_TARGETS.filter((t) => t.kind === "many").map((target) => (
                 <div key={target.id} className="nc-glass-data nc-ex-summon__row">
@@ -255,11 +262,15 @@ function AreaBody({ area, onSend, value, setValue }: {
                     <IconWorkflow size={16} />
                   </span>
                   <span className="nc-ex-summon__text">
-                    <span className="nc-ex-summon__name">{target.label}</span>
-                    <span className="nc-ex-summon__detail">{target.detail}</span>
+                    <span className="nc-ex-summon__name">{tc(target.label)}</span>
+                    <span className="nc-ex-summon__detail">{tc(target.detail)}</span>
                   </span>
-                  <button type="button" className="nc-btn nc-btn--sm" onClick={() => notify(`${target.label} summoned (mock).`)}>
-                    Summon
+                  <button
+                    type="button"
+                    className="nc-btn nc-btn--sm"
+                    onClick={() => notify(t("exw.summonGroupToast", { name: tc(target.label) }))}
+                  >
+                    {t("exw.summon")}
                   </button>
                 </div>
               ))}
@@ -272,34 +283,34 @@ function AreaBody({ area, onSend, value, setValue }: {
       return (
         <div className="nc-ex-grid">
           <section className="nc-glass nc-glass--lit nc-ex-panel nc-ex-panel--wide">
-            <span className="nc-eyebrow">War room · temporary</span>
-            <h3 className="nc-ex-panel__title">{WAR_ROOM.mission}</h3>
-            <p className="nc-ex-panel__lede">{WAR_ROOM.moderator}</p>
+            <span className="nc-eyebrow">{t("exw.warRoomArea")}</span>
+            <h3 className="nc-ex-panel__title">{tc(WAR_ROOM.mission)}</h3>
+            <p className="nc-ex-panel__lede">{tc(WAR_ROOM.moderator)}</p>
             <div className="nc-ex-seats">
               {WAR_ROOM.seats.map((seat) => (
                 <div key={seat.id} className="nc-glass-data nc-ex-seat" data-kind={seat.kind}>
                   <span className="nc-ex-seat__icon" aria-hidden="true">
                     {seat.kind === "human" ? <IconHuman size={15} /> : <IconAgent size={15} />}
                   </span>
-                  <span className="nc-ex-seat__name">{seat.name}</span>
-                  <span className="nc-ex-seat__role">{seat.role}</span>
+                  <span className="nc-ex-seat__name">{tc(seat.name)}</span>
+                  <span className="nc-ex-seat__role">{tc(seat.role)}</span>
                 </div>
               ))}
             </div>
-            <button type="button" className="nc-btn nc-btn--lime" onClick={() => notify("Opening a live war room arrives with the meeting runtime — mock only.")}>
+            <button type="button" className="nc-btn nc-btn--lime" onClick={() => notify(t("exw.warRoomToast"))}>
               <IconSpark size={14} />
-              Open war room
+              {t("exw.openWarRoom")}
             </button>
           </section>
 
           <section className="nc-glass nc-ex-panel">
-            <span className="nc-eyebrow">Agenda</span>
+            <span className="nc-eyebrow">{t("exw.agenda")}</span>
             <ul className="nc-ex-agenda">
               {WAR_ROOM.agenda.map((item) => (
                 <li key={item.id} className="nc-ex-agenda__row" data-state={item.state}>
                   <span className="nc-ex-agenda__dot" aria-hidden="true" />
-                  <span className="nc-ex-agenda__label">{item.label}</span>
-                  <span className="nc-ex-agenda__owner">{item.owner}</span>
+                  <span className="nc-ex-agenda__label">{tc(item.label)}</span>
+                  <span className="nc-ex-agenda__owner">{tc(item.owner)}</span>
                 </li>
               ))}
             </ul>
@@ -310,8 +321,8 @@ function AreaBody({ area, onSend, value, setValue }: {
     case "routing":
       return (
         <section className="nc-glass nc-ex-panel nc-ex-panel--wide">
-          <span className="nc-eyebrow">Mission routing</span>
-          <h3 className="nc-ex-panel__title">Goal → EXEC → departments → actors → tools → output</h3>
+          <span className="nc-eyebrow">{t("exw.missionRouting")}</span>
+          <h3 className="nc-ex-panel__title">{t("exw.routingChain")}</h3>
           <RouteCanvas />
         </section>
       );
@@ -319,21 +330,19 @@ function AreaBody({ area, onSend, value, setValue }: {
     case "repeating":
       return (
         <section className="nc-glass nc-ex-panel nc-ex-panel--wide">
-          <span className="nc-eyebrow">Repeating work</span>
-          <p className="nc-ex-panel__lede">
-            Work that should keep happening without being re-asked. EXEC would own the schedule — there is no scheduler behind this yet.
-          </p>
+          <span className="nc-eyebrow">{t("exw.repeatingWork")}</span>
+          <p className="nc-ex-panel__lede">{t("exw.repeatingLede")}</p>
           <div className="nc-ex-repeat">
             {REPEATING_WORK.map((item) => (
               <div key={item.id} className="nc-glass-data nc-ex-repeat__row" data-state={item.state}>
                 <span className="nc-ex-repeat__state" aria-hidden="true" />
                 <span className="nc-ex-repeat__text">
-                  <span className="nc-ex-repeat__label">{item.label}</span>
-                  <span className="nc-ex-repeat__note">{item.note}</span>
+                  <span className="nc-ex-repeat__label">{tc(item.label)}</span>
+                  <span className="nc-ex-repeat__note">{tc(item.note)}</span>
                 </span>
                 <span className="nc-ex-repeat__meta">
-                  <span className="nc-ex-repeat__cadence">{item.cadence}</span>
-                  <span className="nc-ex-repeat__owner">{item.owner}</span>
+                  <span className="nc-ex-repeat__cadence">{tc(item.cadence)}</span>
+                  <span className="nc-ex-repeat__owner">{tc(item.owner)}</span>
                 </span>
               </div>
             ))}
@@ -346,11 +355,11 @@ function AreaBody({ area, onSend, value, setValue }: {
         <div className="nc-ex-layers">
           {CONTEXT_LAYERS.map((layer) => (
             <section key={layer.id} className="nc-glass nc-ex-layer">
-              <span className="nc-eyebrow">{layer.label}</span>
-              <p className="nc-ex-layer__note">{layer.note}</p>
+              <span className="nc-eyebrow">{tc(layer.label)}</span>
+              <p className="nc-ex-layer__note">{tc(layer.note)}</p>
               <ul className="nc-ex-layer__items">
                 {layer.items.map((item) => (
-                  <li key={item}>{item}</li>
+                  <li key={item}>{tc(item)}</li>
                 ))}
               </ul>
             </section>
@@ -361,17 +370,17 @@ function AreaBody({ area, onSend, value, setValue }: {
     case "activity":
       return (
         <section className="nc-glass nc-ex-panel nc-ex-panel--wide">
-          <span className="nc-eyebrow">Activity</span>
+          <span className="nc-eyebrow">{t("exw.activityArea")}</span>
           <ul className="nc-ex-activity">
             {EXEC_ACTIVITY.map((item) => (
               <li key={item.id} className="nc-ex-activity__row" data-state={item.state}>
                 <span className="nc-ex-activity__dot" aria-hidden="true" />
                 <span className="nc-ex-activity__text">
-                  <span className="nc-ex-activity__label">{item.label}</span>
-                  <span className="nc-ex-activity__meta">{item.meta}</span>
+                  <span className="nc-ex-activity__label">{tc(item.label)}</span>
+                  <span className="nc-ex-activity__meta">{tc(item.meta)}</span>
                 </span>
-                <span className="nc-ex-activity__state">{item.state}</span>
-                <span className="nc-ex-activity__when">{item.when}</span>
+                <span className="nc-ex-activity__state">{tc(item.state)}</span>
+                <span className="nc-ex-activity__when">{tc(item.when)}</span>
               </li>
             ))}
           </ul>
@@ -385,6 +394,7 @@ function AreaBody({ area, onSend, value, setValue }: {
 
 export function ExecWorkspace() {
   const { notify } = useCommand();
+  const { t, tc } = useLocale();
   const [area, setArea] = useState<ExecAreaId>("command");
   const [direction, setDirection] = useState("");
 
@@ -393,7 +403,7 @@ export function ExecWorkspace() {
   const send = () => {
     const text = direction.trim();
     if (!text) return;
-    notify(`Direction received by EXEC (mock): “${text}”. Nothing is executed.`);
+    notify(t("exw.directionReceived", { text }));
     setDirection("");
   };
 
@@ -403,7 +413,7 @@ export function ExecWorkspace() {
         <div className="nc-ex__head-top">
           <Link className="nc-ex__back" href="/command">
             <IconArrowLeft size={14} />
-            Command
+            {t("dws.backToCommand")}
           </Link>
 
           <span className="nc-ex__sigil" aria-hidden="true">
@@ -412,32 +422,32 @@ export function ExecWorkspace() {
           </span>
 
           <div className="nc-ex__titles">
-            <span className="nc-ex__kicker">{EXEC_IDENTITY.role}</span>
+            <span className="nc-ex__kicker">{tc(EXEC_IDENTITY.role)}</span>
             <h1 className="nc-ex__name">{EXEC_IDENTITY.name}</h1>
           </div>
 
           <span className="nc-ex__state" data-state={EXEC_STATUS.state}>
             <i aria-hidden="true" />
-            {status.label}
+            {tc(status.label)}
           </span>
         </div>
 
-        <p className="nc-ex__headline">{EXEC_STATUS.headline}</p>
-        <p className="nc-ex__character">{EXEC_IDENTITY.character}</p>
+        <p className="nc-ex__headline">{tc(EXEC_STATUS.headline)}</p>
+        <p className="nc-ex__character">{tc(EXEC_IDENTITY.character)}</p>
 
         <dl className="nc-ex__aware">
           {EXEC_STATUS.awareness.map((item) => (
             <div key={item.id} className="nc-ex__aware-item">
-              <dt>{item.label}</dt>
-              <dd>{item.detail}</dd>
+              <dt>{tc(item.label)}</dt>
+              <dd>{tc(item.detail)}</dd>
             </div>
           ))}
         </dl>
 
-        <p className="nc-ex__state-note">{status.note}</p>
+        <p className="nc-ex__state-note">{tc(status.note)}</p>
       </header>
 
-      <nav className="nc-ex__areas" aria-label="EXEC areas">
+      <nav className="nc-ex__areas" aria-label={t("exw.areasAria")}>
         {EXEC_AREAS.map((item) => {
           const Icon = AREA_ICONS[item.icon];
           const active = item.id === area;
@@ -454,8 +464,8 @@ export function ExecWorkspace() {
                 <Icon size={16} />
               </span>
               <span className="nc-ex__area-text">
-                <span className="nc-ex__area-label">{item.label}</span>
-                <span className="nc-ex__area-hint">{item.hint}</span>
+                <span className="nc-ex__area-label">{tc(item.label)}</span>
+                <span className="nc-ex__area-hint">{tc(item.hint)}</span>
               </span>
             </button>
           );
@@ -466,10 +476,7 @@ export function ExecWorkspace() {
         <AreaBody area={area} onSend={send} value={direction} setValue={setDirection} />
       </div>
 
-      <p className="nc-ex-note nc-ex-note--foot">
-        EXEC is a mocked foundation. No AI provider, tool, memory, meeting or scheduler is connected — this page exists to get the structure
-        right.
-      </p>
+      <p className="nc-ex-note nc-ex-note--foot">{t("exw.footerNote")}</p>
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import type { LocaleValue } from "../i18n/command-locale";
+import type { MessageKey } from "../i18n/command-locale";
 import type { CommandVisualSnapshot } from "./demo-scenarios";
 
 /**
@@ -7,20 +9,29 @@ import type { CommandVisualSnapshot } from "./demo-scenarios";
  * both need *something* plausible to render. This is that something: a small
  * keyword router, no randomness, no network. It is labelled as mocked wherever
  * it surfaces, so it can never be mistaken for real intelligence.
+ *
+ * IT RETURNS DICTIONARY KEYS, NOT SENTENCES. The router is language-blind: it
+ * decides *what* was said (a read, a write or a plan; which department; whether
+ * approval is required) and hands back `MessageKey`s. The caller renders them
+ * with `t()`, which is the same closure the language switch drives — so the
+ * console is bilingual for free and cannot drift from the rest of the product.
  */
 
+/** The dictionary's translator, as the locale provider types it. */
+type Translate = LocaleValue["t"];
+
 export type MockInterpretation = {
-  intent: string;
-  target: string;
-  authority: string;
+  intent: MessageKey;
+  target: MessageKey;
+  authority: MessageKey;
 };
 
-const ROUTING_HINTS: Array<{ match: RegExp; target: string }> = [
-  { match: /client|onboard|delivery|retention/i, target: "Client & Delivery" },
-  { match: /invoice|payment|money|cash|margin|collect/i, target: "Finance & Control" },
-  { match: /lead|sales|growth|revenue|campaign|pipeline/i, target: "Growth & Revenue" },
-  { match: /deploy|code|automation|agent|bug|build|system/i, target: "Product & Tech" },
-  { match: /vendor|supplier|process|logistics|quality|schedule/i, target: "Operations" },
+const ROUTING_HINTS: Array<{ match: RegExp; target: MessageKey }> = [
+  { match: /client|onboard|delivery|retention/i, target: "mock.targetClient" },
+  { match: /invoice|payment|money|cash|margin|collect/i, target: "mock.targetFinance" },
+  { match: /lead|sales|growth|revenue|campaign|pipeline/i, target: "mock.targetGrowth" },
+  { match: /deploy|code|automation|agent|bug|build|system/i, target: "mock.targetProduct" },
+  { match: /vendor|supplier|process|logistics|quality|schedule/i, target: "mock.targetOperations" },
 ];
 
 export function interpret(input: string): MockInterpretation {
@@ -30,9 +41,9 @@ export function interpret(input: string): MockInterpretation {
   const reads = /report|show|summar|list|check|how many|status|why/i.test(text);
 
   return {
-    intent: reads ? "read · summarize" : risky ? "write · propose action" : "plan · decompose",
-    target: routed?.target ?? "Executive will route",
-    authority: risky ? "requires your approval" : "safe to run autonomously",
+    intent: reads ? "mock.intentRead" : risky ? "mock.intentWrite" : "mock.intentPlan",
+    target: routed?.target ?? "mock.targetExecutive",
+    authority: risky ? "mock.authorityApproval" : "mock.authoritySafe",
   };
 }
 
@@ -40,8 +51,15 @@ export function interpret(input: string): MockInterpretation {
  * A plausible Executive reply that stays honest: it always says out loud that
  * it cannot execute in this phase, and it reflects the state the reviewer has
  * actually put the organization into.
+ *
+ * Counts are phrased so the sentence holds for any figure in both languages —
+ * a mock that reads "1 departments" would undercut the whole exercise.
  */
-export function executiveReply(input: string, snapshot: CommandVisualSnapshot): string {
+export function executiveReply(
+  input: string,
+  snapshot: CommandVisualSnapshot,
+  t: Translate,
+): string {
   const mock = interpret(input);
   const approvals = snapshot.approvals.length;
   const working = Object.values(snapshot.visual.departments).filter(
@@ -49,39 +67,42 @@ export function executiveReply(input: string, snapshot: CommandVisualSnapshot): 
   ).length;
 
   const lines = [
-    `I'd route that to ${mock.target} as a ${mock.intent} — ${mock.authority}.`,
+    t("execDock.replyLead", {
+      target: t(mock.target),
+      intent: t(mock.intent),
+      authority: t(mock.authority),
+    }),
   ];
 
   if (approvals > 0) {
-    lines.push(
-      `Before that: ${approvals} decision ${approvals === 1 ? "is" : "are"} already holding on you. I have not started this one behind your back.`,
-    );
+    lines.push(t("execDock.replyQueue", { count: approvals }));
   } else if (working > 0) {
-    lines.push(`${working} department${working === 1 ? " is" : "s are"} working right now — this would queue behind them.`);
+    lines.push(t("execDock.replyWorking", { count: working }));
   } else {
-    lines.push("Nothing else is running, so this would be first in line.");
+    lines.push(t("execDock.replyIdle"));
   }
 
-  lines.push("I can't execute anything yet — no AI provider or job runner is wired to this surface.");
+  lines.push(t("execDock.replyNoProvider"));
   return lines.join(" ");
 }
 
 /** The Executive's opening line, which always reflects the live demo state. */
-export function executiveGreeting(snapshot: CommandVisualSnapshot): string {
+export function executiveGreeting(snapshot: CommandVisualSnapshot, t: Translate): string {
   const approvals = snapshot.approvals.length;
-  if (approvals > 0) {
-    return "One decision is waiting on you. I've paused the work that depends on it — say the word and I'll walk you through it.";
-  }
-  const active = Object.entries(snapshot.visual.departments).filter(([, node]) => node.status === "ACTIVE");
-  if (active.length > 0) {
-    return `I'm supervising ${active.length} active department${active.length === 1 ? "" : "s"}. Nothing needs you right now — what do you want to move?`;
-  }
-  return "The organization is quiet. Tell me what you want to happen and I'll shape it into work.";
+  if (approvals > 0) return t("execDock.greetingQueue", { count: approvals });
+
+  const active = Object.entries(snapshot.visual.departments).filter(
+    ([, node]) => node.status === "ACTIVE",
+  );
+  if (active.length > 0) return t("execDock.greetingActive", { count: active.length });
+
+  return t("execDock.greetingQuiet");
 }
 
-export const EXEC_INTENTS = [
-  "What needs me right now?",
-  "Why is Finance holding a payment?",
-  "Push more into Growth this week",
-  "Summarize yesterday across all businesses",
+/** The four starting directions the console offers, as dictionary keys. */
+export const EXEC_INTENTS: MessageKey[] = [
+  "execDock.intentWhatNeedsMe",
+  "execDock.intentFinanceHold",
+  "execDock.intentPushGrowth",
+  "execDock.intentSummarize",
 ];

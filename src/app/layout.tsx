@@ -31,7 +31,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ar" dir="rtl" suppressHydrationWarning className={inter.variable}>
+    <html
+      lang="ar"
+      dir="rtl"
+      suppressHydrationWarning
+      className={inter.variable}
+      data-scroll-behavior="smooth"
+    >
       <head>
         {/* Prevent white flash: set dark theme before any CSS paints */}
         <script

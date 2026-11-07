@@ -1,6 +1,7 @@
 "use client";
 
 import { useCommand } from "../state/command-store";
+import { useLocale } from "../i18n/command-locale";
 import {
   actorTypeLabel,
   type ActorConfig,
@@ -58,6 +59,7 @@ export function ActorModeBody({ mode, actor }: { mode: ActorModeId; actor: Actor
  * surfaces per column plus the shared `.nc-net` relationship language.
  */
 function OverviewMode({ actor }: { actor: ActorConfig }) {
+  const { t, tc } = useLocale();
   const isAI = actor.type === "ai-agent";
 
   return (
@@ -65,53 +67,53 @@ function OverviewMode({ actor }: { actor: ActorConfig }) {
       <div className="nc-aw-dash__main">
         {/* Current mission — the reason this console is open. */}
         <section className="nc-glass nc-glass--lit nc-glass-signal nc-aw-mission">
-          <span className="nc-eyebrow">Current mission</span>
-          <h3 className="nc-aw-mission__title">{actor.mission}</h3>
+          <span className="nc-eyebrow">{t("aw.factCurrentMission")}</span>
+          <h3 className="nc-aw-mission__title">{tc(actor.mission)}</h3>
           <p className="nc-aw-mission__priority">
-            <span className="nc-aw-mission__priority-label">Priority</span>
-            {actor.priority}
+            <span className="nc-aw-mission__priority-label">{t("aw.priority")}</span>
+            {tc(actor.priority)}
           </p>
           {actor.attention.length > 0 ? (
             <ul className="nc-aw-mission__flags">
               {actor.attention.map((item) => (
                 <li key={item} className="nc-aw-mission__flag">
-                  {item}
+                  {tc(item)}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="nc-aw-mission__clear">Nothing needs a decision from you right now.</p>
+            <p className="nc-aw-mission__clear">{t("aw.nothingFromYou")}</p>
           )}
         </section>
 
         {/* Who this actor answers to, and who it works with — a relationship,
             not a profile field. */}
         <section className="nc-glass nc-aw-panel">
-          <span className="nc-eyebrow">Relationship</span>
+          <span className="nc-eyebrow">{t("dws.relationship")}</span>
           <RelationshipNetwork actor={actor} />
         </section>
 
         {/* Authority and capability together, so autonomy is read next to what
             the actor can actually do. */}
         <section className="nc-glass nc-aw-panel">
-          <span className="nc-eyebrow">Authority &amp; capability</span>
-          <p className="nc-aw-panel__lead">{actor.capability}</p>
+          <span className="nc-eyebrow">{t("aw.authorityAndCapability")}</span>
+          <p className="nc-aw-panel__lead">{tc(actor.capability)}</p>
           <dl className="nc-aw-facts">
             <div className="nc-aw-facts__row">
-              <dt>Autonomy</dt>
-              <dd className="nc-aw-empower">{actor.permissions.autonomy}</dd>
+              <dt>{tc("Autonomy")}</dt>
+              <dd className="nc-aw-empower">{tc(actor.permissions.autonomy)}</dd>
             </div>
             <div className="nc-aw-facts__row">
-              <dt>Data scope</dt>
-              <dd>{actor.permissions.dataScope}</dd>
+              <dt>{tc("Data scope")}</dt>
+              <dd>{tc(actor.permissions.dataScope)}</dd>
             </div>
             <div className="nc-aw-facts__row">
-              <dt>Approval</dt>
-              <dd>{actor.permissions.approval}</dd>
+              <dt>{tc("Approval")}</dt>
+              <dd>{tc(actor.permissions.approval)}</dd>
             </div>
             <div className="nc-aw-facts__row">
-              <dt>Escalation</dt>
-              <dd>{actor.permissions.escalation}</dd>
+              <dt>{tc("Escalation")}</dt>
+              <dd>{tc(actor.permissions.escalation)}</dd>
             </div>
           </dl>
         </section>
@@ -119,55 +121,55 @@ function OverviewMode({ actor }: { actor: ActorConfig }) {
 
       <div className="nc-aw-dash__side">
         <section className="nc-glass nc-aw-panel">
-          <span className="nc-eyebrow">Identity</span>
+          <span className="nc-eyebrow">{tc("Identity")}</span>
           <dl className="nc-aw-ident">
             <div className="nc-aw-ident__row">
-              <dt>Type</dt>
+              <dt>{tc("Type")}</dt>
               <dd>
                 <span className="nc-aw-badge" data-type={actor.type}>
                   {isAI ? <IconAgent size={12} /> : <IconHuman size={12} />}
-                  {actorTypeLabel(actor.type)}
+                  {tc(actorTypeLabel(actor.type))}
                 </span>
               </dd>
             </div>
             <div className="nc-aw-ident__row">
-              <dt>Role</dt>
-              <dd>{actor.role}</dd>
+              <dt>{tc("Role")}</dt>
+              <dd>{tc(actor.role)}</dd>
             </div>
             <div className="nc-aw-ident__row">
-              <dt>Purpose</dt>
-              <dd>{actor.purpose}</dd>
+              <dt>{tc("Purpose")}</dt>
+              <dd>{tc(actor.purpose)}</dd>
             </div>
             <div className="nc-aw-ident__row">
-              <dt>Department</dt>
+              <dt>{tc("Department")}</dt>
               <dd>{actor.departmentName}</dd>
             </div>
             <div className="nc-aw-ident__row">
-              <dt>Status</dt>
-              <dd>{actor.status}</dd>
+              <dt>{tc("Status")}</dt>
+              <dd>{tc(actor.status)}</dd>
             </div>
             <div className="nc-aw-ident__row">
-              <dt>Reports to</dt>
-              <dd>{actor.reportsTo}</dd>
+              <dt>{tc("Reports to")}</dt>
+              <dd>{tc(actor.reportsTo)}</dd>
             </div>
           </dl>
         </section>
 
         {isAI && actor.model ? (
           <section className="nc-glass nc-aw-panel">
-            <span className="nc-eyebrow">Model route</span>
+            <span className="nc-eyebrow">{tc("Model route")}</span>
             <ModelRouteChain route={actor.model} />
           </section>
         ) : null}
 
         {!isAI && actor.contact ? (
           <section className="nc-glass nc-aw-panel">
-            <span className="nc-eyebrow">Contact &amp; instruction context</span>
+            <span className="nc-eyebrow">{t("aw.contactContext")}</span>
             <dl className="nc-aw-ident">
               {actor.contact.map((row) => (
                 <div key={row.id} className="nc-aw-ident__row">
-                  <dt>{row.label}</dt>
-                  <dd>{row.value}</dd>
+                  <dt>{tc(row.label)}</dt>
+                  <dd>{tc(row.value)}</dd>
                 </div>
               ))}
             </dl>
@@ -180,10 +182,11 @@ function OverviewMode({ actor }: { actor: ActorConfig }) {
 
 /** Reports-to → this actor → collaborators, wired with the shared net language. */
 function RelationshipNetwork({ actor }: { actor: ActorConfig }) {
+  const { tc } = useLocale();
   return (
     <div className="nc-aw-relmap">
-      <span className="nc-aw-relmap__label">Reports to</span>
-      <span className="nc-glass-data nc-aw-relmap__node">{actor.reportsTo}</span>
+      <span className="nc-aw-relmap__label">{tc("Reports to")}</span>
+      <span className="nc-glass-data nc-aw-relmap__node">{tc(actor.reportsTo)}</span>
 
       <svg className="nc-net nc-aw-relmap__line" viewBox="0 0 8 22" preserveAspectRatio="none" aria-hidden="true">
         <path className="nc-net__line" data-state="active" d="M4 0 V22" />
@@ -195,8 +198,8 @@ function RelationshipNetwork({ actor }: { actor: ActorConfig }) {
           {actor.initials}
         </span>
         <span className="nc-aw-relmap__self-text">
-          <span className="nc-aw-relmap__self-role">{actor.role}</span>
-          <span className="nc-aw-relmap__self-name">{actor.name}</span>
+          <span className="nc-aw-relmap__self-role">{tc(actor.role)}</span>
+          <span className="nc-aw-relmap__self-name">{tc(actor.name)}</span>
         </span>
       </span>
 
@@ -204,11 +207,11 @@ function RelationshipNetwork({ actor }: { actor: ActorConfig }) {
         <path className="nc-net__line" data-state="idle" d="M4 0 V22" />
       </svg>
 
-      <span className="nc-aw-relmap__label">Collaborates with</span>
+      <span className="nc-aw-relmap__label">{tc("Collaborates with")}</span>
       <span className="nc-aw-relmap__peers">
         {actor.collaborates.map((name) => (
           <span key={name} className="nc-glass-data nc-aw-relmap__node nc-aw-relmap__node--peer">
-            {name}
+            {tc(name)}
           </span>
         ))}
       </span>
@@ -218,35 +221,36 @@ function RelationshipNetwork({ actor }: { actor: ActorConfig }) {
 
 /** AI-only: the route a request actually takes, drawn as a chain. */
 function ModelRouteChain({ route }: { route: ModelRoute }) {
+  const { tc } = useLocale();
   return (
     <>
       <div className="nc-aw-route">
         <span className="nc-glass-data nc-aw-route__node" data-role="preferred">
-          <span className="nc-aw-route__tier">Preferred</span>
+          <span className="nc-aw-route__tier">{tc("Preferred")}</span>
           <span className="nc-aw-route__name">{route.preferred}</span>
         </span>
         <svg className="nc-net nc-aw-route__line" viewBox="0 0 30 8" preserveAspectRatio="none" aria-hidden="true">
           <path className="nc-net__line" data-state="routing" d="M0 4 H30" />
         </svg>
         <span className="nc-glass-data nc-aw-route__node" data-role="fallback">
-          <span className="nc-aw-route__tier">Fallback</span>
+          <span className="nc-aw-route__tier">{tc("Fallback")}</span>
           <span className="nc-aw-route__name">{route.fallback}</span>
         </span>
       </div>
       <dl className="nc-aw-ident">
         <div className="nc-aw-ident__row">
-          <dt>Current policy</dt>
+          <dt>{tc("Current policy")}</dt>
           <dd>
-            <span className="nc-aw-policy">{route.policy}</span>
+            <span className="nc-aw-policy">{tc(route.policy)}</span>
           </dd>
         </div>
         <div className="nc-aw-ident__row">
-          <dt>Cost policy</dt>
-          <dd>{route.costPolicy}</dd>
+          <dt>{tc("Cost policy")}</dt>
+          <dd>{tc(route.costPolicy)}</dd>
         </div>
         <div className="nc-aw-ident__row">
-          <dt>Paid escalation</dt>
-          <dd>{route.paidEscalation}</dd>
+          <dt>{tc("Paid escalation")}</dt>
+          <dd>{tc(route.paidEscalation)}</dd>
         </div>
       </dl>
     </>
@@ -254,29 +258,30 @@ function ModelRouteChain({ route }: { route: ModelRoute }) {
 }
 
 function ModelRouteMini({ route }: { route: ModelRoute }) {
+  const { tc } = useLocale();
   return (
     <dl className="nc-aw-ident">
       <div className="nc-aw-ident__row">
-        <dt>Current policy</dt>
+        <dt>{tc("Current policy")}</dt>
         <dd>
-          <span className="nc-aw-policy">{route.policy}</span>
+          <span className="nc-aw-policy">{tc(route.policy)}</span>
         </dd>
       </div>
       <div className="nc-aw-ident__row">
-        <dt>Preferred route</dt>
+        <dt>{tc("Preferred route")}</dt>
         <dd>{route.preferred}</dd>
       </div>
       <div className="nc-aw-ident__row">
-        <dt>Fallback route</dt>
+        <dt>{tc("Fallback route")}</dt>
         <dd>{route.fallback}</dd>
       </div>
       <div className="nc-aw-ident__row">
-        <dt>Cost policy</dt>
-        <dd>{route.costPolicy}</dd>
+        <dt>{tc("Cost policy")}</dt>
+        <dd>{tc(route.costPolicy)}</dd>
       </div>
       <div className="nc-aw-ident__row">
-        <dt>Paid escalation</dt>
-        <dd>{route.paidEscalation}</dd>
+        <dt>{tc("Paid escalation")}</dt>
+        <dd>{tc(route.paidEscalation)}</dd>
       </div>
     </dl>
   );
@@ -284,36 +289,37 @@ function ModelRouteMini({ route }: { route: ModelRoute }) {
 
 /* ── Work ──────────────────────────────────────────────────────────────── */
 
-const WORK_GROUPS: Array<{ kind: WorkKind; label: string }> = [
-  { kind: "mission", label: "Active missions" },
-  { kind: "job", label: "Assigned jobs" },
-  { kind: "delegated", label: "Delegated work" },
-  { kind: "blocker", label: "Blockers" },
-  { kind: "approval", label: "Pending approvals" },
-  { kind: "output", label: "Recent outputs" },
-];
+const WORK_GROUP_KEYS = [
+  { kind: "mission", key: "dws.activeMissions" },
+  { kind: "job", key: "aw.groupAssignedJobs" },
+  { kind: "delegated", key: "aw.groupDelegated" },
+  { kind: "blocker", key: "dws.blockers" },
+  { kind: "approval", key: "aw.groupPendingApprovals" },
+  { kind: "output", key: "aw.groupRecentOutputs" },
+] as const;
 
 function WorkMode({ actor }: { actor: ActorConfig }) {
+  const { t, tc } = useLocale();
   return (
     <div className="nc-aw-grid nc-aw-grid--work">
-      {WORK_GROUPS.map((group) => {
-        const items = actor.work.filter((item) => item.kind === group.kind);
+      {WORK_GROUP_KEYS.map((group) => {
+        const items = actor.work.filter((item) => item.kind === (group.kind as WorkKind));
         return (
           <section key={group.kind} className="nc-aw-card" data-empty={items.length === 0}>
             <span className="nc-aw-card__kicker">
-              {group.label} <i>{items.length}</i>
+              {t(group.key)} <i>{items.length}</i>
             </span>
             {items.length === 0 ? (
-              <span className="nc-aw-none">Nothing in this state.</span>
+              <span className="nc-aw-none">{t("aw.nothingInState")}</span>
             ) : (
               <ul className="nc-aw-rows">
                 {items.map((item) => (
                   <li key={item.id} className="nc-aw-row" data-state={item.state}>
                     <span className="nc-aw-row__top">
-                      <span className="nc-aw-row__title">{item.title}</span>
-                      <span className="nc-aw-row__state">{item.state}</span>
+                      <span className="nc-aw-row__title">{tc(item.title)}</span>
+                      <span className="nc-aw-row__state">{tc(item.state)}</span>
                     </span>
-                    <span className="nc-aw-row__note">{item.note}</span>
+                    <span className="nc-aw-row__note">{tc(item.note)}</span>
                   </li>
                 ))}
               </ul>
@@ -321,9 +327,7 @@ function WorkMode({ actor }: { actor: ActorConfig }) {
           </section>
         );
       })}
-      <p className="nc-aw-note">
-        Mock work only. No job runner, queue or scheduler is connected in this phase.
-      </p>
+      <p className="nc-aw-note">{t("aw.workNote")}</p>
     </div>
   );
 }
@@ -333,6 +337,7 @@ function WorkMode({ actor }: { actor: ActorConfig }) {
 const SKILL_LEVELS: SkillLevel[] = ["Mastered", "Proficient", "Learning", "Dormant"];
 
 function SkillsMode({ actor }: { actor: ActorConfig }) {
+  const { t, tc } = useLocale();
   return (
     <div className="nc-aw-stack">
       <ul className="nc-aw-list">
@@ -340,21 +345,21 @@ function SkillsMode({ actor }: { actor: ActorConfig }) {
           <li key={skill.id} className="nc-aw-item" data-available={skill.available}>
             <span className="nc-aw-item__main">
               <span className="nc-aw-item__top">
-                <span className="nc-aw-item__name">{skill.name}</span>
+                <span className="nc-aw-item__name">{tc(skill.name)}</span>
                 <span className="nc-aw-level" data-level={skill.level}>
-                  {skill.level}
+                  {tc(skill.level)}
                 </span>
               </span>
               <span className="nc-aw-item__meta">
-                <span className="nc-aw-item__source">{skill.source}</span>
+                <span className="nc-aw-item__source">{tc(skill.source)}</span>
               </span>
             </span>
             <span className="nc-aw-item__side">
-              <span className="nc-aw-item__label">Last used</span>
+              <span className="nc-aw-item__label">{tc("Last used")}</span>
               <span className="nc-aw-item__value">{skill.lastUsed}</span>
             </span>
             <span className="nc-aw-item__flag" data-available={skill.available}>
-              {skill.available ? "Available" : "Unavailable"}
+              {skill.available ? t("aw.available") : t("aw.unavailable")}
             </span>
           </li>
         ))}
@@ -362,15 +367,11 @@ function SkillsMode({ actor }: { actor: ActorConfig }) {
       <div className="nc-aw-legend">
         {SKILL_LEVELS.map((level) => (
           <span key={level} data-level={level}>
-            {level}
+            {tc(level)}
           </span>
         ))}
       </div>
-      <p className="nc-aw-note">
-        Skills are procedural knowledge (SOP capability) drawn from a shared registry. Nothing is loaded at runtime in
-        this phase — the registry and these assignments are structured so skills can be added or removed dynamically
-        later without changing an actor definition.
-      </p>
+      <p className="nc-aw-note">{t("aw.skillsNote")}</p>
     </div>
   );
 }
@@ -379,6 +380,7 @@ function SkillsMode({ actor }: { actor: ActorConfig }) {
 
 function ToolsMode({ actor }: { actor: ActorConfig }) {
   const { notify } = useCommand();
+  const { t, tc } = useLocale();
 
   return (
     <div className="nc-aw-stack">
@@ -387,33 +389,30 @@ function ToolsMode({ actor }: { actor: ActorConfig }) {
           <li key={tool.id} className="nc-aw-item" data-available={tool.available}>
             <span className="nc-aw-item__main">
               <span className="nc-aw-item__top">
-                <span className="nc-aw-item__name nc-aw-mono">{tool.name}</span>
+                <span className="nc-aw-item__name nc-aw-mono">{tc(tool.name)}</span>
                 <span className="nc-aw-perm" data-perm={tool.permission}>
-                  {tool.permission}
+                  {tc(tool.permission)}
                 </span>
               </span>
               <span className="nc-aw-item__meta">
-                <span className="nc-aw-item__source">{tool.category}</span>
+                <span className="nc-aw-item__source">{tc(tool.category)}</span>
               </span>
             </span>
             <span className="nc-aw-item__side">
-              <span className="nc-aw-item__label">Last used</span>
+              <span className="nc-aw-item__label">{tc("Last used")}</span>
               <span className="nc-aw-item__value">{tool.lastUsed}</span>
             </span>
             <button
               type="button"
               className="nc-aw-item__action"
-              onClick={() => notify(`${tool.name} — tool execution is disabled in this phase.`)}
+              onClick={() => notify(t("aw.toolDisabledToast", { name: tool.name }))}
             >
-              {tool.available ? "Inspect" : "Blocked"}
+              {tool.available ? t("aw.inspect") : t("aw.blocked")}
             </button>
           </li>
         ))}
       </ul>
-      <p className="nc-aw-note">
-        Tools are executable capabilities, distinct from skills: a skill is how the actor thinks, a tool is what it can
-        actually run. Nothing executes here — no tool call leaves this page.
-      </p>
+      <p className="nc-aw-note">{t("aw.toolsNote")}</p>
     </div>
   );
 }
@@ -421,41 +420,40 @@ function ToolsMode({ actor }: { actor: ActorConfig }) {
 /* ── Workflows ─────────────────────────────────────────────────────────── */
 
 function WorkflowsMode({ actor }: { actor: ActorConfig }) {
+  const { t, tc } = useLocale();
   return (
     <div className="nc-aw-grid nc-aw-grid--workflows">
       {actor.workflows.map((workflow) => (
         <section key={workflow.id} className="nc-aw-card">
           <span className="nc-aw-card__kicker">
-            {workflow.name}
+            {tc(workflow.name)}
             <span className="nc-aw-wfstate" data-state={workflow.state}>
-              {workflow.state}
+              {tc(workflow.state)}
             </span>
           </span>
           <ol className="nc-aw-steps">
             {workflow.steps.map((step, index) => (
               <li key={step} className="nc-aw-step">
                 <span className="nc-aw-step__num">{index + 1}</span>
-                {step}
+                {tc(step)}
               </li>
             ))}
           </ol>
           <span className="nc-aw-card__row">
-            <span className="nc-aw-card__label">Reusable</span>
+            <span className="nc-aw-card__label">{tc("Reusable")}</span>
             <span className="nc-aw-card__value">
               {workflow.reusable ? (
                 <>
-                  <IconCheck size={13} /> Shared sequence
+                  <IconCheck size={13} /> {t("aw.sharedSequence")}
                 </>
               ) : (
-                "One-off"
+                t("aw.oneOff")
               )}
             </span>
           </span>
         </section>
       ))}
-      <p className="nc-aw-note">
-        Foundation for reusable sequences. No workflow runtime is introduced — these describe shape and state only.
-      </p>
+      <p className="nc-aw-note">{t("aw.workflowsNote")}</p>
     </div>
   );
 }
@@ -463,15 +461,19 @@ function WorkflowsMode({ actor }: { actor: ActorConfig }) {
 /* ── Memory ────────────────────────────────────────────────────────────── */
 
 function MemoryMode({ actor }: { actor: ActorConfig }) {
+  const { t, tc } = useLocale();
   const total = actor.memory.reduce((sum, layer) => sum + layer.entries.length, 0);
 
   return (
     <div className="nc-aw-stack">
       <section className="nc-aw-card">
-        <span className="nc-aw-card__kicker">Memory layers</span>
+        <span className="nc-aw-card__kicker">{tc("Memory layers")}</span>
         <span className="nc-aw-card__sub">
-          {total} structured {total === 1 ? "entry" : "entries"} across {actor.memory.length} layers. The future
-          architecture retrieves memory on demand rather than injecting everything into every prompt.
+          {t("aw.memoryLead", {
+            count: total,
+            unit: t(total === 1 ? "aw.entry" : "aw.entries"),
+            layers: actor.memory.length,
+          })}
         </span>
       </section>
 
@@ -479,17 +481,17 @@ function MemoryMode({ actor }: { actor: ActorConfig }) {
         {actor.memory.map((layer) => (
           <section key={layer.id} className="nc-aw-card nc-aw-card--memory" data-empty={layer.entries.length === 0}>
             <span className="nc-aw-card__kicker">
-              {layer.label} <i>{layer.entries.length}</i>
+              {tc(layer.label)} <i>{layer.entries.length}</i>
             </span>
-            <span className="nc-aw-card__sub">{layer.note}</span>
+            <span className="nc-aw-card__sub">{tc(layer.note)}</span>
             {layer.entries.length === 0 ? (
-              <span className="nc-aw-none">No entries yet.</span>
+              <span className="nc-aw-none">{t("aw.noEntries")}</span>
             ) : (
               <ul className="nc-aw-mem">
                 {layer.entries.map((entry) => (
                   <li key={entry.id} className="nc-aw-mem__item">
-                    <span className="nc-aw-mem__title">{entry.title}</span>
-                    <span className="nc-aw-mem__note">{entry.note}</span>
+                    <span className="nc-aw-mem__title">{tc(entry.title)}</span>
+                    <span className="nc-aw-mem__note">{tc(entry.note)}</span>
                   </li>
                 ))}
               </ul>
@@ -498,10 +500,7 @@ function MemoryMode({ actor }: { actor: ActorConfig }) {
         ))}
       </div>
 
-      <p className="nc-aw-note">
-        Small structured placeholders only — no memory content is fabricated, and no memory backend exists in this
-        phase.
-      </p>
+      <p className="nc-aw-note">{t("aw.actorMemoryNote")}</p>
     </div>
   );
 }
@@ -509,30 +508,29 @@ function MemoryMode({ actor }: { actor: ActorConfig }) {
 /* ── Permissions ───────────────────────────────────────────────────────── */
 
 function PermissionsMode({ actor }: { actor: ActorConfig }) {
+  const { t, tc } = useLocale();
   const { permissions } = actor;
   const facts: Array<{ label: string; value: string }> = [
-    { label: "Data scope", value: permissions.dataScope },
-    { label: "Financial", value: permissions.financial },
-    { label: "Publishing", value: permissions.publishing },
-    { label: "Approval", value: permissions.approval },
-    { label: "Escalation", value: permissions.escalation },
+    { label: tc("Data scope"), value: tc(permissions.dataScope) },
+    { label: t("aw.financial"), value: tc(permissions.financial) },
+    { label: t("aw.publishing"), value: tc(permissions.publishing) },
+    { label: tc("Approval"), value: tc(permissions.approval) },
+    { label: tc("Escalation"), value: tc(permissions.escalation) },
   ];
 
   return (
     <div className="nc-aw-stack">
       <section className="nc-aw-card">
-        <span className="nc-aw-card__kicker">Autonomy level</span>
-        <span className="nc-aw-autonomy">{permissions.autonomy}</span>
-        <span className="nc-aw-card__sub">
-          How far this actor may act before a human is required. Policy enforcement is not implemented in this phase.
-        </span>
+        <span className="nc-aw-card__kicker">{tc("Autonomy level")}</span>
+        <span className="nc-aw-autonomy">{tc(permissions.autonomy)}</span>
+        <span className="nc-aw-card__sub">{t("aw.autonomyLead")}</span>
       </section>
 
       <div className="nc-aw-grid nc-aw-grid--perm">
         <section className="nc-aw-card">
-          <span className="nc-aw-card__kicker">Allowed tools</span>
+          <span className="nc-aw-card__kicker">{tc("Allowed tools")}</span>
           {permissions.allowedTools.length === 0 ? (
-            <span className="nc-aw-none">No tool is fully allowed.</span>
+            <span className="nc-aw-none">{t("aw.noToolAllowed")}</span>
           ) : (
             <ul className="nc-aw-chips nc-aw-chips--mono">
               {permissions.allowedTools.map((tool) => (
@@ -545,14 +543,14 @@ function PermissionsMode({ actor }: { actor: ActorConfig }) {
         </section>
 
         <section className="nc-aw-card">
-          <span className="nc-aw-card__kicker">Allowed systems</span>
+          <span className="nc-aw-card__kicker">{tc("Allowed systems")}</span>
           {permissions.allowedSystems.length === 0 ? (
-            <span className="nc-aw-none">No system access.</span>
+            <span className="nc-aw-none">{t("aw.noSystemAccess")}</span>
           ) : (
             <ul className="nc-aw-chips">
               {permissions.allowedSystems.map((system) => (
                 <li key={system} className="nc-aw-chip">
-                  {system}
+                  {tc(system)}
                 </li>
               ))}
             </ul>
@@ -560,11 +558,11 @@ function PermissionsMode({ actor }: { actor: ActorConfig }) {
         </section>
 
         <section className="nc-aw-card">
-          <span className="nc-aw-card__kicker">Scope &amp; rules</span>
+          <span className="nc-aw-card__kicker">{t("aw.scopeAndRules")}</span>
           <dl className="nc-aw-ident">
             {facts.map((fact) => (
               <div key={fact.label} className="nc-aw-ident__row">
-                <dt>{fact.label}</dt>
+                <dt>{tc(fact.label)}</dt>
                 <dd>{fact.value}</dd>
               </div>
             ))}
@@ -573,16 +571,13 @@ function PermissionsMode({ actor }: { actor: ActorConfig }) {
 
         {actor.model ? (
           <section className="nc-aw-card">
-            <span className="nc-aw-card__kicker">Model route</span>
+            <span className="nc-aw-card__kicker">{tc("Model route")}</span>
             <ModelRouteMini route={actor.model} />
           </section>
         ) : null}
       </div>
 
-      <p className="nc-aw-note">
-        Mock values only. No policy engine, permission check or model provider is connected — this is the foundation the
-        enforcement layer will read.
-      </p>
+      <p className="nc-aw-note">{t("aw.permissionsNote")}</p>
     </div>
   );
 }
@@ -590,20 +585,19 @@ function PermissionsMode({ actor }: { actor: ActorConfig }) {
 /* ── Performance ───────────────────────────────────────────────────────── */
 
 function PerformanceMode({ actor }: { actor: ActorConfig }) {
+  const { t, tc } = useLocale();
   return (
     <div className="nc-aw-stack">
       <div className="nc-aw-grid nc-aw-grid--perf">
         {actor.performance.map((metric) => (
           <section key={metric.id} className="nc-aw-card nc-aw-card--metric">
-            <span className="nc-aw-card__kicker">{metric.label}</span>
-            <span className="nc-aw-metric__value">{metric.value}</span>
-            <span className="nc-aw-card__sub">{metric.note}</span>
+            <span className="nc-aw-card__kicker">{tc(metric.label)}</span>
+            <span className="nc-aw-metric__value">{tc(metric.value)}</span>
+            <span className="nc-aw-card__sub">{tc(metric.note)}</span>
           </section>
         ))}
       </div>
-      <p className="nc-aw-note">
-        Small mock values. No analytics pipeline is connected and no trend is computed here.
-      </p>
+      <p className="nc-aw-note">{t("aw.performanceNote")}</p>
     </div>
   );
 }
@@ -611,6 +605,7 @@ function PerformanceMode({ actor }: { actor: ActorConfig }) {
 /* ── History ───────────────────────────────────────────────────────────── */
 
 function HistoryMode({ actor }: { actor: ActorConfig }) {
+  const { t, tc } = useLocale();
   return (
     <div className="nc-aw-stack">
       <ol className="nc-aw-timeline">
@@ -621,18 +616,15 @@ function HistoryMode({ actor }: { actor: ActorConfig }) {
             </span>
             <span className="nc-aw-event__body">
               <span className="nc-aw-event__top">
-                <span className="nc-aw-event__kind">{entry.kind}</span>
-                <span className="nc-aw-event__at">{entry.at}</span>
+                <span className="nc-aw-event__kind">{tc(entry.kind)}</span>
+                <span className="nc-aw-event__at">{tc(entry.at)}</span>
               </span>
-              <span className="nc-aw-event__title">{entry.title}</span>
+              <span className="nc-aw-event__title">{tc(entry.title)}</span>
             </span>
           </li>
         ))}
       </ol>
-      <p className="nc-aw-note">
-        A simple timeline foundation — missions, commands, decisions, outputs, warnings, approvals and skill or tool
-        changes. No history store exists in this phase.
-      </p>
+      <p className="nc-aw-note">{t("aw.historyNote")}</p>
     </div>
   );
 }

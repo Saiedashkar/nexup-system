@@ -1,9 +1,14 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 
 import { AiWorkforceError } from "@/modules/ai-workforce/core/errors";
-import type { AgentExecutionError, AgentExecutionStatus } from "../runtimes/agent-runtime";
+import {
+  TERMINAL_EXECUTION_STATUSES,
+  type AgentExecutionError,
+  type AgentExecutionStatus,
+} from "../runtimes/agent-runtime";
 import type {
   ExecutionAuditEvent,
+  ExecutionRecoverableQuery,
   ExecutionRecord,
   ExecutionRecordRepository,
 } from "../execution/execution-record";
@@ -45,7 +50,7 @@ import type { ExecutionRecordId, MissionId, ReviewId, TaskId } from "../core/ref
 
 export type WorkforceLifecyclePrismaClient = Pick<
   PrismaClient,
-  "aiMission" | "aiTask" | "aiExecutionRecord" | "aiTaskReview"
+  "aiMission" | "aiTask" | "aiExecutionRecord" | "aiTaskReview" | "$queryRaw"
 >;
 
 const LIFECYCLE_DELEGATES = ["aiMission", "aiTask", "aiExecutionRecord", "aiTaskReview"] as const;
@@ -295,6 +300,20 @@ export class PrismaTaskRepository implements TaskRepository {
    Execution records
    ═══════════════════════════════════════════════════════ */
 
+/**
+ * The row mapping for ONE execution attempt.
+ *
+ * Exported because the ATOMIC finalizer (`prisma-execution-attempt-committer.ts`)
+ * has to write the identical row from INSIDE a transaction, and a second,
+ * hand-copied mapping is exactly how two "equivalent" writers drift apart. One
+ * mapping, two callers.
+ */
+export /**
+ * The columns a WRITE owns. `recoverySweptAt` is deliberately absent: it is the
+ * recovery rotation key, written by `markRecoverySwept` and nothing else, so a
+ * normal save (which reads a record, edits it and writes it back) must not
+ * overwrite it with a stale value from the object it happened to load.
+ */
 function executionRow(record: ExecutionRecord) {
   return {
     handleId: record.handleId,
@@ -328,7 +347,7 @@ function executionRow(record: ExecutionRecord) {
 
 type ExecutionRow = Prisma.AiExecutionRecordGetPayload<Record<string, never>>;
 
-function toExecution(row: ExecutionRow): ExecutionRecord {
+export function toExecution(row: ExecutionRow): ExecutionRecord {
   const record: ExecutionRecord = {
     id: row.id as ExecutionRecordId,
     handleId: row.handleId,
@@ -359,8 +378,12 @@ function toExecution(row: ExecutionRow): ExecutionRecord {
     record.cancelled = { at: row.cancelledAt.toISOString() };
     if (row.cancelledReason) record.cancelled.reason = row.cancelledReason;
   }
+  if (row.recoverySweptAt) record.recoverySweptAt = row.recoverySweptAt.toISOString();
   return record;
 }
+
+/** The row shape the recovery page reads (a raw row is structurally identical). */
+type ExecutionRecoverableRow = Prisma.AiExecutionRecordGetPayload<Record<string, never>>;
 
 export class PrismaExecutionRecordRepository implements ExecutionRecordRepository {
   constructor(private readonly client: WorkforceLifecyclePrismaClient) {}
@@ -422,6 +445,102 @@ export class PrismaExecutionRecordRepository implements ExecutionRecordRepositor
       take: limit,
     });
     return rows.map(toExecution);
+  }
+
+  /**
+   * The RECOVERY page — the fifth-review correction, in SQL.
+   *
+   * WHY RAW SQL. Two things the page needs are not expressible through the typed
+   * builder without an expression: `NOT IN (…)` over the terminal statuses as a
+   * WHERE predicate (so the filter happens BEFORE `LIMIT`), and `ORDER BY
+   * "recoverySweptAt" ASC NULLS FIRST` (so a NEVER-SWEPT attempt is the first thing
+   * a sweep sees). The status list is IMPORTED from the runtime vocabulary rather
+   * than re-typed here, so this SQL and `isTerminalExecutionStatus` cannot drift.
+   *
+   * WHAT IT GUARANTEES:
+   *
+   *   * ELIGIBLE ONLY, BEFORE THE LIMIT. A page of finished attempts can no longer
+   *     consume the page: they are not in it. An older OPEN attempt is therefore
+   *     reachable no matter how many newer terminal rows exist — the case the
+   *     review reproduced with 50 finished attempts and one ACCEPTED attempt behind
+   *     them.
+   *   * THE DURABLE ROTATION. `NULLS FIRST` + `recoverySweptAt ASC` orders the page
+   *     by "least recently observed, and never-observed first", so a sweep that
+   *     stamps what it read (`markRecoverySwept`) leaves the NEXT page further along
+   *     — in the DATABASE, not in the process. Restarting the process, running a
+   *     second instance, or having 65 active missions changes nothing about where
+   *     the queue is.
+   *   * A TOTAL ORDER. `startedAt`, then `id`, so a page boundary never depends on
+   *     two rows comparing equal. `recoveryRotationCompare` spells the same rule
+   *     for the in-memory reference.
+   *
+   * A `lane` (Step 5A-4, sixth review) is one more fully static statement, because a
+   * lane constrains MEMBERSHIP as well as direction: `"recoverySweptAt" IS NULL` for
+   * the unseen window, `IS NOT NULL` for the revisit one. Ordering alone could never
+   * do that — a merged page ordered "never observed first" is exactly the page a
+   * steady arrival of new attempts can fill forever, which left an
+   * observed-but-still-open attempt with no bound at all.
+   */
+  async listRecoverable(query: ExecutionRecoverableQuery = {}): Promise<ExecutionRecord[]> {
+    const limit = query.limit ?? 100;
+    const missionId = query.missionId ?? null;
+    if (query.lane === "PREVIOUSLY_OBSERVED") {
+      // The REVISIT window: least recently observed first, over rows that all have a
+      // stamp, so `NULLS FIRST` cannot fire and the clause below is the round-robin.
+      const rows = await this.client.$queryRaw<ExecutionRecoverableRow[]>`
+        SELECT r.*
+        FROM ai_execution_records r
+        WHERE r."status" NOT IN (${Prisma.join([...TERMINAL_EXECUTION_STATUSES])})
+          AND r."recoverySweptAt" IS NOT NULL
+          AND (${missionId}::text IS NULL OR r."missionId" = ${missionId})
+        ORDER BY r."recoverySweptAt" ASC, r."startedAt" ASC, r."id" ASC
+        LIMIT ${limit}
+      `;
+      return rows.map(toExecution);
+    }
+    if (query.lane === "NEVER_OBSERVED") {
+      // The UNSEEN window: FIFO by `startedAt` over the attempts no sweep has looked
+      // at, so the oldest unseen attempt is reached within ceil(unseen / quota)
+      // sweeps whatever the arrival rate is.
+      const rows = await this.client.$queryRaw<ExecutionRecoverableRow[]>`
+        SELECT r.*
+        FROM ai_execution_records r
+        WHERE r."status" NOT IN (${Prisma.join([...TERMINAL_EXECUTION_STATUSES])})
+          AND r."recoverySweptAt" IS NULL
+          AND (${missionId}::text IS NULL OR r."missionId" = ${missionId})
+        ORDER BY r."startedAt" ASC, r."id" ASC
+        LIMIT ${limit}
+      `;
+      return rows.map(toExecution);
+    }
+    const rows = await this.client.$queryRaw<ExecutionRecoverableRow[]>`
+      SELECT r.*
+      FROM ai_execution_records r
+      WHERE r."status" NOT IN (${Prisma.join([...TERMINAL_EXECUTION_STATUSES])})
+        AND (${missionId}::text IS NULL OR r."missionId" = ${missionId})
+      ORDER BY r."recoverySweptAt" ASC NULLS FIRST, r."startedAt" ASC, r."id" ASC
+      LIMIT ${limit}
+    `;
+    return rows.map(toExecution);
+  }
+
+  /**
+   * Stamps the RECOVERY rotation key and nothing else.
+   *
+   * It cannot change the attempt's status, output, audit trail, or `updatedAt` (the
+   * activity timestamp the Recent Activity feed is built from), so a recovery sweep
+   * can never be mistaken for work that happened. The database's own clock decides
+   * the value, so two instances agree on the order of the queue.
+   */
+  async markRecoverySwept(id: ExecutionRecordId): Promise<ExecutionRecord | null> {
+    const rows = await this.client.$queryRaw<ExecutionRecoverableRow[]>`
+      UPDATE ai_execution_records
+      SET "recoverySweptAt" = (now() AT TIME ZONE 'UTC')
+      WHERE "id" = ${id}
+      RETURNING *
+    `;
+    const row = rows[0];
+    return row ? toExecution(row) : null;
   }
 
   count(): Promise<number> {

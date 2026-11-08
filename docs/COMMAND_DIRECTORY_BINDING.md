@@ -415,10 +415,25 @@ global counts).
 | **G8** | the workspace gate | **closed** (10.1): `403` again for a session with no company |
 | **G9** | a super-admin write must name a company | unchanged, now tested through the flag-aware path |
 | **G10** | `PATCH /api/projects/[id]` has no "change the client" field, so the client-change rule is enforced where a client can actually be changed: the create path that also renames it | documented |
-| **G11** | the stats dashboard still writes (auto-hide) on a `GET`; it is now admin-only and company-scoped, but the side effect on a read remains | documented |
+| **G11** | ~~the stats dashboard wrote (auto-hide) on a `GET`~~ | **closed** (10.7): the dashboard is read-only; hiding an orphan client is the explicit `DELETE /api/clients` cleanup, with its admin + named-company checks |
 | **G12** | the refusals are proven by calling the real middleware and handlers, not by intercepting a browser session | documented |
 | **G2**, **G4**, **G5**, **G7** | unchanged from round 2 | open |
 
 No design, schema, migration or dependency changed in this round. The throwaway test database was a
 separate cluster on `127.0.0.1:5435`; the demo database and the system PostgreSQL service were not
 touched.
+
+### 10.7 Round 4 — the dashboard is a read again
+
+Round 3 limited the dashboard's auto-hide to admins and to their own companies. That was still a `GET`
+that deletes: refreshing a page could hide a client and its money without anyone asking. `GET
+/api/office/stats` now only reads. Hiding an orphan client stays in the one place it is requested —
+`DELETE /api/clients?businessId=…` (admin role + an explicit, existing company) — and the recycle bin
+restores it exactly as before.
+
+`tests/directory-write-authorization.test.ts` pins it: an employee, a company admin and a super admin
+each load the dashboard; the statistics still report the truth (one company for the scoped admin, both
+for the super admin, `totalClients` / `totalProjects` from the live rows); and **every** row — client
+hidden-flags and names, projects, payments, treasury movements, subscriptions and the global counts —
+is identical before and after. A fourth test shows the orphan client surviving the dashboard and being
+hid only by the explicit cleanup, in the named company alone.

@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentSession, canAccessBusiness, isAdmin, isSuperAdmin } from "@/lib/auth";
-import { resolveReadScope } from "@/lib/read-scope-db";
-import { softDeleteRecord } from "@/lib/soft-delete";
+import { getCurrentSession, canAccessBusiness, isSuperAdmin } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -13,33 +11,14 @@ export async function GET() {
 
     const superAdmin = isSuperAdmin(session);
 
-    /* Auto-hide clients that have neither projects nor subscriptions left.
-       (Soft delete only — recoverable from the recycle bin.)
+    /* THIS ROUTE ONLY READS.
 
-       This is a DELETE, so it obeys the admin deletion policy: an employee may
-       not trigger it by opening a dashboard (this GET used to hide clients for
-       ANY session), and it reaches only the companies the session's flags grant —
-       never every company in the database. A super admin covers all of them. */
-    try {
-      if (isAdmin(session)) {
-        const cleanable = await resolveReadScope(session);
-        if (cleanable.businessIds.length > 0) {
-          const liveClients = await prisma.client.findMany({
-            where: { businessId: { in: cleanable.businessIds } },
-            select: { id: true },
-          });
-          for (const c of liveClients) {
-            const [projectCount, subscriptionCount] = await Promise.all([
-              prisma.projectRecord.count({ where: { clientId: c.id } }),
-              prisma.subscription.count({ where: { clientId: c.id } }),
-            ]);
-            if (projectCount === 0 && subscriptionCount === 0) {
-              await softDeleteRecord("Client", c.id, session.userId);
-            }
-          }
-        }
-      }
-    } catch { /* ignore cleanup errors */ }
+       It used to auto-hide orphan clients while loading the dashboard — a DELETE
+       behind a GET, which any session (and, before round 3, any company) could
+       trigger by refreshing a page. Hiding a client and its money now happens in
+       the one place it is actually asked for: `DELETE /api/clients?businessId=…`,
+       with an admin role and an explicit company (recoverable from the recycle
+       bin like before). */
 
     const allBusinesses = await prisma.business.findMany({ orderBy: { name: "asc" } });
 

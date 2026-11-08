@@ -586,18 +586,78 @@ describe("DELETE /api/clients — the cleanup obeys the same policy", () => {
   });
 });
 
-describe("GET /api/office/stats — the dashboard must not delete for an employee (or across companies)", () => {
-  it("keeps an employee's orphan client visible", async () => {
+describe("GET /api/office/stats — a read that changes nothing", () => {
+  type StatsBody = {
+    stats: { totalClients: number; totalProjects: number };
+    businesses: { slug: string }[];
+  };
+
+  it("loads for an employee, keeps the totals right, and changes no row", async () => {
     const s = sessions();
+    const world = await worldState();
+    const orphan = await clientState(orphanA.id);
+
     as(s.employeeA);
-    await officeStats();
-    expect((await clientState(orphanA.id)).hidden).toBe(false);
+    const response = await officeStats();
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as StatsBody;
+
+    // The statistics are still the truth about the live rows.
+    expect(body.stats.totalClients).toBe(2);
+    expect(body.stats.totalProjects).toBe(1);
+    expect(body.businesses.map((b) => b.slug)).toEqual(["nexup"]);
+
+    expect(await worldState()).toEqual(world);
+    expect(await clientState(orphanA.id)).toEqual(orphan);
   });
 
-  it("cleans only the companies the admin's flags grant", async () => {
+  it("loads for a company admin, keeps the totals right, and changes no row", async () => {
     const s = sessions();
+    const world = await worldState();
+    const orphan = await clientState(orphanA.id);
+
     as(s.adminA);
+    const response = await officeStats();
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as StatsBody;
+
+    expect(body.stats.totalClients).toBe(2);
+    expect(body.stats.totalProjects).toBe(1);
+    expect(body.businesses.map((b) => b.slug)).toEqual(["nexup"]);
+
+    expect(await worldState()).toEqual(world);
+    expect(await clientState(orphanA.id)).toEqual(orphan);
+    expect(orphan.hidden).toBe(false);
+  });
+
+  it("loads for a super admin over both companies and changes no row", async () => {
+    const s = sessions();
+    const world = await worldState();
+
+    as(s.superAdmin);
+    const response = await officeStats();
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as StatsBody;
+
+    expect(body.businesses.map((b) => b.slug).sort()).toEqual(["abomazen", "nexup"]);
+    expect(body.stats.totalClients).toBe(4);
+    expect(body.stats.totalProjects).toBe(2);
+
+    expect(await worldState()).toEqual(world);
+  });
+
+  it("leaves the explicit cleanup as the only way to hide an orphan client", async () => {
+    const s = sessions();
+
+    as(s.superAdmin);
     await officeStats();
+    expect((await clientState(orphanA.id)).hidden).toBe(false);
+    expect((await clientState(orphanB.id)).hidden).toBe(false);
+
+    const response = await cleanupClients(
+      request(`/api/clients?businessId=${bizA.id}`, "DELETE", undefined, s.superAdmin),
+    );
+    expect(response.status).toBe(200);
     expect((await clientState(orphanA.id)).hidden).toBe(true);
     expect((await clientState(orphanB.id)).hidden).toBe(false);
   });

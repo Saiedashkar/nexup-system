@@ -72,9 +72,16 @@ export default function ClientsPage() {
 
 function ClientsSurface() {
   const { t } = useLocale();
-  const { state, clients, reload, reloadClients, reloadProjects } = useDirectory();
+  const { state, clients, reload, reloadSession, reloadClients, reloadProjects } = useDirectory();
 
+  /* NO ROW BEFORE THE SESSION AND ITS SCOPE ARE PROVEN — and none on failure. */
   if (state.unauthorized) return <SessionEnded next="/command/clients" />;
+  if (state.session.state === "loading") {
+    return <LoadingStack label={t("directory.readingSession")} />;
+  }
+  if (state.session.state === "error") {
+    return <ErrorState message={t(errorMessageKey(state.session.error))} onRetry={reloadSession} />;
+  }
   if (state.clients.state === "loading" || !clients) {
     return <LoadingStack label={t("directory.readingClients")} />;
   }

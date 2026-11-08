@@ -44,21 +44,24 @@ export function SessionEnded({ next }: { next: string }) {
 }
 
 /**
- * The company these reads are scoped to — taken from the SESSION, never from a
- * control. A super admin whose session spans companies reads "All companies";
- * everyone else reads the name of the company the session carries.
+ * The companies these reads are scoped to — taken from the SESSION's resolved
+ * scope, which is the same set the routes filtered on, so the line cannot claim a
+ * scope the rows did not come from. A session that spans companies reads "All
+ * companies"; a session granted none says so instead of printing a raw id.
  */
 export function DirectoryScopeLine() {
   const { t } = useLocale();
   const { session, state } = useDirectory();
 
-  const label = session
-    ? session.role === "SUPER_ADMIN" && session.businessId === "all"
-      ? t("directory.scopeAll")
-      : (session.business?.name ?? session.businessId)
-    : state.unauthorized
-      ? t("directory.scopeAll")
-      : "—";
+  const label = (() => {
+    if (!session) return state.unauthorized ? t("directory.scopeAll") : "—";
+    if (session.scope) {
+      if (session.scope.mode === "all") return t("directory.scopeAll");
+      const names = session.scope.businesses.map((business) => business.name);
+      return names.length > 0 ? names.join(" · ") : t("directory.scopeNone");
+    }
+    return session.business?.name ?? session.businessId;
+  })();
 
   return (
     <div className="nl-head__meta">

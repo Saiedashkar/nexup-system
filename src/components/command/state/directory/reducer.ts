@@ -4,16 +4,21 @@
  * Three independent reads — the session, the clients, the projects — and the
  * rules that keep them honest. Pure so they can be tested without a browser:
  *
- *   · A response is applied ONLY if it belongs to the current generation. A read
- *     that resolved after the page was reloaded, after the scope changed or after
- *     the session ended is dropped, so an old answer can never reappear under a
- *     new identity.
- *   · A failure is stored against its OWN source. One source failing does not
- *     touch the other, and it never leaves the reader looking at rows that the
- *     failed read was supposed to refresh.
- *   · A 401 is not an "error state" like the others: it clears every row and
- *     raises `unauthorized`, because a signed-out reader must not be shown the
- *     company's data at all.
+ *   · EACH SOURCE HAS ITS OWN IDENTITY. Every read carries a `stamp`, and every
+ *     source keeps its own counter, so retrying the clients does not invalidate
+ *     the projects request that is still in flight (it used to: one shared
+ *     generation meant any retry voided every other read).
+ *   · A RESPONSE IS APPLIED ONLY IF IT IS STILL THE CURRENT ONE: its stamp must
+ *     match the source's stamp and its `epoch` must match the state's. That is
+ *     what drops a read that resolved after the session moved, after the scope
+ *     changed, or after the same source was retried.
+ *   · A 401 IS ONLY A SESSION END WHEN IT COMES FROM THE CURRENT REQUEST. A stale
+ *     401 — the answer to a read that has already been replaced — is discarded
+ *     like any other stale answer; otherwise a dying request could sign a healthy
+ *     page out.
+ *   · DATA IS NOT SHOWN BEFORE THE SESSION IS PROVEN. Clients and projects may
+ *     arrive first (they are requested in parallel), but `rowsVisible` stays false
+ *     until `/api/auth/me` answers, and a session failure keeps it false.
  */
 
 import type { DirectoryErrorKind } from "./api";
@@ -30,9 +35,13 @@ export type Resource<T> = {
   error: DirectoryErrorKind | null;
 };
 
+/** One counter per source: a retry only moves its own. */
+export type Stamps = Record<ResourceName, number>;
+
 export type DirectoryState = {
-  /** Identity of the read in flight; anything older is discarded. */
-  generation: number;
+  /** Bumped when the session identity or its scope changes: voids every read. */
+  epoch: number;
+  stamps: Stamps;
   unauthorized: boolean;
   session: Resource<SessionDto>;
   clients: Resource<ClientDto[]>;
@@ -40,19 +49,21 @@ export type DirectoryState = {
 };
 
 export type DirectoryAction =
-  | { type: "begin"; generation: number; targets: ResourceName[] }
-  | { type: "settle"; generation: number; target: "session"; data: SessionDto }
-  | { type: "settle"; generation: number; target: "clients"; data: ClientDto[] }
-  | { type: "settle"; generation: number; target: "projects"; data: ProjectDto[] }
-  | { type: "fail"; generation: number; target: ResourceName; kind: DirectoryErrorKind }
-  | { type: "unauthorized"; generation: number };
+  | { type: "begin"; epoch: number; target: ResourceName; stamp: number }
+  | { type: "settle"; epoch: number; target: "session"; stamp: number; data: SessionDto }
+  | { type: "settle"; epoch: number; target: "clients"; stamp: number; data: ClientDto[] }
+  | { type: "settle"; epoch: number; target: "projects"; stamp: number; data: ProjectDto[] }
+  | { type: "fail"; epoch: number; target: ResourceName; stamp: number; kind: DirectoryErrorKind }
+  | { type: "unauthorized"; epoch: number }
+  | { type: "invalidate"; epoch: number };
 
 const pending = <T>(): Resource<T> => ({ state: "loading", data: null, error: null });
 const cleared = <T>(): Resource<T> => ({ state: "loading", data: null, error: null });
 
 export function initialDirectoryState(): DirectoryState {
   return {
-    generation: 0,
+    epoch: 0,
+    stamps: { session: 0, clients: 0, projects: 0 },
     unauthorized: false,
     session: pending<SessionDto>(),
     clients: pending<ClientDto[]>(),
@@ -60,17 +71,51 @@ export function initialDirectoryState(): DirectoryState {
   };
 }
 
+/** The identity of a session, for deciding whether the scope moved under us. */
+export function scopeKey(session: SessionDto): string {
+  const companies = session.scope
+    ? session.scope.mode === "all"
+      ? ["*"]
+      : session.scope.businesses.map((business) => business.id)
+    : [session.businessId];
+  return [session.userId, session.role, ...companies.slice().sort()].join("|");
+}
+
+/** Rows may only be read once the session has answered `ready`. */
+export function rowsVisible(state: DirectoryState): boolean {
+  return !state.unauthorized && state.session.state === "ready";
+}
+
+function bumpAll(stamps: Stamps): Stamps {
+  return {
+    session: stamps.session + 1,
+    clients: stamps.clients + 1,
+    projects: stamps.projects + 1,
+  };
+}
+
+function isCurrent(
+  state: DirectoryState,
+  action: { epoch: number; target: ResourceName; stamp: number },
+): boolean {
+  return action.epoch === state.epoch && action.stamp === state.stamps[action.target];
+}
+
 export function directoryReducer(state: DirectoryState, action: DirectoryAction): DirectoryState {
   switch (action.type) {
     case "begin": {
-      const next: DirectoryState = { ...state, generation: action.generation, unauthorized: false };
-      for (const target of action.targets) next[target] = pending() as never;
-      return next;
+      /* A read started under an older epoch must not resurrect itself. */
+      if (action.epoch !== state.epoch) return state;
+      if (state.unauthorized) return state;
+      return {
+        ...state,
+        stamps: { ...state.stamps, [action.target]: action.stamp },
+        [action.target]: pending(),
+      } as DirectoryState;
     }
 
     case "settle": {
-      /* A superseded read is discarded before anything is read from it. */
-      if (action.generation !== state.generation) return state;
+      if (!isCurrent(state, action)) return state;
       if (state.unauthorized) return state;
 
       if (action.target === "session") {
@@ -97,15 +142,14 @@ export function directoryReducer(state: DirectoryState, action: DirectoryAction)
     }
 
     case "fail": {
-      if (action.generation !== state.generation) return state;
+      if (!isCurrent(state, action)) return state;
       if (state.unauthorized) return state;
 
       if (action.kind === "unauthorized") {
-        /* Session gone: every row goes with it, and nothing that is still in
-           flight may refill them. The provider bumps the generation when it
-           sends this, so the guard above does the rest. */
         return {
           ...state,
+          epoch: action.epoch + 1,
+          stamps: bumpAll(state.stamps),
           unauthorized: true,
           session: { state: "error", data: null, error: action.kind },
           clients: cleared<ClientDto[]>(),
@@ -114,22 +158,33 @@ export function directoryReducer(state: DirectoryState, action: DirectoryAction)
       }
 
       /* One source failed; the others keep exactly what they already had. */
-      const current = state[action.target];
-      const next: DirectoryState = {
+      return {
         ...state,
-        [action.target]: { ...current, state: "error", error: action.kind },
+        [action.target]: { ...state[action.target], state: "error", error: action.kind },
       };
-      return next;
     }
 
     case "unauthorized":
       return {
         ...state,
-        generation: action.generation,
+        epoch: action.epoch,
+        stamps: bumpAll(state.stamps),
         unauthorized: true,
         session: { state: "error", data: null, error: "unauthorized" },
         clients: cleared<ClientDto[]>(),
         projects: cleared<ProjectDto[]>(),
+      };
+
+    case "invalidate":
+      /* The session's identity or scope changed: the session itself stays (it is
+         the proof), every company row goes, and in-flight answers become stale. */
+      return {
+        ...state,
+        epoch: action.epoch,
+        stamps: bumpAll(state.stamps),
+        unauthorized: false,
+        clients: pending<ClientDto[]>(),
+        projects: pending<ProjectDto[]>(),
       };
 
     default:

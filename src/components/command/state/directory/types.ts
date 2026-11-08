@@ -46,8 +46,10 @@ export type ClientDto = {
   businessId?: string;
   name: string;
   phone: string;
-  /** The stored tier; the route ALSO returns a computed tier of the same name. */
+  /** The STORED tier — the value an operator set or the write path persisted. */
   tier?: string;
+  /** A classification the read route derives; it never replaces the stored one. */
+  computedTier?: string;
   createdAt?: string;
   projectRecords?: ClientProjectDto[];
   /** Computed by the route from the client's own projects. */
@@ -101,6 +103,15 @@ export type SessionDto = {
   role: "SUPER_ADMIN" | "ADMIN" | "EMPLOYEE";
   businessId: string;
   business?: { id: string; name: string; slug: string } | null;
+  /**
+   * The companies the read routes actually resolved for this session — sent by
+   * `/api/auth/me` from the same helper the routes use, so the scope line prints
+   * the set the rows came from rather than a second opinion.
+   */
+  scope?: {
+    mode: "all" | "companies";
+    businesses: Array<{ id: string; name: string; slug: string }>;
+  };
   canAccessNexup: boolean;
   canAccessRebound: boolean;
   canAccessAbomazen: boolean;

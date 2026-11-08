@@ -2,9 +2,11 @@
  * THE FIRST REAL BINDING — mapping and read-state rules, without a browser.
  *
  * What these tests are for: the two bound surfaces must never show a value the
- * database does not store, and a failed read must never be papered over with a
- * demo row. Both of those are properties of the pure mapping and of the read
- * reducer, so they can be asserted here rather than inferred from a screenshot.
+ * database does not store, must never show a row before the session and its scope
+ * are proven, and must never let a superseded request — a retried one, or a dying
+ * one answering 401 — decide anything. All of those are properties of the pure
+ * mapping and of the read reducer, so they are asserted here rather than inferred
+ * from a screenshot.
  */
 
 import { describe, expect, it } from "vitest";
@@ -22,9 +24,16 @@ import {
 import {
   directoryReducer,
   initialDirectoryState,
+  rowsVisible,
+  scopeKey,
   type DirectoryState,
+  type ResourceName,
 } from "@/components/command/state/directory/reducer";
-import type { ClientDto, ProjectDto } from "@/components/command/state/directory/types";
+import type {
+  ClientDto,
+  ProjectDto,
+  SessionDto,
+} from "@/components/command/state/directory/types";
 
 const clientDto: ClientDto = {
   id: "c1",
@@ -74,6 +83,18 @@ const projectDto: ProjectDto = {
   notes: null,
 };
 
+const sessionDto: SessionDto = {
+  userId: "u1",
+  name: "سالم",
+  role: "ADMIN",
+  businessId: "b1",
+  business: { id: "b1", name: "NEXUP", slug: "nexup" },
+  scope: { mode: "companies", businesses: [{ id: "b1", name: "NEXUP", slug: "nexup" }] },
+  canAccessNexup: true,
+  canAccessRebound: false,
+  canAccessAbomazen: false,
+};
+
 describe("money and vocabulary", () => {
   it("parses Decimal strings and refuses to produce NaN", () => {
     expect(amount("1000.00")).toBe(1000);
@@ -112,6 +133,13 @@ describe("client mapping", () => {
     for (const invented of ["owner", "industry", "since", "healthScore", "openItems", "missionIds", "status", "note"]) {
       expect(invented in view).toBe(false);
     }
+  });
+
+  it("shows the STORED tier even when the route also sends a derived one", () => {
+    const view = mapClient({ ...clientDto, tier: "VIP", computedTier: "NORMAL" });
+    expect(view.tier).toBe("VIP");
+    expect(directoryTotals([view]).byTier("VIP")).toBe(1);
+    expect(directoryTotals([view]).byTier("NORMAL")).toBe(0);
   });
 
   it("derives the totals from the embedded projects when the route omits them", () => {
@@ -156,18 +184,47 @@ describe("project mapping", () => {
   });
 });
 
-describe("read state", () => {
-  const begin = (generation: number): DirectoryState =>
-    directoryReducer(initialDirectoryState(), {
-      type: "begin",
-      generation,
-      targets: ["session", "clients", "projects"],
-    });
+/* ── Read state: ordering of completions, not just their values ──────────── */
 
+const EPOCH = 0;
+
+const begin = (state: DirectoryState, target: ResourceName, stamp: number, epoch = EPOCH) =>
+  directoryReducer(state, { type: "begin", epoch, target, stamp });
+
+const allStarted = (epoch = EPOCH): DirectoryState => {
+  let state = initialDirectoryState();
+  state = begin(state, "session", 1, epoch);
+  state = begin(state, "clients", 1, epoch);
+  state = begin(state, "projects", 1, epoch);
+  return state;
+};
+
+const settleSession = (state: DirectoryState, stamp: number, data: SessionDto, epoch = EPOCH) =>
+  directoryReducer(state, { type: "settle", epoch, target: "session", stamp, data });
+
+const settleClients = (state: DirectoryState, stamp: number, data: ClientDto[], epoch = EPOCH) =>
+  directoryReducer(state, { type: "settle", epoch, target: "clients", stamp, data });
+
+const settleProjects = (state: DirectoryState, stamp: number, data: ProjectDto[], epoch = EPOCH) =>
+  directoryReducer(state, { type: "settle", epoch, target: "projects", stamp, data });
+
+const fail = (
+  state: DirectoryState,
+  target: ResourceName,
+  stamp: number,
+  kind: Parameters<typeof directoryReducer>[1] extends infer A
+    ? A extends { type: "fail"; kind: infer K }
+      ? K
+      : never
+    : never,
+  epoch = EPOCH,
+) => directoryReducer(state, { type: "fail", epoch, target, stamp, kind });
+
+describe("read state — one source per request", () => {
   it("lets one source fail without touching the other", () => {
-    let state = begin(1);
-    state = directoryReducer(state, { type: "settle", generation: 1, target: "clients", data: [clientDto] });
-    state = directoryReducer(state, { type: "fail", generation: 1, target: "projects", kind: "server" });
+    let state = allStarted();
+    state = settleClients(state, 1, [clientDto]);
+    state = fail(state, "projects", 1, "server");
 
     expect(state.clients.state).toBe("ready");
     expect(state.clients.data).toHaveLength(1);
@@ -176,36 +233,159 @@ describe("read state", () => {
     expect(state.unauthorized).toBe(false);
   });
 
-  it("drops a response that belongs to a superseded read", () => {
-    let state = begin(1);
-    state = directoryReducer(state, { type: "settle", generation: 1, target: "clients", data: [clientDto] });
-    state = directoryReducer(state, { type: "begin", generation: 2, targets: ["clients", "projects"] });
-    state = directoryReducer(state, { type: "settle", generation: 1, target: "clients", data: [] });
+  it("retries ONE source without voiding the requests still in flight", () => {
+    let state = allStarted();
+    /* the projects and session requests are still loading when clients retries */
+    state = begin(state, "clients", 2);
 
-    expect(state.clients.state).toBe("loading");
-    expect(state.clients.data).toBeNull();
+    const settledProjects = settleProjects(state, 1, [projectDto]);
+    expect(settledProjects.projects.state).toBe("ready");
+    expect(settledProjects.projects.data).toHaveLength(1);
+
+    const settledSession = settleSession(settledProjects, 1, sessionDto);
+    expect(settledSession.session.state).toBe("ready");
+    expect(rowsVisible(settledSession)).toBe(true);
+
+    /* the answer to the REPLACED clients request must not land */
+    const staleClients = settleClients(settledSession, 1, []);
+    expect(staleClients.clients.state).toBe("loading");
+    expect(staleClients.clients.data).toBeNull();
+
+    const freshClients = settleClients(staleClients, 2, [clientDto]);
+    expect(freshClients.clients.state).toBe("ready");
+    expect(freshClients.clients.data).toHaveLength(1);
   });
 
-  it("clears every row when the session ends, and ignores what was already in flight", () => {
-    let state = begin(1);
-    state = directoryReducer(state, { type: "settle", generation: 1, target: "clients", data: [clientDto] });
-    state = directoryReducer(state, { type: "settle", generation: 1, target: "projects", data: [projectDto] });
-    state = directoryReducer(state, { type: "fail", generation: 1, target: "clients", kind: "unauthorized" });
+  it("ignores a 401 from a request that was already replaced", () => {
+    let state = allStarted();
+    state = begin(state, "clients", 2);
+    state = settleClients(state, 2, [clientDto]);
+    state = settleSession(state, 1, sessionDto);
 
-    expect(state.unauthorized).toBe(true);
-    expect(state.clients.data).toBeNull();
-    expect(state.projects.data).toBeNull();
+    const stale = fail(state, "clients", 1, "unauthorized");
 
-    const late = directoryReducer(state, { type: "settle", generation: 1, target: "projects", data: [projectDto] });
-    expect(late.projects.data).toBeNull();
+    expect(stale.unauthorized).toBe(false);
+    expect(stale.clients.state).toBe("ready");
+    expect(stale.clients.data).toHaveLength(1);
+    expect(rowsVisible(stale)).toBe(true);
+  });
+
+  it("ends the session when the CURRENT request answers 401, and voids what was in flight", () => {
+    let state = allStarted();
+    state = settleClients(state, 1, [clientDto]);
+    state = settleProjects(state, 1, [projectDto]);
+    state = settleSession(state, 1, sessionDto);
+
+    const ended = fail(state, "projects", 1, "unauthorized");
+
+    expect(ended.unauthorized).toBe(true);
+    expect(ended.clients.data).toBeNull();
+    expect(ended.projects.data).toBeNull();
+    expect(ended.session.data).toBeNull();
+    expect(rowsVisible(ended)).toBe(false);
+
+    /* anything that was still in flight is stale now, even at the same stamp */
+    const late = settleClients(ended, 1, [clientDto]);
+    expect(late.clients.data).toBeNull();
     expect(late.unauthorized).toBe(true);
   });
 
-  it("reports an empty read as empty, not as a failure", () => {
-    let state = begin(1);
-    state = directoryReducer(state, { type: "settle", generation: 1, target: "clients", data: [] });
-    expect(state.clients.state).toBe("empty");
-    expect(state.clients.error).toBeNull();
-    expect(state.clients.data).toEqual([]);
+  it("only moves the epoch through an invalidation, then drops the old answers", () => {
+    let state = allStarted(0);
+    state = settleClients(state, 1, [clientDto]);
+
+    /* a begin for some other epoch is not how the page identity changes */
+    const ignored = begin(state, "clients", 1, 1);
+    expect(ignored.epoch).toBe(0);
+    expect(ignored.clients.state).toBe("ready");
+
+    const invalidated = directoryReducer(ignored, { type: "invalidate", epoch: 1 });
+    const restarted = begin(invalidated, "clients", 2, 1);
+    const stale = settleClients(restarted, 1, [], 0);
+
+    expect(stale.epoch).toBe(1);
+    expect(stale.clients.state).toBe("loading");
+    expect(stale.clients.data).toBeNull();
+
+    const fresh = settleClients(stale, 2, [clientDto], 1);
+    expect(fresh.clients.data).toHaveLength(1);
+  });
+});
+
+describe("read state — nothing before the session is proven", () => {
+  it("hides rows that arrived before the session answered", () => {
+    let state = allStarted();
+    state = settleClients(state, 1, [clientDto]);
+    state = settleProjects(state, 1, [projectDto]);
+
+    expect(state.clients.state).toBe("ready");
+    expect(rowsVisible(state)).toBe(false);
+
+    const proven = settleSession(state, 1, sessionDto);
+    expect(rowsVisible(proven)).toBe(true);
+    expect(state.clients.data).toHaveLength(1);
+  });
+
+  it("keeps rows hidden when the session read fails", () => {
+    let state = allStarted();
+    state = settleClients(state, 1, [clientDto]);
+    state = fail(state, "session", 1, "forbidden");
+
+    expect(state.session.state).toBe("error");
+    expect(rowsVisible(state)).toBe(false);
+  });
+
+  it("keeps rows hidden when the session ends", () => {
+    let state = allStarted();
+    state = settleSession(state, 1, sessionDto);
+    state = fail(state, "clients", 1, "unauthorized");
+    expect(rowsVisible(state)).toBe(false);
+  });
+});
+
+describe("read state — the scope moved", () => {
+  const otherScope: SessionDto = {
+    ...sessionDto,
+    userId: "u2",
+    businessId: "b2",
+    business: { id: "b2", name: "ABOMAZEN", slug: "abomazen" },
+    scope: { mode: "companies", businesses: [{ id: "b2", name: "ABOMAZEN", slug: "abomazen" }] },
+    canAccessNexup: false,
+    canAccessAbomazen: true,
+  };
+
+  it("changes the identity key when the session's companies change", () => {
+    expect(scopeKey(sessionDto)).not.toBe(scopeKey(otherScope));
+  });
+
+  it("voids every row and every in-flight read on invalidation", () => {
+    let state = allStarted();
+    state = settleSession(state, 1, sessionDto);
+    state = settleClients(state, 1, [clientDto]);
+    state = settleProjects(state, 1, [projectDto]);
+
+    const invalidated = directoryReducer(state, { type: "invalidate", epoch: 1 });
+
+    expect(invalidated.epoch).toBe(1);
+    expect(invalidated.clients.state).toBe("loading");
+    expect(invalidated.projects.state).toBe("loading");
+    /* the freshly settled session is the proof for the new scope, so it stays;
+       the company rows it vouched for do not */
+    expect(invalidated.session.state).toBe("ready");
+    expect(rowsVisible(invalidated)).toBe(true);
+    expect(invalidated.clients.data).toBeNull();
+
+    /* the old reads answer after the change: dropped */
+    expect(settleClients(invalidated, 1, [clientDto], 1).clients.data).toBeNull();
+    expect(settleProjects(invalidated, 1, [projectDto], 0).projects.data).toBeNull();
+  });
+});
+
+describe("read state — initial shape", () => {
+  it("starts with an identity stamp per source and no session", () => {
+    const state = initialDirectoryState();
+    expect(state.stamps).toEqual({ session: 0, clients: 0, projects: 0 });
+    expect(state.epoch).toBe(0);
+    expect(rowsVisible(state)).toBe(false);
   });
 });

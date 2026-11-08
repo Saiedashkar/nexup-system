@@ -13,7 +13,7 @@
     "execLayer": 32,
     "authored": 11,
     "overlapBetweenLayers": 0,
-    "totalPathsWritten": 231,
+    "totalPathsWritten": 234,
     "productLayer": 85,
     "productTrackedModified": 39,
     "productUntracked": 46,
@@ -26,8 +26,8 @@
     "missionsGlassLayer": 1,
     "marketingLayer": 10,
     "marketingNote": "Marketing room layer: the delivered tree copied verbatim from nexup-command-product per docs/COMMAND_MARKETING_ROOM.md (route + stylesheet + six modules + its test + that doc). No shared file was edited for it; enabling its door is a sales-layer row. campaign-notice.ts (the outcome-to-notice mapping extracted out of marketing-room.tsx so the Arabic refusal can be tested without React) was added on 2026-11-07 and is recorded here; the room's copy, model, panel and test rows were re-hashed the same day after the approval-line, request-guard, breadcrumb and notice repairs.",
-    "directoryLayer": 9,
-    "directoryNote": "Binding layer: 5 read-layer modules, 1 shared chrome module, 1 test and the two documents of this round. Additive: every row here is a new path, none of them was in another layer."
+    "directoryLayer": 12,
+    "directoryNote": "Binding layer: the read session/api/mapping/reducer/store modules, the pure scope rule and its DB resolution, the shared chrome, the two tests and the two documents of this round. Additive: every row here is a new path, none of them was in another layer."
   },
   "digests": {
     "core73_excludingReport": {
@@ -48,11 +48,11 @@
     },
     "authored11": {
       "count": 11,
-      "value": "e570f66bd85d79ed33fa1c86dc977e0cfc6eb4627b5b3b45afcdf00511348873"
+      "value": "b545e47e7aa593f537c0bba5a812c719bc4f50713857b7cd2f0b4d5ee232b291"
     },
     "product85": {
       "count": 85,
-      "value": "640de9f1678d40742d42a7dfa31e2d4953a1e33bae8c18584fca7fd18d9f1104"
+      "value": "4f1f998989cb0df45ace307d6653398f740eca44a77b09959f4bed5706fa7e98"
     },
     "execLayer32AsCopied": {
       "count": 32,
@@ -76,8 +76,8 @@
       "value": "2bb0b6e53149c9ff3910cf2bdee191c898895f1d7a4d950160f81ffa0d9f23bb"
     },
     "directoryLayer": {
-      "count": 9,
-      "value": "f1d76ecdd68b9bb125ff7491083c3e9da633ab5672719de1760f0780fa2dd8de"
+      "count": 12,
+      "value": "51af7daf359a79439e2fb78af90a72931355fc4447efdd921985b36ab95f8091"
     },
     "directoryNote": "The first real data binding: read layer (api/mapping/reducer/store) + shared chrome + test. The product rows for /command/clients, /command/projects, i18n/messages.ts and lab/kit.tsx were re-hashed on 2026-11-08 because those four files are now bound to the routes."
   },
@@ -827,7 +827,7 @@
       },
       {
         "path": "src/middleware.ts",
-        "sha256": "f05e12c8907a701711e0b98b03199e9ee50b750e9abd5991cc38a71ecab99b10",
+        "sha256": "9cd30c7af1dfdea51c02676698f68e3848a3b362940c50a7b334ac5e6b71e2e5",
         "layer": "authored"
       },
       {
@@ -884,7 +884,7 @@
       },
       {
         "path": "src/app/command/clients/page.tsx",
-        "sha256": "92139f38201c6d1adc5ecbb23d0c36c42f4696dab20e7c2f2ad73d76d5c98a31",
+        "sha256": "8f3611b1adcebd0f1579b8e38ca1885e6d4b77567fec7d7e42d661a4fc524299",
         "git": "copied-from-product",
         "layer": "product"
       },
@@ -986,7 +986,7 @@
       },
       {
         "path": "src/app/command/projects/page.tsx",
-        "sha256": "f5e9faba473097fa0ca7bb46b530ecc1858b62c12533bed6b4d015f49b9dcec5",
+        "sha256": "f7c69503d1ccc95f967b220aab2e59640d0614de3abb2f8b0cc5ee0530f8f6a2",
         "git": "copied-from-product",
         "layer": "product"
       },
@@ -1088,7 +1088,7 @@
       },
       {
         "path": "src/components/command/i18n/messages.ts",
-        "sha256": "8b6afcf0098297f5bcd95463d697a823e02337934208781a71fe78af91acf086",
+        "sha256": "b47f9efc2ea4bd008cf1768e8f22658027b7bdf987bc564c77e585b624cf8b54",
         "git": "copied-from-product",
         "layer": "product"
       },
@@ -1500,7 +1500,7 @@
     "directory": [
       {
         "path": "docs/COMMAND_DIRECTORY_BINDING.md",
-        "sha256": "6c91bc7e4a563ee10dfb8c2ca6d40bd5eab73c4850cc849cba0dd646e35dcac5"
+        "sha256": "cbfa57014e5caed83fb0964fa9d6dafd83d1f0d4f3aa9a5e7313f38af7f63566"
       },
       {
         "path": "docs/DEAL_HANDOFF_SPEC.md",
@@ -1508,7 +1508,7 @@
       },
       {
         "path": "src/components/command/lab/directory.tsx",
-        "sha256": "46d90c4052b6f60649188f04a09dd3bff73ec2bc1a169b4f406571b7a8839dc9"
+        "sha256": "5ca9d6ac45d2d5ae5ff8bd10cd281bb7e9ac0af38a7be29e22f2682761c9fd63"
       },
       {
         "path": "src/components/command/state/directory/api.ts",
@@ -1516,7 +1516,7 @@
       },
       {
         "path": "src/components/command/state/directory/directory-store.tsx",
-        "sha256": "3045f965cf588815502154e2d85da9fbd3a7b6cabb4879303fb1e31449691bf8"
+        "sha256": "82185f8dfad6b845f34181287d25ae9b5e8aa6428907032beb0a26d0d675a070"
       },
       {
         "path": "src/components/command/state/directory/mapping.ts",
@@ -1524,15 +1524,27 @@
       },
       {
         "path": "src/components/command/state/directory/reducer.ts",
-        "sha256": "1e0a520b79b6f3c01f6ca9683cf6121f60ed39a9e6fe5abba63f73daf7904885"
+        "sha256": "7f1a6567d07007997c2b0a6839cd3e6d805fd47224e32080255252abd77d9069"
       },
       {
         "path": "src/components/command/state/directory/types.ts",
-        "sha256": "cece8c339a5635c915ccf8be19dc25152e9653d453e6556a9e182fb8ad789372"
+        "sha256": "ff38c59f7624970c6e626917725f7a7e2bdab11eaa39c2645a305a9f08ce3c64"
+      },
+      {
+        "path": "src/lib/read-scope-db.ts",
+        "sha256": "1256d99f1e859827ddd70c88a8ee8b0b83c132c53d0549287b535a62b8bd71ba"
+      },
+      {
+        "path": "src/lib/read-scope.ts",
+        "sha256": "7348e6f8ddaada73e0467d552abe018b3f172f4b94e6e4284be9a5cb1fbeee3c"
       },
       {
         "path": "tests/command-directory-binding.test.ts",
-        "sha256": "41031dace6900693f2ea0857bd9eddad6f1feab9b1ce3c34ae1756791c286d71"
+        "sha256": "873f0a653c3c909209c5c2cc7f7b3650952213b5a63fe27f2cc869672e55099f"
+      },
+      {
+        "path": "tests/directory-read-scope.test.ts",
+        "sha256": "4e1dcab413fbdaa87b177a2716ca573e408d0a93276024ededc0d40a40c9168e"
       }
     ]
   },

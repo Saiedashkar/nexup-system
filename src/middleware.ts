@@ -13,9 +13,18 @@ const publicPaths = new Set(["/login", "/api/auth/login", "/api/auth/logout"]);
 // `/api/exec/turn/<anything>`, keeps the blanket guard below.
 const routeManagedAuthPaths = new Set(["/api/exec/turn"]);
 
-// Business-specific route prefixes
+// Business-specific route prefixes.
+//
+// `/api/projects` and `/api/clients` are deliberately NOT here. They are the two
+// SHARED reads: each resolves the session's companies itself, with the same rule
+// (`lib/read-scope.ts`), so the gate in front of them could only answer a
+// different question than the route did — that is how one session ended up able
+// to read a company's clients and not its projects. Every company keeps its own
+// typed routes (`/api/nexup`, `/api/rebound`, `/api/abomazen`), which remain
+// gated below, and the project rows these two return were already readable
+// through `/api/clients` for exactly the same companies.
 const businessRoutes: Record<string, string[]> = {
-  nexup: ["/office/nexup", "/api/nexup", "/api/pool", "/api/withdrawals", "/api/expenses", "/api/services", "/api/projects", "/api/client-payments"],
+  nexup: ["/office/nexup", "/api/nexup", "/api/pool", "/api/withdrawals", "/api/expenses", "/api/services", "/api/client-payments"],
   rebound: ["/office/rebound", "/api/rebound", "/api/expenses"],
   abomazen: ["/office/abomazen", "/api/abomazen"],
 };

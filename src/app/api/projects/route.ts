@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { findOrReviveClient } from "@/lib/soft-delete";
 import { getCurrentSession } from "@/lib/auth";
+import { resolveWriteScope } from "@/lib/read-scope";
+import { businessExists, resolveReadScope } from "@/lib/read-scope-db";
 
 export const runtime = "nodejs";
 
@@ -17,11 +19,14 @@ export async function GET(request: NextRequest) {
     const sortBy = searchParams.get("sortBy") || "date";
     const sortDir = searchParams.get("sortDir") || "desc";
 
-    // Filter by businessId (SUPER_ADMIN sees all, others see their business)
-    const where: Record<string, unknown> = {};
-    if (session.role !== "SUPER_ADMIN") {
-      where.businessId = session.businessId;
+    /* ONE SCOPE RULE — the same call `/api/clients` makes, so a session's clients
+       and projects can no longer come from two different sets of companies. */
+    const scope = await resolveReadScope(session);
+    if (scope.businessIds.length === 0) {
+      return NextResponse.json([]);
     }
+
+    const where: Record<string, unknown> = { businessId: { in: scope.businessIds } };
 
     if (search) {
       where.OR = [
@@ -109,7 +114,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Please fill all required fields" }, { status: 400 });
     }
 
-    const businessId = session.businessId;
+    /* A WRITE NAMES ITS COMPANY. A scoped admin writes its own; a session that
+       spans companies has to name one, and the literal `"all"` is refused rather
+       than written into rows that no company owns. */
+    const writeScope = resolveWriteScope(session, body.businessId);
+    if (!writeScope.ok) {
+      return NextResponse.json({ error: writeScope.error }, { status: writeScope.status });
+    }
+    if (!(await businessExists(writeScope.businessId))) {
+      return NextResponse.json({ error: "Unknown company" }, { status: 404 });
+    }
+    const businessId = writeScope.businessId;
 
     // Find or create client (using compound unique for multi-business).
     // A previously soft-deleted client with the same phone is revived instead of

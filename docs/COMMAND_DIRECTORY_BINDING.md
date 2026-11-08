@@ -33,8 +33,14 @@ back to sample rows.
 | Source | Path | What it returns | Scoping |
 |---|---|---|---|
 | Session | `GET /api/auth/me` | `user{userId,name,role,businessId,business{id,name,slug}}` | the cookie's session only |
-| Clients | `GET /api/clients` | clients **with** their `projectRecords` (id, name, price, deposit, both statuses, date) and the computed `projectCount / totalPaid / totalRemaining / isRepeatClient / tier` | `businessId ∈ getAccessibleBusinesses(session)` |
-| Projects | `GET /api/projects` | project records with `client`, `designer`, `services`, plus per-client `projectCount / totalPaid / isRepeatClient` | `businessId = session.businessId` unless `SUPER_ADMIN` |
+| Clients | `GET /api/clients` | clients **with** their `projectRecords` (id, name, price, deposit, both statuses, date) and the computed `projectCount / totalPaid / totalRemaining / isRepeatClient / computedTier` | `businessId ∈ resolveReadScope(session)` |
+| Projects | `GET /api/projects` | project records with `client`, `designer`, `services`, plus per-client `projectCount / totalPaid / isRepeatClient` | **the same** `resolveReadScope(session)` set |
+
+Both reads resolve their companies through one helper (`src/lib/read-scope.ts` +
+`read-scope-db.ts`), and `/api/auth/me` publishes that same resolved set as `scope`, so a
+surface can print the scope its rows actually came from. (Round 1 scoped clients by the
+permission flags and projects by `session.businessId`; a session could then read a company's
+clients and not its projects. See section 9.)
 
 Both reads are `same-origin`, `no-store`, and carry no parameters — the pages never ask for a company
 the session does not carry.
@@ -99,10 +105,10 @@ Read before use, then repaired where isolation was broken **without widening any
 | `PATCH` / `DELETE /api/projects/[id]` — `businessId` check against the session | a caller could address another company's record by id |
 | `GET /api/auth/me` — returns `business {id,name,slug}` | the scope line needs the session's real company; no new data beyond the session's own business |
 
-Observed behaviour, unchanged and correct: `/api/clients` is scoped by the business **flags**
-(`canAccessNexup/Rebound/Abomazen`), `/api/projects` by `businessId`; the middleware answers
-`403 Access denied` for a business route whose flag is off; `SUPER_ADMIN` bypasses both and sees all
-companies (`businessId: "all"`).
+Observed behaviour: reads resolve through the SAME helper for clients and projects — a
+session reads every company its flags grant, a super admin reads all of them, and a session
+with no flags reads nothing from either route. Writes are a separate decision (section 9):
+they need permission and a company named explicitly, never a read scope.
 
 The bound pages print `Scope: <session company>` and state in one sentence that the header's company
 control is a prototype label which does **not** filter these reads. The control itself is untouched on
@@ -182,9 +188,9 @@ real `superadmin@nexup` row was not touched (its password was only used to sign 
 
 | id | Gap | Status |
 |---|---|---|
-| **G1** | `GET /api/clients` **recomputes** `tier` (from total deposit and repeat count) and its value shadows `Client.tier`, so a stored `VIP` row can render as `وفيّ`. The surface shows what the route answers. | documented, not changed (route behaviour) |
+| **G1** | ~~`GET /api/clients` recomputes `tier` and shadows the stored column~~ | **fixed** (section 9): the derived value is now `computedTier`; the stored `tier` travels untouched and is what the surface shows |
 | **G2** | `GET /api/projects?sortBy=<unknown>` sets `orderBy[sortBy]` and Prisma rejects it → `500`. The binding sends no parameters, so these two pages cannot hit it. | documented, not changed |
-| **G3** | `POST /api/projects` uses `session.businessId` as `businessId`, which for a super admin is the string `"all"`. Write path, out of this round's scope; it matters for the hand-off spec below. | documented |
+| **G3** | ~~`POST /api/projects` uses `session.businessId`, i.e. `"all"` for a super admin~~ | **fixed** (section 9): a write resolves an explicit company and refuses `"all"` |
 | **G4** | `GET /api/projects` runs two extra queries per project (count + aggregate) — N+1 on a large table. | measured, not optimised |
 | **G5** | The projects page subtitle still reads "grouped work per client … when it last moved", while the list is flat and shows no last-activity column. The sentence lives in shared area copy (`lab/areas.ts`), used by the home page too, so it was left alone. | documented |
 | **G6** | A browser-level **network failure / single-source failure** could not be produced in this toolchain (no request interception, and stopping the dev server would take every surface down). The rule is covered by `tests/command-directory-binding.test.ts` (`one source fails without touching the other`, stale generation dropped). | not exercised in the browser |
@@ -207,3 +213,116 @@ node scripts/verify-exec-integration-manifest.mjs
 # signed-out readiness (401 is the healthy answer)
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3211/api/clients
 ```
+
+---
+
+## 9. Round 2 — the five corrections (from `8dde2c4`)
+
+Round 1 left five defects in the binding. They are fixed here on the same branch: same design, same
+files, no migration, no dependency, and no step taken towards the deal hand-off.
+
+### 9.1 One request identity per source, and its own cancellation
+
+`load()` used to bump ONE generation for every source, so "read the clients again" invalidated the
+projects and session requests that were still in flight. Each source now owns:
+
+* its own `AbortController` (a retry aborts only its own request);
+* its own `stamp` in `state.stamps` — the reducer applies an outcome only when
+  `stamp === stamps[target]` and `epoch === state.epoch`.
+
+A change of **session identity or scope** still voids everything: `scopeKey()` (user + role +
+resolved companies) is compared on every session settle, and a change bumps the epoch, aborts every
+request, bumps every stamp, dispatches `invalidate` and starts the company reads again under the new
+epoch. The projection that models this is `directoryReducer`, tested without a browser.
+
+### 9.2 A superseded answer decides nothing — including a 401
+
+The settle/fail path re-checks the request's stamp and epoch before it is allowed to dispatch, and the
+provider checks the same refs before it does anything with a side effect. So:
+
+* an answer (or an error) from a request that a retry replaced is dropped silently;
+* a **stale 401** is dropped like any other stale answer — it can no longer sign a healthy page out;
+* a 401 from the **current** request still clears every row, voids the in-flight reads and raises the
+  session-ended state, exactly as round 1 required.
+
+### 9.3 One scope, actually and as declared
+
+Round 1 resolved the two reads differently (clients by the permission flags, projects by
+`session.businessId`), so a session could read a company's clients and not its projects. Now:
+
+| | rule |
+|---|---|
+| read | `readScopeSlugs()` → `resolveReadScope()` — every company the session's flags grant; all companies for a super admin; nothing for a session with no flags. **Both routes call it**, and `/api/auth/me` publishes the resolved set as `scope`, so the printed scope is the one the rows came from |
+| write | `resolveWriteScope()` — an employee may not write; a scoped session writes only its own company; a session that spans companies must name one, and the literal `"all"` is refused |
+
+Consequences that were deliberate, not incidental:
+
+* **The client cleanup stopped inheriting the read scope.** `DELETE /api/clients` now requires an
+  admin role AND a named company (`?businessId=` for a session that spans companies; its own for a
+  scoped one) that must also exist as a row. A read scope no longer authorises a delete.
+* **`POST /api/projects` no longer writes `businessId: "all"`.** A super admin has to name the
+  company; a scoped admin names its own; a foreign company is `403`.
+* **The middleware no longer gates `/api/projects`.** It was the last place answering a different
+  question than the route (a company-flag portal in front of a shared, session-scoped read). Every
+  company keeps its own typed routes (`/api/nexup`, `/api/rebound`, `/api/abomazen`) behind their
+gates, and the project rows this endpoint returns were already readable through `/api/clients` for
+  exactly the same companies — so the change aligns the two reads instead of widening what a session
+  can see. Legacy consumers were reviewed first: `/clients`, `/office/nexup/clients`,
+  `/office/{rebound,abomazen}/clients` and the office project pages keep their own routes and their
+  own suggestions.
+
+### 9.4 No row before the session and its scope are proven
+
+`rowsVisible(state)` is true only when `/api/auth/me` answered `ready` and the page is not signed out.
+The store exposes **no rows** while it is false, and both surfaces now render, in order: session-ended
+→ "proving the session and its scope" → a session failure with its own retry → then the source's own
+loading/empty/error. Company data that arrived first is therefore held and never displayed, and a
+failed session proof shows an error instead of rows.
+
+### 9.5 The stored tier is the tier
+
+`GET /api/clients` derives a classification from deposits and repeat count. It used to be returned as
+`tier`, shadowing `Client.tier`. The stored column now travels untouched and the derived value has its
+own name — `computedTier` — so no consumer can mistake one for the other. The clients surface shows the
+stored `tier` (the pill and the tier chips); `computedTier` is not rendered.
+
+### 9.6 Checks run for this round
+
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` | **exit 0** |
+| eslint on every touched file | **exit 0**, no errors, no warnings |
+| `npx vitest run tests/command-directory-binding.test.ts tests/directory-read-scope.test.ts` | **32/32 passed** (ordering: retry-while-others-loading, stale 401 after a newer success, data arriving before the session, invalidation on scope change, stored-vs-derived tier, read/write scope for two companies) |
+| `node scripts/verify-exec-integration-manifest.mjs` | **exit 0**, `problems: []` |
+| `/command`, `/command/clients`, `/command/projects`, `/api/auth/me` as a session | `200`, `200`, `200`, `200` |
+
+#### Two companies, live routes, isolated demo cluster
+
+Two companies (the demo cluster seeds only `nexup`; a second company row was created **for the check
+and deleted after it**), one client + one project in each, and six sessions minted from the
+development secret so no user row was touched:
+
+| session | `/api/clients` | `/api/projects` | declared scope |
+|---|---|---|---|
+| admin of A | 200, A only | 200, A only | `companies:[nexup]` |
+| admin of B | 200, B only | 200, B only | `companies:[abomazen]` |
+| admin of A+B | 200, A+B | 200, A+B | `companies:[abomazen,nexup]` |
+| super admin | 200, A+B | 200, A+B | `all` |
+| employee of A | 200, A only | 200, A only | `companies:[nexup]` |
+| no flags | 200, `[]` | 200, `[]` | `companies:[]` |
+
+And the write boundary, all `PASS`: employee cleanup `403`; super-admin cleanup without a company
+`400`; unknown company `404`; scoped cleanup `deleted: 0` while the other company's rows stayed;
+super-admin `POST /api/projects` without a company `400`; a write naming another company `403`; a cross-
+company `PATCH` `403`; and the row counts identical before and after every refused write. The cluster
+was then restored to its exact baseline (`nexup 0/0`, business count back to 1).
+
+### 9.7 Gaps after round 2
+
+| id | Gap | Status |
+|---|---|---|
+| **G1**, **G3** | derived tier shadowing `Client.tier`; `"all"` written as a business | **fixed** (9.5, 9.3) |
+| **G8** | `/api/projects` is no longer behind the nexup business prefix, so a session whose flags grant no company now reads `[]` instead of `403` (no data either way) | deliberate (9.3), documented |
+| **G9** | A super-admin `POST /api/projects` now needs an explicit `businessId` (`400` otherwise). Any caller that relied on the old `"all"` behaviour must send one | deliberate (9.3) |
+| **G6** | Ordering and single-source failure are proven in the reducer tests, not by intercepting requests in a browser | unchanged |
+| **G2**, **G4**, **G5**, **G7** | sort key `500`; N+1 on the projects list; stale projects subtitle; the narrow `.nl-head__meta` box | unchanged |

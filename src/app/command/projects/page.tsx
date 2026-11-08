@@ -65,9 +65,16 @@ export default function ProjectsPage() {
 
 function ProjectsSurface() {
   const { t } = useLocale();
-  const { state, projects, reloadClients, reloadProjects } = useDirectory();
+  const { state, projects, reloadSession, reloadClients, reloadProjects } = useDirectory();
 
+  /* NO CARD BEFORE THE SESSION AND ITS SCOPE ARE PROVEN — and none on failure. */
   if (state.unauthorized) return <SessionEnded next="/command/projects" />;
+  if (state.session.state === "loading") {
+    return <LoadingStack label={t("directory.readingSession")} />;
+  }
+  if (state.session.state === "error") {
+    return <ErrorState message={t(errorMessageKey(state.session.error))} onRetry={reloadSession} />;
+  }
   if (state.projects.state === "loading" || !projects) {
     return <LoadingStack label={t("directory.readingProjects")} />;
   }

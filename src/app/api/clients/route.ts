@@ -1,29 +1,26 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentSession, getAccessibleBusinesses } from "@/lib/auth";
+import { getCurrentSession, isAdmin } from "@/lib/auth";
 import { softDeleteMany, softDeleteRecord } from "@/lib/soft-delete";
+import { resolveWriteScope } from "@/lib/read-scope";
+import { businessExists, resolveReadScope } from "@/lib/read-scope-db";
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // Get accessible business IDs
-    const accessibleSlugs = getAccessibleBusinesses(session);
-    const accessibleBusinesses = await prisma.business.findMany({
-      where: { slug: { in: accessibleSlugs } },
-      select: { id: true },
-    });
-    const accessibleIds = accessibleBusinesses.map(b => b.id);
-
-    if (accessibleIds.length === 0) {
+    /* ONE SCOPE RULE. `/api/projects` resolves the same set from the same helper,
+       so the two reads can no longer disagree about the session's companies. */
+    const scope = await resolveReadScope(session);
+    if (scope.businessIds.length === 0) {
       return NextResponse.json([]);
     }
 
     const clients = await prisma.client.findMany({
-      where: { businessId: { in: accessibleIds } },
+      where: { businessId: { in: scope.businessIds } },
       include: {
         /* A NESTED include is not covered by the soft-delete extension (that
            runs on the top-level operation only), so a deleted project would
@@ -44,8 +41,11 @@ export async function GET(request: Request) {
       const totalPaid = c.projectRecords.reduce((s, p) => s + Number(p.deposit), 0);
       const totalRemaining = c.projectRecords.reduce((s, p) => s + Number(p.totalPrice) - Number(p.deposit), 0);
       const isRepeatClient = projectCount > 1;
-      const tier = totalPaid >= 5000 ? "VIP" : totalPaid >= 1000 ? "LOYAL" : isRepeatClient ? "LOYAL" : "NORMAL";
-      return { ...c, projectCount, totalPaid, totalRemaining, isRepeatClient, tier };
+      /* `tier` is the STORED column — it travels through the spread above
+         untouched. The classification this route derives is a different fact, so
+         it has its own name and never shadows what the operator set. */
+      const computedTier = totalPaid >= 5000 ? "VIP" : totalPaid >= 1000 ? "LOYAL" : isRepeatClient ? "LOYAL" : "NORMAL";
+      return { ...c, projectCount, totalPaid, totalRemaining, isRepeatClient, computedTier };
     });
 
     return NextResponse.json(enriched);
@@ -56,24 +56,23 @@ export async function GET(request: Request) {
 }
 
 // DELETE — Clean up orphaned clients (clients with no projects)
-export async function DELETE() {
+export async function DELETE(request: Request) {
   try {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (session.role === "EMPLOYEE") return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    if (!isAdmin(session)) return NextResponse.json({ error: "Access denied" }, { status: 403 });
 
-    /* Cleanup is scoped to the caller's own businesses: a bulk delete may not
-       reach across companies just because a client there happens to be orphaned.
-       (The GET above is scoped the same way.) */
-    const accessibleSlugs = getAccessibleBusinesses(session);
-    const scopedBusinesses = await prisma.business.findMany({
-      where: { slug: { in: accessibleSlugs } },
-      select: { id: true },
-    });
-    const scopedIds = scopedBusinesses.map(b => b.id);
-    if (scopedIds.length === 0) {
-      return NextResponse.json({ deleted: 0, message: "No orphaned clients found" });
+    /* A READ scope does not authorise a cleanup. The target company is named
+       explicitly — a scoped admin may only clean its own, a super admin has to
+       say which company it means — and it has to be a real company. */
+    const scope = resolveWriteScope(session, new URL(request.url).searchParams.get("businessId"));
+    if (!scope.ok) {
+      return NextResponse.json({ error: scope.error }, { status: scope.status });
     }
+    if (!(await businessExists(scope.businessId))) {
+      return NextResponse.json({ error: "Unknown company" }, { status: 404 });
+    }
+    const scopedIds = [scope.businessId];
 
     // Find all clients with no projects AND no subscriptions.
     // Counts are computed with the soft-delete-aware client so a client whose

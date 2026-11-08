@@ -154,12 +154,15 @@ export function LabHeader({
   blurb,
   meta,
   actions,
+  hideDemoState,
 }: {
   areaId: AreaId;
   title?: string;
   blurb?: string;
   meta?: ReactNode;
   actions?: ReactNode;
+  /** A BOUND surface hides the demo-state switch: its data is not demo data. */
+  hideDemoState?: boolean;
 }) {
   const { t } = useLocale();
   const area = AREAS.find((a) => a.id === areaId) as Area | undefined;
@@ -186,7 +189,7 @@ export function LabHeader({
       <div className="nl-head__aside">
         {meta && <div className="nl-head__meta">{meta}</div>}
         {actions && <div className="nl-head__actions">{actions}</div>}
-        <DemoStateControl />
+        {!hideDemoState && <DemoStateControl />}
       </div>
     </header>
   );
@@ -203,6 +206,7 @@ export function LabFrame({
   blurb,
   meta,
   actions,
+  hideDemoState,
   children,
 }: {
   areaId: AreaId;
@@ -210,12 +214,21 @@ export function LabFrame({
   blurb?: string;
   meta?: ReactNode;
   actions?: ReactNode;
+  /** Set on a surface whose rows come from the database, not from the demo set. */
+  hideDemoState?: boolean;
   children: ReactNode;
 }) {
   return (
     <div className="nl-page">
       <AreaNav />
-      <LabHeader areaId={areaId} title={title} blurb={blurb} meta={meta} actions={actions} />
+      <LabHeader
+        areaId={areaId}
+        title={title}
+        blurb={blurb}
+        meta={meta}
+        actions={actions}
+        hideDemoState={hideDemoState}
+      />
       <div className="nl-body">{children}</div>
     </div>
   );

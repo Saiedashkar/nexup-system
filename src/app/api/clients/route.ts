@@ -25,7 +25,12 @@ export async function GET(request: Request) {
     const clients = await prisma.client.findMany({
       where: { businessId: { in: accessibleIds } },
       include: {
+        /* A NESTED include is not covered by the soft-delete extension (that
+           runs on the top-level operation only), so a deleted project would
+           otherwise reappear inside its client's own list. The filter is
+           explicit here, which is why the row list and the totals agree. */
         projectRecords: {
+          where: { deletedAt: null },
           select: { id: true, projectName: true, totalPrice: true, deposit: true, workStatus: true, paymentStatus: true, date: true, businessId: true },
           orderBy: { date: "desc" },
         },
@@ -57,10 +62,26 @@ export async function DELETE() {
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (session.role === "EMPLOYEE") return NextResponse.json({ error: "Access denied" }, { status: 403 });
 
+    /* Cleanup is scoped to the caller's own businesses: a bulk delete may not
+       reach across companies just because a client there happens to be orphaned.
+       (The GET above is scoped the same way.) */
+    const accessibleSlugs = getAccessibleBusinesses(session);
+    const scopedBusinesses = await prisma.business.findMany({
+      where: { slug: { in: accessibleSlugs } },
+      select: { id: true },
+    });
+    const scopedIds = scopedBusinesses.map(b => b.id);
+    if (scopedIds.length === 0) {
+      return NextResponse.json({ deleted: 0, message: "No orphaned clients found" });
+    }
+
     // Find all clients with no projects AND no subscriptions.
     // Counts are computed with the soft-delete-aware client so a client whose
     // rows were only soft-deleted still counts as orphaned.
-    const liveClients = await prisma.client.findMany({ select: { id: true } });
+    const liveClients = await prisma.client.findMany({
+      where: { businessId: { in: scopedIds } },
+      select: { id: true },
+    });
     const orphaned: { id: string }[] = [];
     for (const c of liveClients) {
       const [projectCount, subscriptionCount] = await Promise.all([

@@ -2,95 +2,161 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { DEPARTMENT_BY_ID } from "@/components/command/state/organization-model";
-import { agentHref, clientHref, missionHref } from "@/components/command/lab/areas";
-import { useLocale } from "@/components/command/i18n/command-locale";
-import { Avatar, LabData, LabFrame, Meter, Note, Pill, tone } from "@/components/command/lab/kit";
+import { clientHref } from "@/components/command/lab/areas";
 import {
-  MISSION_STATUS_META,
-  missionsForProject,
-  projectProgress,
-} from "@/components/command/state/demo/selectors";
-import type { CommandDataset, Project, ProjectStatus } from "@/components/command/state/demo/types";
+  DirectoryScopeLine,
+  DirectorySourcePanel,
+  SessionEnded,
+  errorMessageKey,
+} from "@/components/command/lab/directory";
+import { useLocale } from "@/components/command/i18n/command-locale";
+import {
+  EmptyState,
+  ErrorState,
+  LabFrame,
+  LoadingStack,
+  Meter,
+  Note,
+  Pill,
+  Section,
+  StaleBanner,
+  tone,
+} from "@/components/command/lab/kit";
+import { DirectoryProvider, useDirectory } from "@/components/command/state/directory/directory-store";
+import {
+  projectTotals,
+  type ProjectView,
+} from "@/components/command/state/directory/mapping";
+import type { WorkStatus } from "@/components/command/state/directory/types";
 
 /**
- * PROJECTS — grouped work, per client
- * ──────────────────────────────────
- * A project is where missions, a client and a set of agents meet. The page is a
- * card wall rather than a table because a project's identity matters more than
- * its numbers: what it is, who it is for, what is running inside it and when it
- * last moved.
+ * PROJECTS — the work, bound to this company's records
+ * ───────────────────────────────────────────────────
+ * Every card is a `ProjectRecord` from the database, read through
+ * `GET /api/projects` (session-scoped, with the client, the designer and the
+ * services the record actually references).
  *
- * Status and progress are read from the missions the project actually owns, so a
- * project can never claim progress its missions do not support.
+ * The demo card showed a department, a mission list, agent avatars, a progress
+ * percentage and a "next milestone". A project record has none of them — it has
+ * a name, a client, a date, four work states, a payment state, a designer, the
+ * services booked and the money. Those are the card now. The meter is collected
+ * ÷ agreed, which is arithmetic over two stored amounts.
  */
 
-const PROJECT_STATUS_TONE: Record<ProjectStatus, string> = {
-  discovery: "--nc-violet",
-  active: "--nc-active",
-  review: "--nc-thinking",
-  "on-hold": "--nc-approval",
-  closed: "--nc-completed",
+const WORK_TONE: Record<WorkStatus, string> = {
+  WAITING: "--nc-approval",
+  IN_PROGRESS: "--nc-active",
+  COMPLETED: "--nc-completed",
+  PAUSED: "--nc-text-3",
 };
 
+const WORK_ORDER: WorkStatus[] = ["WAITING", "IN_PROGRESS", "PAUSED", "COMPLETED"];
+
 export default function ProjectsPage() {
-  const { tc } = useLocale();
   return (
-    <LabFrame areaId="projects">
-      <LabData
-        emptyTitle={tc("No projects yet")}
-        emptyBody={tc("Projects group missions against a client. This organization has none open.")}
-      >
-        {(dataset) => <Projects dataset={dataset} />}
-      </LabData>
+    <LabFrame areaId="projects" hideDemoState>
+      <DirectoryProvider>
+        <DirectoryScopeLine />
+        <ProjectsSurface />
+      </DirectoryProvider>
     </LabFrame>
   );
 }
 
-function Projects({ dataset }: { dataset: CommandDataset }) {
-  const { t, tc } = useLocale();
-  const [status, setStatus] = useState<"all" | ProjectStatus>("all");
-  const listed = dataset.projects.filter((p) => status === "all" || p.status === status);
+function ProjectsSurface() {
+  const { t } = useLocale();
+  const { state, projects, reloadClients, reloadProjects } = useDirectory();
 
-  const clientsWithoutWork = dataset.clients.filter((client) =>
-    client.projectIds.every((id) => {
-      const project = dataset.projects.find((p) => p.id === id);
-      return !project || project.missionIds.length === 0;
-    }),
+  if (state.unauthorized) return <SessionEnded next="/command/projects" />;
+  if (state.projects.state === "loading" || !projects) {
+    return <LoadingStack label={t("directory.readingProjects")} />;
+  }
+  if (state.projects.state === "error") {
+    return (
+      <ErrorState message={t(errorMessageKey(state.projects.error))} onRetry={reloadProjects} />
+    );
+  }
+  if (state.projects.state === "empty") {
+    return (
+      <>
+        <EmptyState title={t("directory.projectsTitle")} body={t("directory.projectsBody")} />
+        <Section title={t("directory.sources.title")} span={12}>
+          <DirectorySourcePanel />
+        </Section>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {state.clients.state === "error" && (
+        <StaleBanner message={t("directory.clientsFailed")} onRetry={reloadClients} />
+      )}
+      <Projects projects={projects} />
+    </>
   );
+}
+
+function Projects({ projects }: { projects: ProjectView[] }) {
+  const { t, formatNumber } = useLocale();
+  const [status, setStatus] = useState<"all" | WorkStatus>("all");
+  const listed = projects.filter((p) => status === "all" || p.work === status);
+  const totals = projectTotals(projects);
 
   return (
     <>
       <div className="nl-figures" role="list">
         {[
-          { id: "projects", value: String(dataset.projects.length), label: "Projects", note: t("projects.shownCount", { count: listed.length }), tone: "--nc-product" },
           {
-            id: "missions",
-            value: String(dataset.projects.reduce((n, p) => n + p.missionIds.length, 0)),
-            label: "Missions in projects",
-            note: "every mission belongs somewhere",
-            tone: "--nc-growth",
+            id: "projects",
+            value: formatNumber(totals.projects),
+            label: t("directory.figureProjects"),
+            note: t("directory.figureProjectsNote"),
+            tone: "--nc-product",
           },
-          { id: "clients", value: String(dataset.clients.length), label: "Clients", note: t("projects.nothingRunning", { count: clientsWithoutWork.length }), tone: "--nc-client" },
           {
-            id: "hold",
-            value: String(dataset.projects.filter((p) => p.status === "on-hold").length),
-            label: "On hold",
-            note: "waiting on something outside the team",
+            id: "progress",
+            value: formatNumber(totals.byWork("IN_PROGRESS")),
+            label: t("directory.figureWorkInProgress"),
+            note: t("directory.figureWorkInProgressNote"),
+            tone: "--nc-active",
+          },
+          {
+            id: "completed",
+            value: formatNumber(totals.byWork("COMPLETED")),
+            label: t("directory.figureCompleted"),
+            note: t("directory.figureCompletedNote"),
+            tone: "--nc-completed",
+          },
+          {
+            id: "outstanding",
+            value: formatNumber(Math.round(totals.outstanding)),
+            label: t("directory.figureOutstanding"),
+            note: t("directory.figureOutstandingNote"),
             tone: "--nc-approval",
           },
         ].map((figure) => (
           <div key={figure.id} role="listitem" className="nl-figure" style={tone(figure.tone)}>
             <span className="nl-figure__value">{figure.value}</span>
-            <span className="nl-figure__label">{tc(figure.label)}</span>
-            <span className="nl-figure__note">{tc(figure.note)}</span>
+            <span className="nl-figure__label">{figure.label}</span>
+            <span className="nl-figure__note">{figure.note}</span>
           </div>
         ))}
       </div>
 
       <div className="nl-toolbar">
-        <div className="nl-chips" role="group" aria-label={t("projects.statusAria")}>
-          {(["all", "discovery", "active", "review", "on-hold"] as const).map((option) => (
+        <div className="nl-chips" role="group" aria-label={t("directory.statusAria")}>
+          <button
+            type="button"
+            className="nl-chip"
+            data-active={status === "all"}
+            aria-pressed={status === "all"}
+            onClick={() => setStatus("all")}
+          >
+            {t("directory.allProjects")}
+            <span className="nl-chip__count">{projects.length}</span>
+          </button>
+          {WORK_ORDER.filter((option) => totals.byWork(option) > 0).map((option) => (
             <button
               key={option}
               type="button"
@@ -99,10 +165,8 @@ function Projects({ dataset }: { dataset: CommandDataset }) {
               aria-pressed={status === option}
               onClick={() => setStatus(option)}
             >
-              {option === "all" ? tc("All projects") : t(`status.project.${option}`)}
-              <span className="nl-chip__count">
-                {option === "all" ? dataset.projects.length : dataset.projects.filter((p) => p.status === option).length}
-              </span>
+              {t(`status.work.${option}`)}
+              <span className="nl-chip__count">{totals.byWork(option)}</span>
             </button>
           ))}
         </div>
@@ -110,80 +174,85 @@ function Projects({ dataset }: { dataset: CommandDataset }) {
 
       {listed.length === 0 ? (
         <div className="nl-empty">
-          <h2 className="nl-empty__title">{tc("No project in that state")}</h2>
-          <p className="nl-empty__body">{tc("Nothing in this organization is in that stage right now.")}</p>
+          <h2 className="nl-empty__title">{t("directory.inThatState")}</h2>
+          <p className="nl-empty__body">{t("directory.inThatStateBody")}</p>
         </div>
       ) : (
         <div className="nl-cards nl-cards--wide">
           {listed.map((project) => (
-            <ProjectCard key={project.id} project={project} dataset={dataset} />
+            <ProjectCard key={project.id} project={project} />
           ))}
         </div>
       )}
+
+      <Section title={t("directory.sources.title")} span={12}>
+        <DirectorySourcePanel />
+      </Section>
     </>
   );
 }
 
-function ProjectCard({ project, dataset }: { project: Project; dataset: CommandDataset }) {
-  const { t, tc } = useLocale();
-  const department = DEPARTMENT_BY_ID[project.departmentId];
-  const client = dataset.clients.find((c) => c.id === project.clientId);
-  const missions = missionsForProject(dataset, project.id);
-  const agents = project.agentIds
-    .map((id) => dataset.agents.find((a) => a.id === id))
-    .filter((a): a is NonNullable<typeof a> => Boolean(a));
+function ProjectCard({ project }: { project: ProjectView }) {
+  const { t, formatNumber } = useLocale();
+  const workTone = project.work ? WORK_TONE[project.work] : "--nc-text-3";
 
   return (
-    <article className="nl-card nl-card--project" id={project.id} style={tone(department?.accentVar ?? "--nc-network")}>
+    <article className="nl-card nl-card--project" id={project.id} style={tone(workTone)}>
       <div className="nl-card__head">
-        <span className="nl-card__title">{tc(project.name)}</span>
+        <span className="nl-card__title">{project.name}</span>
         <span className="nl-card__spacer" />
-        <Pill label={t(`status.project.${project.status}`)} tone={PROJECT_STATUS_TONE[project.status]} />
+        {project.work ? (
+          <Pill label={t(`status.work.${project.work}`)} tone={workTone} />
+        ) : (
+          <Pill label={t("directory.none")} tone="--nc-text-3" />
+        )}
       </div>
 
       <div className="nl-card__meta">
-        {client ? (
-          <Link href={clientHref(client.id)} className="nl-inlinelink">
-            {tc(client.name)}
+        {project.clientName ? (
+          <Link href={clientHref(project.clientId)} className="nl-inlinelink">
+            {project.clientName}
           </Link>
         ) : (
-          tc("Internal")
+          t("directory.none")
         )}{" "}
-        · {department ? t(`dept.${department.id}.name`) : project.departmentId} · {t("common.updated")}{" "}
-        {project.updatedAt}
+        · {t("directory.opened")} {project.date.slice(0, 10)}
+        {project.designer ? ` · ${t("directory.designer")} ${project.designer}` : ""}
       </div>
 
       <div className="nl-card__meter">
-        <Meter value={project.progress} tone={PROJECT_STATUS_TONE[project.status]} />
-        <span className="nl-cell__num">{projectProgress(project, dataset)}</span>
+        <Meter value={project.paidRatio} tone={workTone} />
+        <span className="nl-cell__num">
+          {t("directory.paidOfTotal", {
+            paid: formatNumber(Math.round(project.paid)),
+            total: formatNumber(Math.round(project.total)),
+          })}
+        </span>
       </div>
 
       <div className="nl-card__rows">
-        {missions.map((mission) => (
-          <Link key={mission.id} href={missionHref(mission.id)} className="nl-card__row">
-            <span className="nl-inlinedot" style={tone(MISSION_STATUS_META[mission.status].tone)} aria-hidden="true" />
-            <span className="nl-card__rowtext">{tc(mission.title)}</span>
-            <span className="nl-card__rowpct">{mission.progress}%</span>
-          </Link>
-        ))}
-        {missions.length === 0 && <Note>{tc("No mission has been opened against this project yet.")}</Note>}
+        {project.services.length > 0 ? (
+          project.services.map((service) => (
+            <span key={service} className="nl-card__row">
+              <span className="nl-inlinedot" style={tone("--nc-cyan")} aria-hidden="true" />
+              <span className="nl-card__rowtext">{service}</span>
+            </span>
+          ))
+        ) : (
+          <Note>{t("directory.noServices")}</Note>
+        )}
+        {project.notes && <Note>{project.notes}</Note>}
       </div>
 
       <div className="nl-card__foot">
-        <div className="nl-avatars" aria-label={t("projects.agentsAria")}>
-          {agents.slice(0, 4).map((agent) => (
-            <Link key={agent.id} href={agentHref(agent.id)} title={agent.name} className="nl-avatars__item">
-              <Avatar
-                initials={agent.initials}
-                kind={agent.kind}
-                tone={agent.kind === "human" ? "--nc-human" : "--nc-lime"}
-                size={26}
-              />
-            </Link>
-          ))}
-          {agents.length > 4 && <span className="nl-avatars__more">+{agents.length - 4}</span>}
-        </div>
-        <span className="nl-card__meta">{tc(project.nextMilestone)}</span>
+        <span className="nl-card__meta">
+          {t("directory.remaining")} {formatNumber(Math.round(Math.max(0, project.remaining)))}
+        </span>
+        {project.payment ? (
+          <Pill label={t(`status.payment.${project.payment}`)} tone="--nc-finance" />
+        ) : (
+          <Pill label={t("directory.none")} tone="--nc-text-3" />
+        )}
       </div>
     </article>
   );

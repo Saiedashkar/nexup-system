@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentSession } from "@/lib/auth";
+import { getCurrentSession, isSuperAdmin } from "@/lib/auth";
 import { softDeleteMany, softDeleteRecord } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
@@ -24,6 +24,12 @@ export async function PATCH(
     });
     if (!existing) {
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
+    }
+
+    /* ISOLATION: the project must belong to the caller's company. Without this
+       a scoped admin could patch another business's record by id. */
+    if (!isSuperAdmin(session) && session.businessId !== existing.businessId) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
     const updateData: Record<string, unknown> = {};
@@ -175,6 +181,12 @@ export async function DELETE(
     });
     if (!existing) {
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
+    }
+
+    /* ISOLATION: same rule on the delete path — a scoped admin deletes only
+       inside the company the session carries. */
+    if (!isSuperAdmin(session) && session.businessId !== existing.businessId) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
     // Soft-delete related rows first (recoverable — nothing is destroyed)

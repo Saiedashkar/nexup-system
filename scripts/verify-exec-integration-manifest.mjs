@@ -61,6 +61,10 @@ export function verifyManifest(root = process.cwd()) {
     salesLayer: digestRows(manifest.layers.sales ?? []),
     marketingLayer: digestRows(manifest.layers.marketing ?? []),
     missionsGlassLayer: digestRows(manifest.layers.missionsGlass ?? []),
+    /* The first real data binding of /command/clients and /command/projects:
+       the read layer, its shared chrome and its test are a layer of their own,
+       digested like every other, so a stray edit to any of them fails here. */
+    directoryLayer: digestRows(manifest.layers.directory ?? []),
   };
 
   /* A deletion is part of the overlay: the base commit still carries the file,

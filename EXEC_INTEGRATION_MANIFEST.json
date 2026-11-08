@@ -1,6 +1,6 @@
 {
   "artifact": "EXEC integration copy — overlay manifest",
-  "generatedFor": "Step 5A-4 / EXEC conversation lab, review checkpoint 1 + Marketing & Sales gateway and sales room + missions glass + marketing room delivered from the product tree",
+  "generatedFor": "Step 5A-4 / EXEC conversation lab, review checkpoint 1 + Marketing & Sales gateway and sales room + missions glass + marketing room delivered from the product tree + first real clients/projects binding",
   "worktree": "nexup-exec-integration",
   "branch": "feature/exec-integration-lab",
   "baseCommit": "4ecc1a7fd1a28f2a45d2dfbd32a878914133356f",
@@ -13,7 +13,7 @@
     "execLayer": 32,
     "authored": 11,
     "overlapBetweenLayers": 0,
-    "totalPathsWritten": 221,
+    "totalPathsWritten": 231,
     "productLayer": 85,
     "productTrackedModified": 39,
     "productUntracked": 46,
@@ -25,7 +25,9 @@
     "salesNote": "Marketing & Sales layer: gateway route, sales room route, their one CSS layer, copy + journey state, and one test. No overlap with core/exec/authored/product beyond the two product files edited above.",
     "missionsGlassLayer": 1,
     "marketingLayer": 10,
-    "marketingNote": "Marketing room layer: the delivered tree copied verbatim from nexup-command-product per docs/COMMAND_MARKETING_ROOM.md (route + stylesheet + six modules + its test + that doc). No shared file was edited for it; enabling its door is a sales-layer row. campaign-notice.ts (the outcome-to-notice mapping extracted out of marketing-room.tsx so the Arabic refusal can be tested without React) was added on 2026-11-07 and is recorded here; the room's copy, model, panel and test rows were re-hashed the same day after the approval-line, request-guard, breadcrumb and notice repairs."
+    "marketingNote": "Marketing room layer: the delivered tree copied verbatim from nexup-command-product per docs/COMMAND_MARKETING_ROOM.md (route + stylesheet + six modules + its test + that doc). No shared file was edited for it; enabling its door is a sales-layer row. campaign-notice.ts (the outcome-to-notice mapping extracted out of marketing-room.tsx so the Arabic refusal can be tested without React) was added on 2026-11-07 and is recorded here; the room's copy, model, panel and test rows were re-hashed the same day after the approval-line, request-guard, breadcrumb and notice repairs.",
+    "directoryLayer": 9,
+    "directoryNote": "Binding layer: 5 read-layer modules, 1 shared chrome module, 1 test and the two documents of this round. Additive: every row here is a new path, none of them was in another layer."
   },
   "digests": {
     "core73_excludingReport": {
@@ -50,7 +52,7 @@
     },
     "product85": {
       "count": 85,
-      "value": "d4c20371d42a3b36e46922d50a605b195a58291cedb7ad612920f28a80c81737"
+      "value": "640de9f1678d40742d42a7dfa31e2d4953a1e33bae8c18584fca7fd18d9f1104"
     },
     "execLayer32AsCopied": {
       "count": 32,
@@ -70,9 +72,14 @@
       "value": "67f37959efcc4241b15f6866a07dcc372b3d13f2f2144bbe0edba12cb2e55ae5"
     },
     "marketingLayer": {
-      "count": 9,
+      "count": 10,
       "value": "2bb0b6e53149c9ff3910cf2bdee191c898895f1d7a4d950160f81ffa0d9f23bb"
-    }
+    },
+    "directoryLayer": {
+      "count": 9,
+      "value": "f1d76ecdd68b9bb125ff7491083c3e9da633ab5672719de1760f0780fa2dd8de"
+    },
+    "directoryNote": "The first real data binding: read layer (api/mapping/reducer/store) + shared chrome + test. The product rows for /command/clients, /command/projects, i18n/messages.ts and lab/kit.tsx were re-hashed on 2026-11-08 because those four files are now bound to the routes."
   },
   "reviewerReferenceValues": {
     "note": "Values quoted by the reviewer for the same path sets. The per-file hashes the reviewer published and the review-report hash match byte for byte; the aggregate values were produced by the reviewer's tooling, whose row recipe is not published, so they are recorded verbatim and NOT claimed as reproduced.",
@@ -877,7 +884,7 @@
       },
       {
         "path": "src/app/command/clients/page.tsx",
-        "sha256": "3bc2c1024f5a104f246512fd583bc1b00cf6b72e46c3d912b734a70b21a31033",
+        "sha256": "92139f38201c6d1adc5ecbb23d0c36c42f4696dab20e7c2f2ad73d76d5c98a31",
         "git": "copied-from-product",
         "layer": "product"
       },
@@ -979,7 +986,7 @@
       },
       {
         "path": "src/app/command/projects/page.tsx",
-        "sha256": "0d671646dd0101cd837491aca88a01d356bd1a518d0609c5504382adbcf7b5a0",
+        "sha256": "f5e9faba473097fa0ca7bb46b530ecc1858b62c12533bed6b4d015f49b9dcec5",
         "git": "copied-from-product",
         "layer": "product"
       },
@@ -1081,7 +1088,7 @@
       },
       {
         "path": "src/components/command/i18n/messages.ts",
-        "sha256": "1ae4e273b51ee42219446faeeeb49226a002ddae9b85852281370790fc4fe3b6",
+        "sha256": "8b6afcf0098297f5bcd95463d697a823e02337934208781a71fe78af91acf086",
         "git": "copied-from-product",
         "layer": "product"
       },
@@ -1099,7 +1106,7 @@
       },
       {
         "path": "src/components/command/lab/kit.tsx",
-        "sha256": "d1bbc406890001d468c48bc8dd38a30cc18f0ef4a357f07ae9eebc9a29004894",
+        "sha256": "81863b991c40bf369f96248d696971b71e581a221e973022afdaf436b18e8e8a",
         "git": "copied-from-product",
         "layer": "product"
       },
@@ -1488,6 +1495,44 @@
         "sha256": "d7966ae60165e0ee3dd26bff97a0572936a998f73fa306bf8fda1012bed65548",
         "git": "??",
         "layer": "marketing"
+      }
+    ],
+    "directory": [
+      {
+        "path": "docs/COMMAND_DIRECTORY_BINDING.md",
+        "sha256": "6c91bc7e4a563ee10dfb8c2ca6d40bd5eab73c4850cc849cba0dd646e35dcac5"
+      },
+      {
+        "path": "docs/DEAL_HANDOFF_SPEC.md",
+        "sha256": "97e2c7454913086e010a4db23eccd64e085c53eaface8827d8f17a78952ea2d1"
+      },
+      {
+        "path": "src/components/command/lab/directory.tsx",
+        "sha256": "46d90c4052b6f60649188f04a09dd3bff73ec2bc1a169b4f406571b7a8839dc9"
+      },
+      {
+        "path": "src/components/command/state/directory/api.ts",
+        "sha256": "24ba6df34f2a1efc2c14d0297cc2e5911d4263892eccc4fdda266623233df47b"
+      },
+      {
+        "path": "src/components/command/state/directory/directory-store.tsx",
+        "sha256": "3045f965cf588815502154e2d85da9fbd3a7b6cabb4879303fb1e31449691bf8"
+      },
+      {
+        "path": "src/components/command/state/directory/mapping.ts",
+        "sha256": "9afb546ef3eedb521a16173b1cda398d83c6920bd4b6cc0254f2a60c07093585"
+      },
+      {
+        "path": "src/components/command/state/directory/reducer.ts",
+        "sha256": "1e0a520b79b6f3c01f6ca9683cf6121f60ed39a9e6fe5abba63f73daf7904885"
+      },
+      {
+        "path": "src/components/command/state/directory/types.ts",
+        "sha256": "cece8c339a5635c915ccf8be19dc25152e9653d453e6556a9e182fb8ad789372"
+      },
+      {
+        "path": "tests/command-directory-binding.test.ts",
+        "sha256": "41031dace6900693f2ea0857bd9eddad6f1feab9b1ce3c34ae1756791c286d71"
       }
     ]
   },

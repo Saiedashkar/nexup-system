@@ -1,0 +1,108 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# NEXUP COMMAND — application + database, and nothing else
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#   docker compose -f deploy/compose.yml up -d
+#
+# Traefik is NOT configured here. Routing, TLS and the login gate live in
+# deploy/traefik/command.yml (the proxy's own file provider), so this stack can be
+# started and health-checked with no proxy at all, and no label in this file can
+# accidentally point the edge at something else.
+#
+# TWO NETWORKS, and the split is the point:
+#
+#   internal  `internal: true` — nothing outside this compose project can route to
+#             it, and nothing on it can reach the internet. The DATABASE lives here
+#             and only here: it is not on the proxy network, so neither Traefik nor
+#             any other container on the edge can open a socket to Postgres.
+#   edge      the proxy's existing network (external). ONLY the app joins it, so
+#             the proxy can reach 3000 and can reach nothing else of ours.
+#
+# Neither service publishes a port. There is no `ports:` key in this file, which is
+# why `ss -ltnp` on the host shows nothing for this stack.
+
+name: nexup-command
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    env_file:
+      - /etc/nexup-command/db.env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      # `$$` keeps the variable for the CONTAINER, not for compose interpolation.
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    mem_limit: 768m
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  app:
+    # Digest-pinned on purpose: `latest` is not an identity and cannot be rolled back.
+    image: ${COMMAND_IMAGE:?set COMMAND_IMAGE to a digest-pinned image, e.g. nexup-command@sha256:...}
+    restart: unless-stopped
+    env_file:
+      - /etc/nexup-command/app.env
+    environment:
+      # The trial lock is enforced twice: here at request time (Node handlers) and,
+      # if the image was built with --build-arg TRIAL_READ_ONLY=1, inside the edge
+      # middleware too. Keep both in step — see deploy/README.md.
+      TRIAL_READ_ONLY: ${TRIAL_READ_ONLY:-1}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+      - edge
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+      # next/image writes optimised files here; the rest of the filesystem stays read-only.
+      - /app/.next/cache:size=256m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    pids_limit: 512
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pgdata:
+    name: nexup-command-pgdata
+
+networks:
+  internal:
+    name: nexup-command-internal
+    internal: true
+  edge:
+    # The proxy's network already exists and is created by the proxy, not here.
+    external: true
+    name: ${EDGE_NETWORK:?set EDGE_NETWORK to the proxy's docker network name}

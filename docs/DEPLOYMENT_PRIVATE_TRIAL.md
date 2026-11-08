@@ -4,10 +4,16 @@
 Hermes أو NEXPUBLISH أو Traefik أو خدمة PostgreSQL النظامية. الغرض أن يكون التنفيذ
 لاحقًا ميكانيكيًا: كل خطوة لها أمر، ومخرَج متوقّع، وإشارة توقّف.
 
+**تحديث 2026-11-09 — تجهيز النشر نُفِّذ محليًا:** حزمة `deploy/` (Dockerfile + compose +
+Traefik file-provider + سكربتات) موجودة الآن، والبناء الإنتاجي نُفِّذ في شجرة معزولة،
+والنسخة شُغِّلت ودُخل إليها وقُرِئت العملاء/المشاريع في وضعين (كتابة، وقيد قراءة 17/17)،
+ونُسخت القاعدة واستُعيدت فعليًا. الدليل الكامل والقياسات في **§13**، والعوائق الباقية في §10.
+Docker غير متاح على جهاز الإعداد، فالصورة وCompose وTraefik **لم تُختبر تشغيليًا**.
+
 الفرع: `feature/data-binding-clients-projects-20261107` · آخر commit: `635961c`
 · التطبيق: Next.js 16.3.2 + React 19.2.8 + Prisma 7.9.1 (`@prisma/adapter-pg` + `pg`)
 · قاعدة البيانات: PostgreSQL · **14 هجرة** في `prisma/migrations` + `migration_lock.toml`
-· **لا يوجد تعريف صورة (Dockerfile/compose) للتطبيق** في المستودع — الموجود فقط `bridge/deploy/Dockerfile` للـbridge.
+· تعريف الصورة الآن في `deploy/` (`Dockerfile`, `compose.yml`, `traefik/command.yml`, `scripts/*`) — وثيقة الحزمة: `deploy/README.md`.
 
 ---
 
@@ -253,9 +259,11 @@ find /var/backups/nexup-command -name 'command-*.dump' -mtime +7 -delete
 
 ## 10. العوائق والحدود (يجب أن تُقرأ قبل الموافقة)
 
-1. **البناء الإنتاجي لم يُشغَّل بعد على هذه الشجرة.** لا `BUILD_ID` موجود في `.next` (المجلد تطويري).
-   `tsc` و`eslint` و63 اختبارًا خضراء، لكن أول خطوة في نافذة النشر يجب أن تُثبت `next build`
-   على الـSHA المستهدف وتُسجّل زمنه وأي تحذير. لو فشل البناء، تتوقف النافذة كلها عند الخطوة 5.
+1. **البناء الإنتاجي نُفِّذ الآن بنجاح — في شجرة معزولة لا في `.next` الأصلية.** `.deploy/tree`
+   (نسخة شجرة + junction لـ`node_modules`) أنتجت `BUILD_ID=xBzUmJntUH51CF7R7q0v3` ثم
+   `djmXay5SjmAaCreK2u1gp` بعد تفعيل قفل الحافة، بـ`Compiled successfully in 15.0s` لكلتيهما.
+   `.next` الأصلية بقيت **بلا `BUILD_ID`** ومعاينة 3211 بقيت تعمل. يبقى على نافذة النشر أن
+   تُعيد البناء على الـSHA المستهدف داخل الحاوية وتُسجّل الزمن.
 2. **لا وصول للخادم من جلسة الإعداد هذه**: الذاكرة/القرص/DNS/وجود Postgres غير مقيسة (خطوة 0).
 3. **HTTPS شرط لا تحسين**: الكوكي `secure` في الإنتاج. أي محاولة "تجربة سريعة بـ`http://IP:PORT`"
    ستفشل في تسجيل الدخول على الموبايل — وهذا سلوك مقصود لا خلل.
@@ -268,7 +276,31 @@ find /var/backups/nexup-command -name 'command-*.dump' -mtime +7 -delete
    مشروعًا/إيداعًا. للتجربة الخاصة مقبول إن ذُكر للمستخدم؛ وقبل التسليم الحقيقي هو شرط.
 8. **نسخة تجريبية ببيانات حقيقية** = مسؤولية نسخ احتياطي يومية مُتحقَّقة؛ لو أردت بيانات وهمية فقط،
    الخطوة 5 تُملأ ببيانات الديمو بدل بيانات العمل.
-9. **لا تعريف صورة للتطبيق بعد**: لا `Dockerfile` ولا `compose.yml` له في المستودع (الموجود `bridge/deploy/*` خاص بالـbridge فقط، ولا يُعاد استخدامه). تجهيز النافذة يتضمّن كتابة ملفين صغيرين ومراجعتهما قبل الخطوة 6: صورة تعتمد على `node:22-bookworm-slim`، `npm ci` + `next build` داخل الصورة، `USER` غير جذر، `HEALTHCHECK` على `/login`، و`compose.yml` بشبكة `nexup-command` بلا `ports:` وبـ`mem_limit`. هذه **إضافة تجهيزية خارج نطاق التطبيق** ولا تغيّر أي سلوك فيه.
+9. **حزمة الصورة كُتبت ولم تُبنَ**: `deploy/Dockerfile` (3 مراحل، غير جذر، `HEALTHCHECK`) و
+   `deploy/compose.yml` (شبكة `internal` مغلقة للقاعدة، و`edge` للتطبيق وحده، بلا `ports:`) و
+   `deploy/traefik/command.yml` (file provider منفصل). **`docker` غير مثبّت على جهاز الإعداد**
+   (`docker: command not found`)، فلم يُنفَّذ `docker build` ولا `compose up` ولا توجيه Traefik
+   ولا `HEALTHCHECK` داخل حاوية. الأمر التالي على جهاز فيه Docker هو البوّابة الحقيقية لهذه الحزمة.
+
+11. **سلسلة الهجرات لا تُنشئ المخطط من الصفر (عائق حقيقي، مُقاس).** `prisma migrate deploy`
+    على قاعدة جديدة طبّق 4 من 14 ثم سقط بـ`column "designerName" does not exist`؛ تاريخ الهجرات
+    انحرف عن المخطط لأن التطوير استخدم `db push`. عيب واحد أُصلح في
+    `20260824120000_add_business_multitenancy` (`DROP CONSTRAINT` لكائنين أُنشئا كـINDEX صار
+    `DROP INDEX IF EXISTS`)، والسلسلة ما زالت لا تكتمل. لذلك قاعدة التجربة بُنيت بـ
+    `prisma db push --accept-data-loss` (38 جدولًا، 20 عمود `deletedAt`). **قبل أي نشر حقيقي
+    يجب إعادة تأسيس الهجرات، وإلا فمسار الترقية غير موجود.** ملاحظة: `--skip-generate` لم يعد
+    خيارًا في Prisma 7.9 (`unknown or unexpected option`).
+
+12. **قفل التجربة يعتمد على البناء لا على وقت التشغيل وحده.** الـmiddleware يُبنى لـEdge
+    runtime، فقيم `process.env` فيه تُستبدل وقت البناء: تشغيل نسخة مبنية **بلا**
+    `--build-arg TRIAL_READ_ONLY=1` أوقف الكتابة في مسارات الدليل (`403`) لكن ترك
+    `/api/ai-workforce/health` تُعيد `200`. صورة التجربة تُبنى بالـarg؛ الطبقة الثانية في
+    `src/lib/trial-lock.ts` تمنع الكتابة عبر معالجات Node في كل الأحوال.
+
+13. **نطاق القراءة مثبَّت على ثلاث شركات في الكود.** `readScopeSlugs` يعيد
+    `nexup`/`rebound`/`abomazen` حرفيًا، فشركة بـslug آخر تُقرأ **صفر صفوف** حتى لـ`SUPER_ADMIN`
+    بينما `/api/office/stats` يعدّها (قياس: `0 client(s)` مقابل `clients=1`). لذلك يُنشأ مستخدم
+    التجربة على شركة `nexup`. جعل النطاق يُقرأ من القاعدة **تغيير وظيفي** — خارج نطاق هذا التسليم.
 10. **NEXPUBLISH غير موثّق في هذا المستودع** (لا ذكر له في الكود ولا الوثائق): تفترض الخطة أنه جار
    مستقل، ولا تحتوي على أمر واحد يلمسه. إن كان يشارك Postgres أو Traefik بشكل غير معتاد، فذلك
    يُفحص في الخطوة 0 ويُسجَّل قبل أي تثبيت.
@@ -307,4 +339,63 @@ curl -s -o /dev/null -w '%{http_code}\n' https://command.<DOMAIN>/api/clients  #
 docker logs --tail 50 nexup-command-app
 ```
 
-**الحالة النهائية لهذا التسليم:** خطة جاهزة للتنفيذ، و**لم يُغيَّر شيء على أي خادم**.
+---
+
+## 13. سجل الأدلة — ما نُفِّذ فعليًا (2026-11-09، محليًا، بلا خادم)
+
+كل ما يلي نُفِّذ على هذه الشجرة فوق `e549f77`. **لا اتصال بأي خادم، لا push، لا DNS،
+لا مسّ لـ Hermes أو NEXPUBLISH.**
+
+### 13.1 البناء المعزول
+
+| البند | القياس |
+|---|---|
+| المكان | `.deploy/tree` (نسخة شجرة، `node_modules` عبر junction، `.next`/`.git`/`.demo`/`tests`/`.env*` مستثناة) |
+| الأمر | `npx next build --webpack` مع `DATABASE_URL=…/deploy_check` وقت البناء فقط |
+| النتيجة | `✓ Compiled successfully in 15.0s`، `BUILD_RC=0` |
+| `BUILD_ID` | `xBzUmJntUH51CF7R7q0v3` (بلا قفل حافة) ثم `djmXay5SjmAaCreK2u1gp` (بعد `TRIAL_READ_ONLY=1`) |
+| معاينة 3211 | لم تُمَس: `.next` الأصلية **بلا `BUILD_ID`**، والمنفذ 3211 استمر بالرد |
+
+### 13.2 قاعدة جديدة والهجرات
+
+- `prisma migrate deploy` على قاعدة فارغة: **توقف** بعد 4 هجرات — `column "designerName" does not exist`.
+  (عيب منفصل أُصلح: `DROP CONSTRAINT "Client_phone_key"` و`ServiceType_name_isCustom_key`
+  كانا `INDEX` لا constraint ⇒ صار `DROP INDEX IF EXISTS`.)
+- `prisma db push --accept-data-loss`: **نجح** ⇒ 38 جدولًا، 20 عمود `deletedAt`، `DB_PUSH_RC=0`.
+- `prisma/proposed-migrations`: لم تُطبَّق ولم تُمَس.
+
+### 13.3 التشغيل والدخول والقراءة
+
+| المرحلة | الحالة | النتيجة |
+|---|---|---|
+| كتابة مفعّلة (بلا قفل) | `next start` 3311، `✓ Ready in 338ms` | **12/12** فحصًا: دخول، `/api/auth/me`، `1 client(s)`، `3 project(s)`، صفحتا `/command/*` (~33.6 KB)، إنشاء مشروع، خروج، تحويل بلا جلسة، `401` |
+| قيد قراءة (`TRIAL_READ_ONLY=1` + بناء بالـarg) | نفسه | **17/17**: كل ما سبق + رفض الكتابة `403 This trial is read-only.` + `/api/exec/turn` و`/api/ai-workforce/*` = `403 external execution disabled` |
+
+المستخدم الأول: `scripts/create-first-user.mjs --slug nexup` ⇒ شركة `cmw8f0xdq0000ksudmvmh1008`
+ومستخدم `owner@trial.local` بدور `SUPER_ADMIN`. كلمة المرور من `--password-stdin`
+(مولّدة 24 بايت، في `.deploy/trial-check.env` المستثنى من git) — لا تُطبع ولا تُحفظ في المستودع.
+
+ملاحظة صدق عن التشغيل: أول محاولة للمرحلة الثانية أعطت `201` لأن `kill` لم يُوقف الخادم
+السابق (استمع 3311 فبقي يخدم، والخادم الجديد فشل بـ`EADDRINUSE`). بعد الإيقاف بالـPID
+(`Stop-Process`) وإعادة البناء، كانت النتيجة 17/17 أعلاه. لا تُصدَّق نتيجة مرحلة لم يُثبت
+أنها خدمها الخادم المقصود.
+
+### 13.4 النسخ والاستعادة — أثر الرجوع
+
+| الخطوة | المخرَج |
+|---|---|
+| `deploy/scripts/backup.sh` | `/tmp/nexup-backups/deploy_run-20261109-004015.dump` — 131689 بايت، `sha256=49bf6e32…`, `users=1 clients=1 projects=1` |
+| صف كُتب **بعد** النسخة | مستخدم ثانٍ `second@trial.local` ⇒ الحيّة: `users=2` |
+| `restore.sh --file … --database deploy_restore --scratch` | أنشأ القاعدة، استعاد في **1s**، والعدّادات: `users=1 businesses=1 clients=1 live_clients=1 projects=1 activity=1` |
+| `migration_history` | `absent` — قاعدة بُنيت بـ`db push` لا تحمل `_prisma_migrations`؛ صُحّح السكربت ليقولها بدل أن يفشل |
+| **أثر الرجوع** | الاستعادة تُعيد الحالة **لحظة النسخة**: `second@trial.local` غير موجود في القاعدة المستعادة. لا PITR ولا استعادة تدريجية — كل ما بُعد النسخة يضيع |
+
+### 13.5 ما لم يُختبر (ولا يُدّعى)
+
+- `docker build` / `compose up` / توجيه Traefik / `HEALTHCHECK` داخل حاوية — **Docker غير متاح** على جهاز الإعداد.
+- الكوكي `secure` على HTTPS حقيقي، والفحص من هاتف — يحتاج الاسم الفرعي والشهادة على الخادم.
+- `prisma migrate deploy` على قاعدة تُحفظ (السلسلة مكسورة أصلًا، §10/11).
+- EXEC مع مزوّد حقيقي: غير مُهيّأ ولا مُختبر؛ "مغلق" هنا يعني `403` من قفل/إعداد، لا تنفيذًا ناجحًا مع Hermes.
+
+**الحالة النهائية لهذا التسليم:** حزمة نشر جاهزة وقياساتها مسجّلة، و**لم يُغيَّر شيء على أي خادم
+ولم يُنشر شيء**. "يعمل" تقال فقط لما في §13.3–13.4؛ "غير مُختبر" لما في §13.5.

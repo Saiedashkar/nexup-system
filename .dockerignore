@@ -1,0 +1,20 @@
+# Build context for `docker build -f deploy/Dockerfile .` (repository root).
+#
+# Everything here stays OUT of the image: history, the machine's own build output,
+# the local demo environment (which holds a generated secret), the rehearsal tree,
+# tests and evidence documents, and the PROPOSED migrations — those are not part of
+# the shipped schema and must never be baked into an image.
+.git
+.gitignore
+.next
+node_modules
+.demo
+.deploy
+coverage
+tests
+docs
+bridge
+prisma/proposed-migrations
+*.md
+.env*
+*.log

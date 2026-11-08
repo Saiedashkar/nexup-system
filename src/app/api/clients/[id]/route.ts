@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentSession, isAdmin } from "@/lib/auth";
 import { companyWriteDenial } from "@/lib/read-scope";
+import { trialWriteDenial } from "@/lib/trial-lock";
 import { softDeleteMany, softDeleteRecord, type LooseDb } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
@@ -19,6 +20,9 @@ export async function DELETE(
        projects, payments and subscriptions with one request. Refused before the
        row is even read. */
     if (!isAdmin(session)) return NextResponse.json({ error: "Access denied" }, { status: 403 });
+
+    const trial = trialWriteDenial();
+    if (trial) return NextResponse.json({ error: trial.error }, { status: trial.status });
 
     const { id } = await params;
 

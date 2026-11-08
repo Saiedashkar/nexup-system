@@ -1,0 +1,99 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# NEXUP COMMAND — the proxy's view (Traefik FILE provider)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# This file is the ONLY place this project talks about the proxy. It is installed
+# into the proxy's file-provider directory under a name of its own (for example
+# `<traefik-file-provider-dir>/nexup-command.yml`); no existing proxy file is
+# edited, no static configuration changes, and nothing here mentions Hermes,
+# NEXPUBLISH or port 4860.
+#
+# Requirements it assumes (verify on the host, read-only):
+#   · the proxy's docker network is the one compose calls EDGE_NETWORK, and the app
+#     container is attached to it (compose does that);
+#   · the proxy already resolves container names on that network (it does for the
+#     existing bridge route, which is how this shape was chosen);
+#   · a file provider is enabled and its directory is known.
+#
+# LOGIN PROTECTION FOR A PHONE — two independent gates, both optional but
+# recommended for a private trial:
+#
+#   1. `command-ip-allowlist`: only the operator's networks may even connect. The
+#      cheapest and strongest control for a one-person trial; a phone on mobile data
+#      needs its carrier range, so most operators will leave this COMMENTED and rely
+#      on (2) plus the domain not being published anywhere.
+#   2. `command-basic-auth`: one more password in front of the login page, so an
+#      unattended phone or a leaked URL still hits a wall. Generate the user line ON
+#      THE HOST, never in git:
+#
+#        docker run --rm httpd:2.4-alpine htpasswd -nbB owner 'the-password' | sed 's/\$/\$\$/g'
+#
+#      Paste the single resulting `owner:$2y$…` line into `users:` below (on the
+#      host copy of this file, chmod 600). Escape `$` as `$$` so the proxy does not
+#      read it as a variable.
+#
+# The application adds its own layer: `TRIAL_READ_ONLY=1` in app.env keeps every
+# write and every model call closed even for a signed-in session.
+
+http:
+  routers:
+    nexup-command:
+      rule: "Host(`${COMMAND_HOSTNAME}`)"
+      entryPoints:
+        - websecure
+      service: nexup-command
+      middlewares:
+        - command-security-headers
+        # - command-ip-allowlist
+        # - command-basic-auth
+      tls:
+        certResolver: ${TRAEFIK_CERT_RESOLVER:-le}
+
+    nexup-command-http:
+      rule: "Host(`${COMMAND_HOSTNAME}`)"
+      entryPoints:
+        - web
+      service: nexup-command
+      middlewares:
+        - command-redirect-https
+
+  services:
+    nexup-command:
+      loadBalancer:
+        # Container DNS name on the edge network. Change only if compose renames it.
+        servers:
+          - url: "http://nexup-command-app-1:3000"
+        healthCheck:
+          path: /login
+          intervalSeconds: 30
+          timeoutSeconds: 5
+
+  middlewares:
+    command-redirect-https:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+    command-security-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        contentTypeNosniff: true
+        referrerPolicy: strict-origin-when-cross-origin
+        frameDeny: true
+
+    command-ip-allowlist:
+      ipAllowList:
+        sourceRange:
+          # Replace with the operator's static ranges; never commit the real values.
+          - "203.0.113.0/24"
+        ipStrategy:
+          # Behind a proxy the peer is the proxy itself; do not trust a caller-supplied
+          # X-Forwarded-For for an allowlist decision.
+          depth: 1
+
+    command-basic-auth:
+      basicAuth:
+        users:
+          # One line, generated on the host (see header). Empty here on purpose.
+          - "owner:$$2y$$REPLACE_WITH_HOST_GENERATED_HASH"

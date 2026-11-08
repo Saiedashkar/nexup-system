@@ -95,9 +95,15 @@ CREATE INDEX "Expense_businessId_idx" ON "Expense"("businessId");
 -- Step 10: Update unique constraints for multi-business
 -- ═══════════════════════════════════════════════════════
 -- Client: drop old unique on phone, add composite unique
-ALTER TABLE "Client" DROP CONSTRAINT "Client_phone_key";
+-- The initial migration creates this uniqueness as an INDEX, not a table
+-- constraint, so "ALTER TABLE ... DROP CONSTRAINT" failed with 42704 on every
+-- fresh database (the dev/test databases were built with `prisma db push`, which
+-- is why the chain was never exercised end to end). Drop the object that exists.
+DROP INDEX IF EXISTS "Client_phone_key";
 ALTER TABLE "Client" ADD CONSTRAINT "Client_businessId_phone_key" UNIQUE ("businessId", "phone");
 
 -- ServiceType: drop old unique, add composite unique
-ALTER TABLE "ServiceType" DROP CONSTRAINT "ServiceType_name_isCustom_key";
+-- Same defect, same object shape (a UNIQUE INDEX created by the initial
+-- migration): drop the index that is really there.
+DROP INDEX IF EXISTS "ServiceType_name_isCustom_key";
 ALTER TABLE "ServiceType" ADD CONSTRAINT "ServiceType_businessId_name_isCustom_key" UNIQUE ("businessId", "name", "isCustom");

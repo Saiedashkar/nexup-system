@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { findOrReviveClient } from "@/lib/soft-delete";
 import { getCurrentSession } from "@/lib/auth";
 import { canUseProjectsFeature } from "@/lib/read-scope";
+import { trialWriteDenial } from "@/lib/trial-lock";
 import { resolveReadScope, resolveWriteTarget } from "@/lib/read-scope-db";
 
 export const runtime = "nodejs";
@@ -95,6 +96,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  /* Runtime trial lock (see src/lib/trial-lock.ts): the edge middleware's copy of
+     this flag is fixed at build time, this one is read per request. */
+  const trial = trialWriteDenial();
+  if (trial) return NextResponse.json({ error: trial.error }, { status: trial.status });
+
   try {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

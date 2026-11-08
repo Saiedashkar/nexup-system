@@ -50,3 +50,8 @@ next-env.d.ts
 # Local throwaway DEMO environment (scripts/demo-env.mjs) — holds a generated
 # AUTH_SECRET and a local demo login. Never committed.
 .demo/
+
+# Isolated deployment rehearsal (`deploy/` artifacts are committed; the tree this
+# machine builds and runs them from is not, and it holds no secrets of its own).
+/.deploy/
+__pycache__/

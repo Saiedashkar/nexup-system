@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentSession, isAdmin } from "@/lib/auth";
 import { softDeleteMany, softDeleteRecord, type LooseDb } from "@/lib/soft-delete";
 import { resolveReadScope, resolveWriteTarget } from "@/lib/read-scope-db";
+import { trialWriteDenial } from "@/lib/trial-lock";
 
 export const runtime = "nodejs";
 
@@ -56,6 +57,9 @@ export async function GET() {
 
 // DELETE — Clean up orphaned clients (clients with no projects)
 export async function DELETE(request: Request) {
+  const trial = trialWriteDenial();
+  if (trial) return NextResponse.json({ error: trial.error }, { status: trial.status });
+
   try {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

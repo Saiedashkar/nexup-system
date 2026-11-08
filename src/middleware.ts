@@ -14,6 +14,31 @@ const publicPaths = new Set(["/login", "/api/auth/login", "/api/auth/logout"]);
 // `/api/exec/turn/<anything>`, keeps the blanket guard below.
 const routeManagedAuthPaths = new Set(["/api/exec/turn"]);
 
+/* ═══════════════════════════════════════════════════════
+   TRIAL LOCK — explicit, default off
+   ─────────────────────────────
+   A private trial ships the READ surfaces and nothing that can move money or
+   reach a model provider. `TRIAL_READ_ONLY=1` turns every mutating API call off
+   except sign-in/sign-out, and closes the external-execution surfaces for every
+   method, so "the trial became a writable app" is an environment decision, never
+   a toggle a page or a stray client can flip. Unset (the default) keeps every
+   production behaviour exactly as it was.
+   ═══════════════════════════════════════════════════════ */
+const TRIAL_SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const TRIAL_ALWAYS_MUTABLE = new Set(["/api/auth/login", "/api/auth/logout"]);
+const TRIAL_EXECUTION_PREFIXES = ["/api/exec", "/api/ai-workforce"];
+
+function trialDenial(pathname: string, method: string): string | null {
+  if (process.env.TRIAL_READ_ONLY !== "1") return null;
+  if (!pathname.startsWith("/api/")) return null;
+  if (TRIAL_EXECUTION_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+    return "External execution is disabled in this trial.";
+  }
+  if (TRIAL_SAFE_METHODS.has(method.toUpperCase())) return null;
+  if (TRIAL_ALWAYS_MUTABLE.has(pathname)) return null;
+  return "This trial is read-only.";
+}
+
 // Business-specific route prefixes: "may this session enter THIS COMPANY" — a
 // company question, answered per prefix.
 const businessRoutes: Record<string, string[]> = {
@@ -62,6 +87,12 @@ const officeFinanceRoutes = [
 
 export default async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  /* The trial lock answers BEFORE every other gate, including the route-managed
+     EXEC path: in a read-only trial there is no envelope worth speaking. */
+  const trial = trialDenial(pathname, request.method);
+  if (trial) return NextResponse.json({ error: trial }, { status: 403 });
+
   if (routeManagedAuthPaths.has(pathname)) return NextResponse.next();
   if (publicPaths.has(pathname)) return NextResponse.next();
 

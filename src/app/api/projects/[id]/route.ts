@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentSession } from "@/lib/auth";
 import { canUseProjectsFeature, companyWriteDenial } from "@/lib/read-scope";
+import { trialWriteDenial } from "@/lib/trial-lock";
 import { softDeleteMany, softDeleteRecord, type LooseDb } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
@@ -11,6 +12,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const trial = trialWriteDenial();
+  if (trial) return NextResponse.json({ error: trial.error }, { status: trial.status });
+
   try {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -169,6 +173,9 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const trial = trialWriteDenial();
+  if (trial) return NextResponse.json({ error: trial.error }, { status: trial.status });
+
   try {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

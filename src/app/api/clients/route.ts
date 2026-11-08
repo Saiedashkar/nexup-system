@@ -68,40 +68,45 @@ export async function DELETE(request: Request) {
     if (!scope.ok) {
       return NextResponse.json({ error: scope.error }, { status: scope.status });
     }
-    const scopedIds = [scope.businessId];
+    /* ONE TRANSACTION FOR THE WHOLE REQUEST. Choosing the orphans, hiding each
+       one, its subscriptions and the activity entries are a single unit: if any
+       client fails, every earlier one is rolled back instead of leaving the
+       company half cleaned. The timeout is raised because the request is now one
+       statement series, not N independent commits. */
+    const deleted = await prisma.$transaction(async (tx) => {
+      const db = tx as unknown as LooseDb;
 
-    // Find all clients with no projects AND no subscriptions.
-    // Counts are computed with the soft-delete-aware client so a client whose
-    // rows were only soft-deleted still counts as orphaned.
-    const liveClients = await prisma.client.findMany({
-      where: { businessId: { in: scopedIds } },
-      select: { id: true },
-    });
-    const orphaned: { id: string }[] = [];
-    for (const c of liveClients) {
-      const [projectCount, subscriptionCount] = await Promise.all([
-        prisma.projectRecord.count({ where: { clientId: c.id } }),
-        prisma.subscription.count({ where: { clientId: c.id } }),
-      ]);
-      if (projectCount === 0 && subscriptionCount === 0) orphaned.push(c);
-    }
+      /* `tx` is the raw client, so the soft-delete extension does not filter for
+         us: "live" is spelled out, exactly as the extended client would have
+         applied it. An orphan is a client with no live project and no live
+         subscription. */
+      const liveClients = await tx.client.findMany({
+        where: { businessId: scope.businessId, deletedAt: null },
+        select: { id: true },
+      });
 
-    if (orphaned.length === 0) {
+      const orphaned: string[] = [];
+      for (const c of liveClients) {
+        const [projectCount, subscriptionCount] = await Promise.all([
+          tx.projectRecord.count({ where: { clientId: c.id, deletedAt: null } }),
+          tx.subscription.count({ where: { clientId: c.id, deletedAt: null } }),
+        ]);
+        if (projectCount === 0 && subscriptionCount === 0) orphaned.push(c.id);
+      }
+
+      for (const id of orphaned) {
+        await softDeleteMany("Subscription", { clientId: id }, session.userId, db);
+        await softDeleteRecord("Client", id, session.userId, db);
+      }
+
+      return orphaned.length;
+    }, { timeout: 30_000 });
+
+    if (deleted === 0) {
       return NextResponse.json({ deleted: 0, message: "No orphaned clients found" });
     }
 
-    /* Each client is one operation: its subscriptions, the client row and the
-       activity entry are written in one transaction, so a failure cannot leave a
-       client hidden with its subscriptions still live (or the reverse). */
-    for (const c of orphaned) {
-      await prisma.$transaction(async (tx) => {
-        const db = tx as unknown as LooseDb;
-        await softDeleteMany("Subscription", { clientId: c.id }, session.userId, db);
-        await softDeleteRecord("Client", c.id, session.userId, db);
-      });
-    }
-
-    return NextResponse.json({ deleted: orphaned.length, message: `Deleted ${orphaned.length} orphaned client(s)` });
+    return NextResponse.json({ deleted, message: `Deleted ${deleted} orphaned client(s)` });
   } catch (error) {
     console.error("Failed to cleanup clients:", error);
     return NextResponse.json({ error: "Failed to cleanup" }, { status: 500 });

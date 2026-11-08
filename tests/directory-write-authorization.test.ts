@@ -20,6 +20,73 @@ vi.mock("@/lib/auth", async (importOriginal) => {
   return { ...actual, getCurrentSession: async () => authState.current };
 });
 
+/* THE TRANSACTION ITSELF IS THE SUBJECT of the cleanup tests, so the Prisma handle
+   is wrapped once, here. The wrapper counts the `$transaction` calls one request
+   makes, and it can fail the SECOND client hide inside one — the failure a
+   per-client commit loop cannot survive. Every other delegate is the real client. */
+const txProbe = vi.hoisted(() => ({
+  failOnSecondClientHide: false,
+  transactions: 0,
+  hidden: new Set<string>(),
+}));
+
+vi.mock("@/lib/prisma", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/prisma")>();
+  const realTransaction = actual.prisma.$transaction.bind(actual.prisma) as unknown as (
+    arg: unknown,
+    opts?: unknown,
+  ) => Promise<unknown>;
+
+  const guardClient = (delegate: unknown) =>
+    new Proxy(delegate as Record<string, unknown>, {
+      get(target, prop, receiver) {
+        if (prop !== "update") return Reflect.get(target, prop, receiver);
+        return (args: { where?: { id?: string } }) => {
+          const update = Reflect.get(target, "update", receiver) as (a: unknown) => Promise<unknown>;
+          const id = args?.where?.id ?? "";
+          if (!txProbe.failOnSecondClientHide) return update(args);
+          if (!txProbe.hidden.has(id)) {
+            txProbe.hidden.add(id);
+            if (txProbe.hidden.size === 2) {
+              return Promise.reject(new Error("injected: the second client hide fails"));
+            }
+          }
+          return update(args);
+        };
+      },
+    });
+
+  const guardTransaction = (client: Record<string, unknown>) =>
+    new Proxy(client, {
+      get(target, prop, receiver) {
+        if (prop !== "client") return Reflect.get(target, prop, receiver);
+        return guardClient(Reflect.get(target, "client", receiver));
+      },
+    });
+
+  const wrapped = new Proxy(actual.prisma, {
+    get(target, prop, receiver) {
+      if (prop === "$transaction") {
+        return (arg: unknown, opts?: unknown) => {
+          txProbe.transactions += 1;
+          if (typeof arg !== "function") return realTransaction(arg, opts);
+          return realTransaction(
+            (client: Record<string, unknown>) =>
+              (arg as (c: unknown) => Promise<unknown>)(guardTransaction(client)),
+            opts,
+          );
+        };
+      }
+      const value = Reflect.get(target, prop, receiver) as unknown;
+      return typeof value === "function"
+        ? (value as (...a: unknown[]) => unknown).bind(target)
+        : value;
+    },
+  });
+
+  return { ...actual, prisma: wrapped };
+});
+
 import middleware from "@/middleware";
 import { createSessionToken, SESSION_COOKIE, type Session } from "@/lib/auth";
 import { prisma, prismaRaw } from "@/lib/prisma";
@@ -81,6 +148,10 @@ let orphanB: { id: string };
 const date = new Date("2026-11-01T10:00:00.000Z");
 
 beforeEach(async () => {
+  txProbe.transactions = 0;
+  txProbe.failOnSecondClientHide = false;
+  txProbe.hidden.clear();
+
   await prismaRaw.paymentReceipt.deleteMany({});
   await prismaRaw.subscriptionInvoice.deleteMany({});
   await prismaRaw.clientPayment.deleteMany({});
@@ -589,6 +660,75 @@ describe("DELETE /api/clients — the cleanup obeys the same policy", () => {
     expect((await clientState(orphanB.id)).hidden).toBe(true);
     expect((await clientState(orphanA.id)).hidden).toBe(false);
   });
+
+  /** More orphans in company B, so one cleanup has to touch several clients. */
+  async function extraOrphans(count: number) {
+    const created: { id: string }[] = [];
+    for (let i = 0; i < count; i += 1) {
+      created.push(
+        await prismaRaw.client.create({
+          data: { businessId: bizB.id, phone: `0299${i}`, name: `يتيم إضافي ${i}` },
+        }),
+      );
+    }
+    return created;
+  }
+
+  it("hides three clients and their logs in ONE transaction for the request", async () => {
+    const s = sessions();
+    const extras = await extraOrphans(2);
+    const ids = [orphanB.id, ...extras.map((c) => c.id)];
+    const logsBefore = await prismaRaw.activityLog.count();
+
+    txProbe.transactions = 0;
+    const response = await cleanupClients(
+      request(`/api/clients?businessId=${bizB.id}`, "DELETE", undefined, s.adminB),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ deleted: 3 });
+    /* ONE `$transaction` for the whole request — not one per client. */
+    expect(txProbe.transactions).toBe(1);
+    for (const id of ids) {
+      const row = await prismaRaw.client.findUnique({ where: { id }, select: { deletedAt: true } });
+      expect(row?.deletedAt).not.toBeNull();
+    }
+    /* The activity entries were written inside that same unit. */
+    expect(await prismaRaw.activityLog.count()).toBe(logsBefore + 3);
+    /* clientB still has a live project, so it is not an orphan and stays visible. */
+    expect(await prismaRaw.client.count({ where: { businessId: bizB.id, deletedAt: null } })).toBe(1);
+  });
+
+  it("rolls the whole cleanup back when the second client fails", async () => {
+    const s = sessions();
+    const extras = await extraOrphans(2);
+    const ids = [orphanB.id, ...extras.map((c) => c.id)];
+
+    const world = await worldState();
+    const logsBefore = await prismaRaw.activityLog.count();
+    const before = await Promise.all(ids.map((id) => clientState(id)));
+
+    txProbe.hidden.clear();
+    txProbe.failOnSecondClientHide = true;
+    try {
+      const response = await cleanupClients(
+        request(`/api/clients?businessId=${bizB.id}`, "DELETE", undefined, s.adminB),
+      );
+      /* The first client had already been hidden when the second failed — a
+         per-client commit would answer 500 here with that first hide kept. */
+      expect(response.status).toBe(500);
+    } finally {
+      txProbe.failOnSecondClientHide = false;
+    }
+
+    expect(await worldState()).toEqual(world);
+    expect(await prismaRaw.activityLog.count()).toBe(logsBefore);
+    expect(await Promise.all(ids.map((id) => clientState(id)))).toEqual(before);
+    for (const id of ids) {
+      const row = await prismaRaw.client.findUnique({ where: { id }, select: { deletedAt: true } });
+      expect(row?.deletedAt).toBeNull();
+    }
+  });
 });
 
 describe("the projects workspace refuses an employee before it looks anything up", () => {
@@ -842,5 +982,63 @@ describe("GET /api/office/stats — a read that changes nothing", () => {
     expect(response.status).toBe(200);
     expect((await clientState(orphanA.id)).hidden).toBe(true);
     expect((await clientState(orphanB.id)).hidden).toBe(false);
+  });
+});
+
+describe("a project delete leaves the client's OTHER work alone", () => {
+  it("keeps the client, their second project and the subscription visible", async () => {
+    const s = sessions();
+
+    /* A second live project for the same client, with its own money. Deleting the
+       first must not touch any of it — and must not hide the client. */
+    const second = await prismaRaw.projectRecord.create({
+      data: {
+        businessId: bizA.id,
+        clientId: clientA.id,
+        projectName: "مشروع ثانٍ",
+        date,
+        totalPrice: 500,
+        deposit: 100,
+        remaining: 400,
+      },
+    });
+    await prismaRaw.clientPayment.create({ data: { projectRecordId: second.id, amount: 100, date } });
+    await prismaRaw.poolTransaction.create({
+      data: { businessId: bizA.id, projectRecordId: second.id, amountSAR: 100, type: "IN", date },
+    });
+
+    const response = await deleteProject(
+      request(`/api/projects/${projectA.id}`, "DELETE", undefined, s.adminA),
+      params(projectA.id),
+    );
+    expect(response.status).toBe(200);
+
+    const deleted = await prismaRaw.projectRecord.findUnique({
+      where: { id: projectA.id },
+      select: { deletedAt: true },
+    });
+    expect(deleted?.deletedAt).not.toBeNull();
+
+    const kept = await prismaRaw.projectRecord.findUnique({
+      where: { id: second.id },
+      select: { deletedAt: true, deposit: true, projectName: true },
+    });
+    expect(kept?.deletedAt).toBeNull();
+    expect(kept?.projectName).toBe("مشروع ثانٍ");
+    expect(Number(kept?.deposit)).toBe(100);
+
+    /* The client is not an orphan any more, so the auto-hide must not fire. */
+    const client = await prismaRaw.client.findUnique({
+      where: { id: clientA.id },
+      select: { deletedAt: true },
+    });
+    expect(client?.deletedAt).toBeNull();
+    expect(await prismaRaw.subscription.count({ where: { clientId: clientA.id, deletedAt: null } })).toBe(1);
+
+    /* The second project's money survived; only the deleted project's was hidden. */
+    expect(await prismaRaw.clientPayment.count({ where: { projectRecordId: second.id, deletedAt: null } })).toBe(1);
+    expect(await prismaRaw.poolTransaction.count({ where: { projectRecordId: second.id, deletedAt: null } })).toBe(1);
+    expect(await prismaRaw.clientPayment.count({ where: { projectRecordId: projectA.id, deletedAt: null } })).toBe(0);
+    expect(await prismaRaw.poolTransaction.count({ where: { projectRecordId: projectA.id, deletedAt: null } })).toBe(0);
   });
 });

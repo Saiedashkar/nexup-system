@@ -77,7 +77,7 @@
     },
     "directoryLayer": {
       "count": 13,
-      "value": "b6dd955aad14de7a30e52d84de1227eaab3e18ebedea1dac0459e079811e61c4"
+      "value": "103e7d869ff8284bc65234a169706c9d1cf6365db9a1415413e55fb6d1596ba7"
     },
     "directoryNote": "The first real data binding: read layer (api/mapping/reducer/store) + shared chrome + test. The product rows for /command/clients, /command/projects, i18n/messages.ts and lab/kit.tsx were re-hashed on 2026-11-08 because those four files are now bound to the routes."
   },
@@ -1500,7 +1500,7 @@
     "directory": [
       {
         "path": "docs/COMMAND_DIRECTORY_BINDING.md",
-        "sha256": "bc8a3be17642363a76b2f2ad439c75b0928b6d797b6cacc1b6830d3d22bdaf6f"
+        "sha256": "7924482bf66c4b773553e8aa4ce80442a323c2c733b5fbac1332e96fc021f693"
       },
       {
         "path": "docs/DEAL_HANDOFF_SPEC.md",
@@ -1548,7 +1548,7 @@
       },
       {
         "path": "tests/directory-write-authorization.test.ts",
-        "sha256": "6d174c9060ba305dcc8114533ac74dbbaacb6eb450b08f7a6eed756a5d794e55"
+        "sha256": "e5bcb95bfab688d3c97ae6806b290bbcf556480963dc527debc6814610ae07b5"
       }
     ]
   },

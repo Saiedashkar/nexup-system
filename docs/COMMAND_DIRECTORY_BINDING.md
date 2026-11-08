@@ -462,7 +462,7 @@ an oracle for which project ids exist. Authorized roles keep exactly the isolati
 | `PATCH /api/projects/[id]` | treasury movement, client payment, project row, recomputed tier, `UPDATE` activity |
 | `DELETE /api/projects/[id]` | client payments, treasury movements, project row, client auto-hide, its subscriptions, every `SOFT_DELETE` entry |
 | `DELETE /api/clients/[id]` | payments, treasury movements, projects, subscriptions, client row, every `SOFT_DELETE` entry |
-| `DELETE /api/clients` (cleanup) | per client: its subscriptions, the client row and the activity entry |
+| `DELETE /api/clients` (cleanup) | **the whole request** (11.5): choosing the orphans, every orphan's subscriptions, its row and every `SOFT_DELETE` entry |
 
 `softDeleteRecord` / `softDeleteMany` now accept the transaction's delegates (`LooseDb`), and
 `logActivity` **rethrows** when it is given one — inside a transaction the log is part of the write, so a
@@ -492,3 +492,49 @@ receipt — and is deliberately not implemented here.
 | failure halfway through a client delete | `500`, client still visible, every child row still live |
 | failure halfway through a project delete | `500`, project still live, its client still visible |
 | successful project delete | payments/projects/subscriptions hidden together, client hidden, activity entries written |
+| project delete when the client has another live project | the deleted project and its money hidden; the client, the second project, its payment, its treasury movement and the client's subscription all still live |
+| cleanup of three clients | three hidden rows and three `SOFT_DELETE` entries written in exactly **one** `$transaction` call |
+| cleanup where the second client fails | `500` and **every** client still visible, no log written, the global ledger identical — one unit for the request, not one per client |
+
+`tests/directory-write-authorization.test.ts` holds **44** of these (up from 41), next to the **19**
+rule tests in `tests/directory-read-scope.test.ts`: **63/63 pass**.
+
+### 11.5 The cleanup is one transaction for the request
+
+`DELETE /api/clients` used to commit once per client, so a company with nine orphans was nine commits:
+if the tenth failed, the route answered `500` with nine clients already hidden and nine activity entries
+already written, and the caller had no way to learn how much had landed. The whole request is now one
+`prisma.$transaction` — the candidate query, the orphan counts, every client's subscription hide, its row
+and its activity entries.
+
+The first failure rolls the request back, so the answer is one of the two honest outcomes: everything is
+hidden, or nothing is. Three details are deliberate:
+
+* **The candidates are chosen inside the same transaction**, with `deletedAt: null` spelled out: `tx` is
+the raw client, so the soft-delete extension is not filtering for it. A client created while the cleanup
+runs cannot be selected and then skipped, and a row that is already hidden is never counted as an orphan
+again.
+* **One timeout for the request** (`{ timeout: 30_000 }`): a cleanup is a single statement series now, and
+the 5 s default would fail a genuinely large company halfway instead of finishing it.
+* **The plan is unchanged otherwise**: the same admin role, the same named, existing company, the same
+`resolveWriteTarget` proof, the same recycle-bin behaviour (a hidden client is restored with its
+subscriptions, section 11.2).
+
+This is the property of 11.2 at the granularity of the request: **a `500` means none of it happened**.
+It is still not idempotent (11.3) — repeating the cleanup after a lost response is harmless because the
+rows already carry `deletedAt`, but that is not a general answer for a write that adds rows.
+
+### 11.6 Checks run for round 6
+
+| Check | Result |
+|---|---|
+| `npx vitest run tests/directory-write-authorization.test.ts tests/directory-read-scope.test.ts` | **63/63 passed**, no skipped test |
+| `npx tsc --noEmit` | **exit 0** |
+| eslint on every touched file | **exit 0**, no errors, no warnings |
+| `node scripts/verify-exec-integration-manifest.mjs` | **exit 0**, `problems: []` |
+| isolated test cluster (`127.0.0.1:5435`, `%LOCALAPPDATA%\nexup-test-db`) | started through `scripts/dev-db.mjs`, destination verified with `SHOW data_directory` / `SHOW port` / `current_database()` **before** the database tests ran |
+
+The rollback tests are the ones a previous turn could not run (the cluster was down and the handler
+suite had been left unexecuted there): the create, update, client-delete, project-delete and cleanup
+failures are all re-run here against a live database, each asserting that every row and every activity
+entry equals the snapshot taken before the request.

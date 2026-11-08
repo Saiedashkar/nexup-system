@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentSession, isAdmin } from "@/lib/auth";
-import { softDeleteMany, softDeleteRecord } from "@/lib/soft-delete";
+import { softDeleteMany, softDeleteRecord, type LooseDb } from "@/lib/soft-delete";
 import { resolveReadScope, resolveWriteTarget } from "@/lib/read-scope-db";
 
 export const runtime = "nodejs";
@@ -90,10 +90,15 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ deleted: 0, message: "No orphaned clients found" });
     }
 
-    // Soft-delete subscriptions and clients (recoverable from the recycle bin)
+    /* Each client is one operation: its subscriptions, the client row and the
+       activity entry are written in one transaction, so a failure cannot leave a
+       client hidden with its subscriptions still live (or the reverse). */
     for (const c of orphaned) {
-      await softDeleteMany("Subscription", { clientId: c.id }, session.userId);
-      await softDeleteRecord("Client", c.id, session.userId);
+      await prisma.$transaction(async (tx) => {
+        const db = tx as unknown as LooseDb;
+        await softDeleteMany("Subscription", { clientId: c.id }, session.userId, db);
+        await softDeleteRecord("Client", c.id, session.userId, db);
+      });
     }
 
     return NextResponse.json({ deleted: orphaned.length, message: `Deleted ${orphaned.length} orphaned client(s)` });

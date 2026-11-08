@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken, type Session } from "@/lib/auth";
-import { canUseDirectoryFeature } from "@/lib/read-scope";
+import { canUseDirectoryFeature, canUseProjectsFeature } from "@/lib/read-scope";
 
 const publicPaths = new Set(["/login", "/api/auth/login", "/api/auth/logout"]);
 
@@ -26,7 +26,10 @@ const businessRoutes: Record<string, string[]> = {
 // which companies it may see. Each entry is answered by the same pure rule the
 // route uses (`lib/read-scope.ts`), so the gate and the handler cannot disagree.
 const featureRoutes: { prefixes: string[]; allows: (session: Session) => boolean }[] = [
-  { prefixes: ["/api/projects", "/command/clients", "/command/projects"], allows: canUseDirectoryFeature },
+  /* Projects are an operator surface: an employee is refused here, on the page and
+     through the API, whatever company flags it carries. */
+  { prefixes: ["/api/projects", "/command/projects"], allows: canUseProjectsFeature },
+  { prefixes: ["/command/clients"], allows: canUseDirectoryFeature },
 ];
 
 // Office finance routes (require canAccessOfficeFinanceFull or SUPER_ADMIN)

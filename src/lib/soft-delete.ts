@@ -7,7 +7,7 @@ import { type SoftDeleteModel } from "./soft-delete-models";
    name declared in `SOFT_DELETE_REGISTRY`.
    ═══════════════════════════════════════════════════════ */
 
-type LooseDelegate = {
+export type LooseDelegate = {
   findMany: (args?: unknown) => Promise<LooseRecord[]>;
   findUnique: (args: unknown) => Promise<LooseRecord | null>;
   update: (args: unknown) => Promise<LooseRecord>;
@@ -23,6 +23,14 @@ type LooseRecord = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 };
+
+/**
+ * The same delegates, but inside `prisma.$transaction`. Callers that need the
+ * delete and its activity log to be one unit pass the transaction's client here,
+ * so a failure anywhere rolls the whole deletion back instead of leaving half of
+ * it applied.
+ */
+export type LooseDb = Record<string, LooseDelegate>;
 
 function db(): Record<string, LooseDelegate> {
   return prismaRaw as unknown as Record<string, LooseDelegate>;
@@ -69,10 +77,22 @@ export async function logActivity(
   action: string,
   entityType: string,
   entityId: string,
+  tx?: LooseDb,
 ): Promise<void> {
   if (!userId) return;
+  const activities = ((tx ?? db()) as unknown as {
+    activityLog: { create: (args: { data: Record<string, unknown> }) => Promise<unknown> };
+  }).activityLog;
+
+  if (tx) {
+    /* Inside a transaction the log is part of the write: its failure must abort
+       the operation, not be swallowed. */
+    await activities.create({ data: { userId, action, entityType, entityId } });
+    return;
+  }
+
   try {
-    await prismaRaw.activityLog.create({ data: { userId, action, entityType, entityId } });
+    await activities.create({ data: { userId, action, entityType, entityId } });
   } catch {
     /* logging must never break the operation */
   }
@@ -93,16 +113,21 @@ export async function getRecord(model: string, id: string): Promise<LooseRecord 
 }
 
 /** Marks a record as deleted. The row itself (and its money) stays in the DB. */
-export async function softDeleteRecord(model: string, id: string, userId: string | null): Promise<LooseRecord | null> {
+export async function softDeleteRecord(
+  model: string,
+  id: string,
+  userId: string | null,
+  tx?: LooseDb,
+): Promise<LooseRecord | null> {
   const meta = SOFT_DELETE_REGISTRY[model as SoftDeleteModel];
   if (!meta) throw new Error(`Unknown model: ${model}`);
 
-  const updated = await db()[meta.delegate].update({
+  const updated = await (tx ?? db())[meta.delegate].update({
     where: { id },
     data: { deletedAt: new Date(), deletedByUserId: userId ?? null },
   });
 
-  await logActivity(userId, "SOFT_DELETE", model, id);
+  await logActivity(userId, "SOFT_DELETE", model, id, tx);
   return updated;
 }
 
@@ -111,16 +136,17 @@ export async function softDeleteMany(
   model: string,
   where: Record<string, unknown>,
   userId: string | null,
+  tx?: LooseDb,
 ): Promise<number> {
   const meta = SOFT_DELETE_REGISTRY[model as SoftDeleteModel];
   if (!meta) return 0;
 
-  const result = await db()[meta.delegate].updateMany({
+  const result = await (tx ?? db())[meta.delegate].updateMany({
     where: { ...where, deletedAt: null },
     data: { deletedAt: new Date(), deletedByUserId: userId ?? null },
   });
 
-  if (result.count > 0) await logActivity(userId, "SOFT_DELETE", model, `bulk:${result.count}`);
+  if (result.count > 0) await logActivity(userId, "SOFT_DELETE", model, `bulk:${result.count}`, tx);
   return result.count;
 }
 

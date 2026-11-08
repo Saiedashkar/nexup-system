@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentSession } from "@/lib/auth";
-import { canUseDirectoryFeature, companyWriteDenial } from "@/lib/read-scope";
-import { softDeleteMany, softDeleteRecord } from "@/lib/soft-delete";
+import { canUseProjectsFeature, companyWriteDenial } from "@/lib/read-scope";
+import { softDeleteMany, softDeleteRecord, type LooseDb } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
 
@@ -14,7 +14,9 @@ export async function PATCH(
   try {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (!canUseDirectoryFeature(session)) {
+    /* BEFORE loading the record: an employee is refused identically whether the id
+       exists or not, so the route cannot be used to probe project ids. */
+    if (!canUseProjectsFeature(session)) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
@@ -140,16 +142,19 @@ export async function PATCH(
         data: { tier },
       });
 
-      return row;
-    });
+      /* The activity log is written INSIDE the same transaction: if it fails, the
+         payment, the project row and the tier change roll back together, and no
+         request fails with 500 after its save already landed. */
+      await tx.activityLog.create({
+        data: {
+          userId: session.userId,
+          action: "UPDATE",
+          entityType: "ProjectRecord",
+          entityId: id,
+        },
+      });
 
-    await prisma.activityLog.create({
-      data: {
-        userId: session.userId,
-        action: "UPDATE",
-        entityType: "ProjectRecord",
-        entityId: id,
-      },
+      return row;
     });
 
     return NextResponse.json(updated);
@@ -167,7 +172,7 @@ export async function DELETE(
   try {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (!canUseDirectoryFeature(session)) {
+    if (!canUseProjectsFeature(session)) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
@@ -189,19 +194,27 @@ export async function DELETE(
     });
     if (denial) return NextResponse.json({ error: denial.error }, { status: denial.status });
 
-    // Soft-delete related rows first (recoverable — nothing is destroyed)
-    await softDeleteMany("ClientPayment", { projectRecordId: id }, session.userId);
-    await softDeleteMany("PoolTransaction", { projectRecordId: id }, session.userId);
+    /* ONE TRANSACTION for the whole deletion: the payments, the treasury
+       movements, the project row, the client auto-hide and every activity entry
+       land together or not at all. A failure halfway rolls everything back
+       instead of leaving a half-deleted project. */
+    await prisma.$transaction(async (tx) => {
+      const db = tx as unknown as LooseDb;
 
-    const clientId = existing.clientId;
-    await softDeleteRecord("ProjectRecord", id, session.userId);
+      // Soft-delete related rows first (recoverable — nothing is destroyed)
+      await softDeleteMany("ClientPayment", { projectRecordId: id }, session.userId, db);
+      await softDeleteMany("PoolTransaction", { projectRecordId: id }, session.userId, db);
 
-    // Auto-hide the client when it has no projects left (restored together on undo)
-    const remainingProjects = await prisma.projectRecord.count({ where: { clientId } });
-    if (remainingProjects === 0) {
-      await softDeleteMany("Subscription", { clientId }, session.userId);
-      await softDeleteRecord("Client", clientId, session.userId);
-    }
+      const clientId = existing.clientId;
+      await softDeleteRecord("ProjectRecord", id, session.userId, db);
+
+      // Auto-hide the client when it has no projects left (restored together on undo)
+      const remainingProjects = await tx.projectRecord.count({ where: { clientId } });
+      if (remainingProjects === 0) {
+        await softDeleteMany("Subscription", { clientId }, session.userId, db);
+        await softDeleteRecord("Client", clientId, session.userId, db);
+      }
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

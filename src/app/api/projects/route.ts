@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { findOrReviveClient } from "@/lib/soft-delete";
 import { getCurrentSession } from "@/lib/auth";
-import { canUseDirectoryFeature } from "@/lib/read-scope";
+import { canUseProjectsFeature } from "@/lib/read-scope";
 import { resolveReadScope, resolveWriteTarget } from "@/lib/read-scope-db";
 
 export const runtime = "nodejs";
@@ -12,11 +12,10 @@ export async function GET(request: NextRequest) {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    /* FEATURE FIRST, COMPANIES SECOND. Using the projects workspace is one
-       permission; which companies it may show is another. A session with no
-       company allowance has no workspace at all — the question the middleware
-       gate used to answer — while the rows below stay scoped to the flags. */
-    if (!canUseDirectoryFeature(session)) {
+    /* PERMISSION FIRST, COMPANIES SECOND. Projects are an operator surface: an
+       employee is refused here even with a company flag, and the refusal happens
+       before any query. Authorized roles still read only their own companies. */
+    if (!canUseProjectsFeature(session)) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
@@ -99,7 +98,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (!canUseDirectoryFeature(session)) {
+    if (!canUseProjectsFeature(session)) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
@@ -230,17 +229,19 @@ export async function POST(request: NextRequest) {
 
       await tx.client.update({ where: { id: client.id }, data: { tier } });
 
-      return created;
-    });
+      /* The activity log is part of the write, not a step after it: if it cannot
+         be recorded, the project (and the client it created) must not exist. A
+         later step can therefore never fail the request after the save landed. */
+      await tx.activityLog.create({
+        data: {
+          userId: session.userId,
+          action: "CREATE",
+          entityType: "ProjectRecord",
+          entityId: created.id,
+        },
+      });
 
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId: session.userId,
-        action: "CREATE",
-        entityType: "ProjectRecord",
-        entityId: project.id,
-      },
+      return created;
     });
 
     return NextResponse.json(project, { status: 201 });

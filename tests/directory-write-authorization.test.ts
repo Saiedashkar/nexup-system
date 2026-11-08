@@ -259,10 +259,17 @@ describe("middleware — the projects workspace is a capability, not a company",
     expect(clientsPage.status).toBe(307);
   });
 
-  it("lets an employee with a company allowance into the workspace (the route still scopes the rows)", async () => {
+  it("refuses an employee even with a company allowance — page and API", async () => {
     const s = sessions();
-    const response = await middlewareFor("/api/projects", s.employeeA);
-    expect(passthrough(response)).toBe(true);
+
+    expect((await middlewareFor("/api/projects", s.employeeA)).status).toBe(403);
+    expect((await middlewareFor(`/api/projects/${projectA.id}`, s.employeeA)).status).toBe(403);
+    const page = await middlewareFor("/command/projects", s.employeeA);
+    expect(page.status).toBe(307);
+    expect(page.headers.get("location")).toContain("/office");
+
+    // The clients workspace keeps its company rule — only projects are operator-only.
+    expect(passthrough(await middlewareFor("/command/clients", s.employeeA))).toBe(true);
   });
 
   it("lets a manager of ANOTHER company into its own projects — the gate no longer asks for nexup", async () => {
@@ -292,13 +299,11 @@ describe("GET — a capability opens the workspace, the flags scope the rows", (
     expect(response.status).toBe(403);
   });
 
-  it("returns only the session's own company to an employee", async () => {
+  it("refuses an employee the project list outright, whatever the company flag", async () => {
     const s = sessions();
     const response = await listProjects(request("/api/projects", "GET", undefined, s.employeeA));
-    expect(response.status).toBe(200);
-    const rows = (await response.json()) as { businessId: string }[];
-    expect(rows).toHaveLength(1);
-    expect(rows[0].businessId).toBe(bizA.id);
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "Access denied" });
   });
 
   it("reads the same companies on both routes", async () => {
@@ -583,6 +588,183 @@ describe("DELETE /api/clients — the cleanup obeys the same policy", () => {
     expect(response.status).toBe(200);
     expect((await clientState(orphanB.id)).hidden).toBe(true);
     expect((await clientState(orphanA.id)).hidden).toBe(false);
+  });
+});
+
+describe("the projects workspace refuses an employee before it looks anything up", () => {
+  it("answers the same way for an existing id and a missing one", async () => {
+    const s = sessions();
+    const ghost = "project-that-does-not-exist";
+
+    const existingPatch = await patchProject(
+      request(`/api/projects/${projectA.id}`, "PATCH", { deposit: 950 }, s.employeeA),
+      params(projectA.id),
+    );
+    const missingPatch = await patchProject(
+      request(`/api/projects/${ghost}`, "PATCH", { deposit: 950 }, s.employeeA),
+      params(ghost),
+    );
+    const existingDelete = await deleteProject(
+      request(`/api/projects/${projectA.id}`, "DELETE", undefined, s.employeeA),
+      params(projectA.id),
+    );
+    const missingDelete = await deleteProject(
+      request(`/api/projects/${ghost}`, "DELETE", undefined, s.employeeA),
+      params(ghost),
+    );
+
+    for (const response of [existingPatch, missingPatch, existingDelete, missingDelete]) {
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: "Access denied" });
+    }
+    // Identical answer either way: the route never tells an employee which id is real.
+    expect(missingPatch.status).toBe(existingPatch.status);
+    expect(missingDelete.status).toBe(existingDelete.status);
+  });
+
+  it("leaves every row alone when an employee tries to create", async () => {
+    const s = sessions();
+    const world = await worldState();
+    const before = await clientState(clientA.id);
+
+    const response = await createProject(
+      request(
+        "/api/projects",
+        "POST",
+        newProjectBody({ businessId: bizA.id, clientId: clientA.id }),
+        s.employeeA,
+      ),
+    );
+
+    expect(response.status).toBe(403);
+    expect(await worldState()).toEqual(world);
+    expect(await clientState(clientA.id)).toEqual(before);
+  });
+
+  it("leaves the project and its client untouched when an employee tries to delete", async () => {
+    const s = sessions();
+    const world = await worldState();
+    const before = await clientState(clientA.id);
+
+    await deleteProject(
+      request(`/api/projects/${projectA.id}`, "DELETE", undefined, s.employeeA),
+      params(projectA.id),
+    );
+
+    expect(await worldState()).toEqual(world);
+    expect(await clientState(clientA.id)).toEqual(before);
+    const project = await prismaRaw.projectRecord.findUnique({ where: { id: projectA.id } });
+    expect(project?.deletedAt).toBeNull();
+  });
+});
+
+describe("write atomicity — the required log and the deletes are part of the write", () => {
+  const projectRow = async (id: string) => {
+    const row = await prismaRaw.projectRecord.findUnique({
+      where: { id },
+      select: { deposit: true, totalPrice: true, deletedAt: true, projectName: true },
+    });
+    return {
+      deposit: Number(row?.deposit),
+      totalPrice: Number(row?.totalPrice),
+      hidden: row?.deletedAt !== null && row?.deletedAt !== undefined,
+      name: row?.projectName,
+    };
+  };
+
+  const liveCounts = async (clientId: string) => ({
+    projects: await prismaRaw.projectRecord.count({ where: { clientId, deletedAt: null } }),
+    payments: await prismaRaw.clientPayment.count({
+      where: { deletedAt: null, projectRecord: { clientId } },
+    }),
+    subscriptions: await prismaRaw.subscription.count({ where: { clientId, deletedAt: null } }),
+  });
+
+  it("writes the activity log inside the create: no log ⇒ no client and no project", async () => {
+    const s = sessions();
+    // The session's user row is gone, so the log's foreign key cannot be satisfied.
+    await prismaRaw.user.delete({ where: { id: "adm-b" } });
+    const world = await worldState();
+    const before = await clientState(clientB.id);
+
+    const response = await createProject(
+      request(
+        "/api/projects",
+        "POST",
+        newProjectBody({ businessId: bizB.id, clientId: clientB.id, clientName: "اسم داخل معاملة" }),
+        s.adminB,
+      ),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await worldState()).toEqual(world);
+    expect(await clientState(clientB.id)).toEqual(before);
+  });
+
+  it("writes the activity log inside the update: no log ⇒ no payment and no project change", async () => {
+    const s = sessions();
+    await prismaRaw.user.delete({ where: { id: "adm-a" } });
+    const world = await worldState();
+    const before = await clientState(clientA.id);
+    const rowBefore = await projectRow(projectA.id);
+
+    const response = await patchProject(
+      request(`/api/projects/${projectA.id}`, "PATCH", { deposit: 900 }, s.adminA),
+      params(projectA.id),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await worldState()).toEqual(world);
+    expect(await clientState(clientA.id)).toEqual(before);
+    expect(await projectRow(projectA.id)).toEqual(rowBefore);
+  });
+
+  it("rolls back a client delete that fails halfway", async () => {
+    const s = sessions();
+    await prismaRaw.user.delete({ where: { id: "adm-a" } });
+    const world = await worldState();
+    const before = await clientState(clientA.id);
+
+    const response = await deleteClient(
+      request(`/api/clients/${clientA.id}`, "DELETE", undefined, s.adminA),
+      params(clientA.id),
+    );
+
+    expect(response.status).toBe(500);
+    expect(before.hidden).toBe(false);
+    expect(await clientState(clientA.id)).toEqual(before);
+    expect(await worldState()).toEqual(world);
+  });
+
+  it("rolls back a project delete that fails halfway", async () => {
+    const s = sessions();
+    await prismaRaw.user.delete({ where: { id: "adm-a" } });
+    const world = await worldState();
+    const before = await clientState(clientA.id);
+
+    const response = await deleteProject(
+      request(`/api/projects/${projectA.id}`, "DELETE", undefined, s.adminA),
+      params(projectA.id),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await clientState(clientA.id)).toEqual(before);
+    expect(await worldState()).toEqual(world);
+  });
+
+  it("still deletes a project and hides its only client when nothing fails", async () => {
+    const s = sessions();
+
+    const response = await deleteProject(
+      request(`/api/projects/${projectA.id}`, "DELETE", undefined, s.adminA),
+      params(projectA.id),
+    );
+
+    expect(response.status).toBe(200);
+    const after = await clientState(clientA.id);
+    expect(after.hidden).toBe(true);
+    expect(await liveCounts(clientA.id)).toEqual({ projects: 0, payments: 0, subscriptions: 0 });
+    expect(await prismaRaw.activityLog.count()).toBeGreaterThan(0);
   });
 });
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentSession, isAdmin } from "@/lib/auth";
 import { companyWriteDenial } from "@/lib/read-scope";
-import { softDeleteMany, softDeleteRecord } from "@/lib/soft-delete";
+import { softDeleteMany, softDeleteRecord, type LooseDb } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
 
@@ -40,18 +40,25 @@ export async function DELETE(
     });
     if (denial) return NextResponse.json({ error: denial.error }, { status: denial.status });
 
-    // Soft-delete in order: ClientPayments → PoolTransactions → ProjectRecords → Subscriptions → Client.
-    // Nothing is really removed — everything is restorable from the recycle bin.
+    /* Soft-delete in order — ClientPayments → PoolTransactions → ProjectRecords →
+       Subscriptions → Client — inside ONE transaction, together with the activity
+       entries. Nothing is really removed (the recycle bin restores it), and a
+       failure at any step leaves the client and every row under it untouched
+       rather than half-hidden. */
     const projectIds = client.projectRecords.map(p => p.id);
 
-    if (projectIds.length > 0) {
-      await softDeleteMany("ClientPayment", { projectRecordId: { in: projectIds } }, session.userId);
-      await softDeleteMany("PoolTransaction", { projectRecordId: { in: projectIds } }, session.userId);
-      await softDeleteMany("ProjectRecord", { id: { in: projectIds } }, session.userId);
-    }
+    await prisma.$transaction(async (tx) => {
+      const db = tx as unknown as LooseDb;
 
-    await softDeleteMany("Subscription", { clientId: id }, session.userId);
-    await softDeleteRecord("Client", id, session.userId);
+      if (projectIds.length > 0) {
+        await softDeleteMany("ClientPayment", { projectRecordId: { in: projectIds } }, session.userId, db);
+        await softDeleteMany("PoolTransaction", { projectRecordId: { in: projectIds } }, session.userId, db);
+        await softDeleteMany("ProjectRecord", { id: { in: projectIds } }, session.userId, db);
+      }
+
+      await softDeleteMany("Subscription", { clientId: id }, session.userId, db);
+      await softDeleteRecord("Client", id, session.userId, db);
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -118,6 +118,23 @@ export function canUseDirectoryFeature(session: ScopedSession): boolean {
 }
 
 /**
+ * MAY THIS SESSION USE THE PROJECTS WORKSPACE?
+ * ───────────────────────────────────────────
+ * A project record is the operator's ledger of sold work, not a company read:
+ * an EMPLOYEE is refused on the READ as well as on every write, even when it has
+ * a company flag. The check is made before any record is loaded, so an employee
+ * gets the same refusal for an id that exists and an id that does not — the route
+ * never becomes a way to probe which project ids are real.
+ *
+ * Authorized roles keep exactly the company isolation they had (`resolveReadScope`
+ * for reads, `companyWriteDenial` for writes); no new permission, flag or schema.
+ */
+export function canUseProjectsFeature(session: ScopedSession): boolean {
+  if (session.role === "EMPLOYEE") return false;
+  return canUseDirectoryFeature(session);
+}
+
+/**
  * MAY THIS SESSION WRITE TO THIS COMPANY?
  * ───────────────────────────────────────
  * Role, then the target, then the company's own access FLAG. A matching

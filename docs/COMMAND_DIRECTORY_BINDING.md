@@ -437,3 +437,58 @@ for the super admin, `totalClients` / `totalProjects` from the live rows); and *
 hidden-flags and names, projects, payments, treasury movements, subscriptions and the global counts —
 is identical before and after. A fourth test shows the orphan client surviving the dashboard and being
 hid only by the explicit cleanup, in the named company alone.
+
+---
+
+## 11. Round 5 — operator-only projects, and writes that are one unit
+
+### 11.1 An employee never reaches the projects surface
+
+`canUseProjectsFeature(session)` refuses an `EMPLOYEE` **even when it carries a company flag**, and it is
+checked in the middleware (`/api/projects` in every method, `/api/projects/[id]`, and the
+`/command/projects` page) and again at the top of each project handler. The clients workspace keeps its
+existing rule; only projects became operator-only.
+
+The check happens **before any record is loaded**, so an employee's `PATCH`/`DELETE` on a missing id
+returns the same `403` and the same `{"error":"Access denied"}` body as on a real one. The route is not
+an oracle for which project ids exist. Authorized roles keep exactly the isolation they had —
+`resolveReadScope` for reads, `companyWriteDenial` for writes — with no new role, flag or schema.
+
+### 11.2 Every write is one transaction — including the activity log
+
+| operation | in the transaction |
+|---|---|
+| `POST /api/projects` | client find/create/revive/rename, project row, deposit movement, recomputed tier, `CREATE` activity |
+| `PATCH /api/projects/[id]` | treasury movement, client payment, project row, recomputed tier, `UPDATE` activity |
+| `DELETE /api/projects/[id]` | client payments, treasury movements, project row, client auto-hide, its subscriptions, every `SOFT_DELETE` entry |
+| `DELETE /api/clients/[id]` | payments, treasury movements, projects, subscriptions, client row, every `SOFT_DELETE` entry |
+| `DELETE /api/clients` (cleanup) | per client: its subscriptions, the client row and the activity entry |
+
+`softDeleteRecord` / `softDeleteMany` now accept the transaction's delegates (`LooseDb`), and
+`logActivity` **rethrows** when it is given one — inside a transaction the log is part of the write, so a
+failure aborts it instead of being swallowed after the save. The consequence is the property the review
+asked for: a `500` always means nothing was written, and no request can fail with `500` after its save
+already landed.
+
+### 11.3 What a transaction does NOT give you: idempotency
+
+A transaction makes **one attempt** atomic. It does not make a retried request safe: if the browser posts
+`POST /api/projects`, the commit succeeds and the response is lost, the retry writes a second project and
+a second deposit movement — both transactions were individually valid. Deduplicating that needs a
+persisted idempotency key (client-generated, unique per attempt, replayed from the first success), not a
+transaction. **This is required for the deal hand-off** — delivering a sale to a client, a project and a
+receipt — and is deliberately not implemented here.
+
+### 11.4 Tests for this round
+
+| test | proves |
+|---|---|
+| middleware: employee on `/api/projects`, `/api/projects/[id]` and `/command/projects` | `403`/redirect with a company flag, while the clients page still opens |
+| employee `GET /api/projects` | `403` with `{"error":"Access denied"}` |
+| employee on an existing vs a missing project id | identical `403` and body — no existence oracle |
+| employee create / delete | every row identical afterwards (clients, projects, payments, treasury movements, subscriptions, counts) |
+| activity-log failure on create | `500` and **no** client, no project, no deposit |
+| activity-log failure on update | `500` and no payment, no project change, no tier change |
+| failure halfway through a client delete | `500`, client still visible, every child row still live |
+| failure halfway through a project delete | `500`, project still live, its client still visible |
+| successful project delete | payments/projects/subscriptions hidden together, client hidden, activity entries written |

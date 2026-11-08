@@ -538,3 +538,18 @@ The rollback tests are the ones a previous turn could not run (the cluster was d
 suite had been left unexecuted there): the create, update, client-delete, project-delete and cleanup
 failures are all re-run here against a live database, each asserting that every row and every activity
 entry equals the snapshot taken before the request.
+
+### 11.7 Closure — owner validation (2026-11-08T22:21Z)
+
+| Item | Value |
+|---|---|
+| Result | **63/63 passed · 0 failed · 0 skipped** — `Test Files 2 passed (2)`, `Tests 63 passed (63)` |
+| Reviewed source | `635961ceb8b6fad53832f691f053001b6f520914` |
+| Tree the run happened on | `e549f77`; the only file that advanced during the run was `docs/DEPLOYMENT_PRIVATE_TRIAL.md`, hence `REVIEWED_SOURCE_AND_TEST_PATHS_IDENTICAL=True` |
+| Run log | `.demo/review/directory-db-tests-635961c.log` — the raw record (start/stop output, counts, `REVIEW_TARGET`, `CLOSURE_BASIS`). `.demo/` is gitignored, so the log is a working record and this table is the durable one |
+| Test cluster | `scripts/dev-db.mjs start` on `127.0.0.1:5435`, `DEV_DB_DIR=%LOCALAPPDATA%\nexup-test-db` |
+
+`CLOSURE_BASIS` in the log states the same thing this table does: 63/63 at `e549f77`, with the
+reviewed source and test paths byte-identical to `635961c`. The round therefore closes on evidence,
+not on assertion: the suite that an earlier round could not execute ran in full, and nothing was
+skipped to make it green.

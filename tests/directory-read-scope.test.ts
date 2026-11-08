@@ -10,6 +10,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canUseDirectoryFeature,
+  companyWriteDenial,
   readScopeSlugs,
   resolveWriteScope,
   type ScopedSession,
@@ -140,5 +142,62 @@ describe("write scope", () => {
       status: 400,
       error: "This session carries no company",
     });
+  });
+});
+
+describe("feature permission (a capability, not a company)", () => {
+  it("opens the workspace for any company allowance", () => {
+    expect(canUseDirectoryFeature(employeeNexup)).toBe(true);
+    expect(canUseDirectoryFeature(adminAbomazen)).toBe(true);
+  });
+
+  it("closes it for a session with no company at all", () => {
+    const none = session({ canAccessNexup: false, canAccessRebound: false, canAccessAbomazen: false });
+    expect(canUseDirectoryFeature(none)).toBe(false);
+  });
+
+  it("opens it for a super admin regardless of flags", () => {
+    expect(
+      canUseDirectoryFeature(
+        session({
+          role: "SUPER_ADMIN",
+          businessId: "all",
+          canAccessNexup: false,
+          canAccessRebound: false,
+          canAccessAbomazen: false,
+        }),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("company write authorization (role + flag + target)", () => {
+  it("refuses an employee even inside its own company", () => {
+    expect(companyWriteDenial(employeeNexup, { id: "biz-nexup", slug: "nexup" })).toEqual({
+      status: 403,
+      error: "Access denied",
+    });
+  });
+
+  it("allows the session's own company when its flag is on", () => {
+    expect(companyWriteDenial(session(), { id: "biz-nexup", slug: "nexup" })).toBeNull();
+  });
+
+  it("refuses a company the session carries but has no flag for", () => {
+    const carriedButForbidden = session({ canAccessNexup: false });
+    expect(companyWriteDenial(carriedButForbidden, { id: "biz-nexup", slug: "nexup" })).toEqual({
+      status: 403,
+      error: "Access denied",
+    });
+  });
+
+  it("refuses a company the session does not carry, even with the flag on", () => {
+    expect(
+      companyWriteDenial(adminNexupAndAbomazen, { id: "biz-abomazen", slug: "abomazen" }),
+    ).toEqual({ status: 403, error: "Access denied" });
+  });
+
+  it("allows a super admin into any company it names", () => {
+    expect(companyWriteDenial(superAdmin, { id: "biz-abomazen", slug: "abomazen" })).toBeNull();
   });
 });

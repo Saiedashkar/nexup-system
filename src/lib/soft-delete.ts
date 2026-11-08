@@ -266,8 +266,11 @@ export async function findOrReviveClient(
   businessId: string,
   phone: string,
   name: string,
+  /* Additive: a caller inside `prisma.$transaction` passes its own delegate, so the
+     create/revive happens in the same transaction as the project it belongs to. */
+  delegate: LooseDelegate = db().client,
 ): Promise<ResolvedClient> {
-  const client = db().client;
+  const client = delegate;
 
   const existing = await client.findUnique({
     where: { businessId_phone: { businessId, phone } },

@@ -326,3 +326,99 @@ was then restored to its exact baseline (`nexup 0/0`, business count back to 1).
 | **G9** | A super-admin `POST /api/projects` now needs an explicit `businessId` (`400` otherwise). Any caller that relied on the old `"all"` behaviour must send one | deliberate (9.3) |
 | **G6** | Ordering and single-source failure are proven in the reducer tests, not by intercepting requests in a browser | unchanged |
 | **G2**, **G4**, **G5**, **G7** | sort key `500`; N+1 on the projects list; stale projects subtitle; the narrow `.nl-head__meta` box | unchanged |
+
+---
+
+## 10. Round 3 — the gates, restored as gates (from `1f2abe3`)
+
+Round 2 removed the middleware gate in front of `/api/projects` and unified the read scope. Four things
+were still wrong: the workspace had lost a permission gate, a write trusted its target id, a project
+could attach (or rename) a client of another company, and an employee could delete a client through a
+route the review had not looked at.
+
+### 10.1 The projects workspace is a capability again — not a company
+
+`middleware.ts` now carries `featureRoutes`: `/api/projects`, `/command/clients` and
+`/command/projects` require `canUseDirectoryFeature(session)` — *any* company allowance, or a super
+admin — and answer `403` (API) or redirect to `/office` (page) otherwise. Each project handler re-checks
+the same rule, so calling the route directly is refused identically.
+
+This restores the question the old gate answered ("may this session use the projects workspace?") as a
+capability, which is exactly what the old entry in `businessRoutes.nexup` was doing by accident. It does
+not widen what any session can see: rows still come from `resolveReadScope`, so a manager of another
+company opens the workspace and reads its own company only. A manager with no flags at all is refused
+again instead of receiving `[]` (round 2's G8 is closed).
+
+### 10.2 A write proves four things, and an id is not one of them
+
+`resolveWriteTarget(session, namedId)` (`lib/read-scope-db.ts`) composes the answer in one place:
+
+| Proof | Rule |
+|---|---|
+| role | `EMPLOYEE` is refused outright |
+| operation permission | the workspace capability above (plus the admin role where deletion is involved) |
+| company access flag | `companyWriteDenial()`: the target's own slug flag must be **on** |
+| target company | the session's own company, or a company a super admin names; never the literal `"all"` |
+
+So a session that *carries* a `businessId` but has no flag for that company is refused (`403`), and a
+super admin must still name a real company (`400`/`404`). This is applied to `POST /api/projects`,
+`PATCH`/`DELETE /api/projects/[id]`, `DELETE /api/clients/[id]` and the `DELETE /api/clients` cleanup.
+
+### 10.3 A named client must belong to the company being written to
+
+`POST /api/projects` used to accept any `clientId` and then rename it. Now the client is loaded first:
+missing → `404`, another company → `403`, both **before** any write. The create path (client
+create/revive/rename, project, deposit movement, recomputed tier) runs in one `prisma.$transaction`,
+and so does the money side of `PATCH` (treasury movement + client payment + project row + tier). A
+failing insert therefore leaves no half-written client and no orphan project — proven by a test that
+forces a foreign-key failure after the rename would have happened.
+
+### 10.4 Deleting a client is an admin operation — on every path
+
+| path | before | now |
+|---|---|---|
+| `DELETE /api/clients/[id]` | **no role check at all**: any employee could hide a client with its projects, payments, treasury movements and subscriptions | `isAdmin` + `companyWriteDenial`; employee `403` |
+| `DELETE /api/clients` (cleanup) | admin + scope (round 2) | unchanged, now also through the company-flag check |
+| `DELETE /api/projects/[id]` | employee `403` | unchanged |
+| `GET /api/office/stats` | auto-hid orphan clients for **any** session and across **every** company | admin only, and only the companies the session's flags grant |
+
+The last row is the bypass the review asked to look for: a GET the employee dashboard calls on load was
+deleting clients. It still cleans up after itself, but only for an admin and only inside its own
+companies.
+
+### 10.5 Tests: the real middleware and the real handlers
+
+`tests/directory-write-authorization.test.ts` — **31 tests**, the REAL middleware (with a real signed
+cookie) and the REAL route handlers, against a throwaway database of two companies; only the session
+source is mocked. `tests/directory-read-scope.test.ts` grew to **19** rule tests (capability, and the
+flag-aware company write denial). **50/50 pass.**
+
+| Scenario | Evidence |
+|---|---|
+| manager with no flags | middleware `403` on `/api/projects`, `307` from `/command/projects` and `/command/clients`; handler `403`; nothing written |
+| employee | `403` on create/update/delete/cleanup and on `DELETE /api/clients/[id]`; client, project, payment, treasury movement and subscription unchanged |
+| session allowed for another company | `403` on the other company's project create, patch, delete and on its own company cleanup when naming the foreign one; the other company's typed routes stay gated |
+| session carrying a company without its flag | `403` — the `businessId` alone grants nothing |
+| foreign `clientId` | `403` before any write; the foreign client's name, tier and money counts are identical afterwards |
+| failure halfway | `500` and **no** renamed client, no orphan project, no deposit row (transaction) |
+| allowed paths still work | create in the named company, patch with a payment (one movement pair), admin client delete, scoped cleanup, admin stats cleanup |
+| dashboard | an employee's stats load hides nothing; an admin's hides only its own company's orphans |
+
+Every refusal is asserted twice: the HTTP status, and a full snapshot of the rows it would have changed
+(client name/tier/hidden, projects, client payments, treasury movements, subscriptions — plus the
+global counts).
+
+### 10.6 Limits and what is still open
+
+| id | Gap | Status |
+|---|---|---|
+| **G8** | the workspace gate | **closed** (10.1): `403` again for a session with no company |
+| **G9** | a super-admin write must name a company | unchanged, now tested through the flag-aware path |
+| **G10** | `PATCH /api/projects/[id]` has no "change the client" field, so the client-change rule is enforced where a client can actually be changed: the create path that also renames it | documented |
+| **G11** | the stats dashboard still writes (auto-hide) on a `GET`; it is now admin-only and company-scoped, but the side effect on a read remains | documented |
+| **G12** | the refusals are proven by calling the real middleware and handlers, not by intercepting a browser session | documented |
+| **G2**, **G4**, **G5**, **G7** | unchanged from round 2 | open |
+
+No design, schema, migration or dependency changed in this round. The throwaway test database was a
+separate cluster on `127.0.0.1:5435`; the demo database and the system PostgreSQL service were not
+touched.

@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { findOrReviveClient } from "@/lib/soft-delete";
 import { getCurrentSession } from "@/lib/auth";
-import { resolveWriteScope } from "@/lib/read-scope";
-import { businessExists, resolveReadScope } from "@/lib/read-scope-db";
+import { canUseDirectoryFeature } from "@/lib/read-scope";
+import { resolveReadScope, resolveWriteTarget } from "@/lib/read-scope-db";
 
 export const runtime = "nodejs";
 
@@ -11,6 +11,14 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    /* FEATURE FIRST, COMPANIES SECOND. Using the projects workspace is one
+       permission; which companies it may show is another. A session with no
+       company allowance has no workspace at all — the question the middleware
+       gate used to answer — while the rows below stay scoped to the flags. */
+    if (!canUseDirectoryFeature(session)) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
@@ -91,7 +99,9 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (session.role === "EMPLOYEE") return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    if (!canUseDirectoryFeature(session)) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
 
     const body = await request.json();
     const {
@@ -114,77 +124,114 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Please fill all required fields" }, { status: 400 });
     }
 
-    /* A WRITE NAMES ITS COMPANY. A scoped admin writes its own; a session that
-       spans companies has to name one, and the literal `"all"` is refused rather
-       than written into rows that no company owns. */
-    const writeScope = resolveWriteScope(session, body.businessId);
-    if (!writeScope.ok) {
-      return NextResponse.json({ error: writeScope.error }, { status: writeScope.status });
+    /* THE WRITE NAMES A COMPANY, AND THE SESSION MUST BE ALLOWED TO TOUCH IT:
+       role, then the named company, then that company's own access flag. A
+       matching `businessId` on its own never grants anything. */
+    const target = await resolveWriteTarget(session, body.businessId);
+    if (!target.ok) {
+      return NextResponse.json({ error: target.error }, { status: target.status });
     }
-    if (!(await businessExists(writeScope.businessId))) {
-      return NextResponse.json({ error: "Unknown company" }, { status: 404 });
-    }
-    const businessId = writeScope.businessId;
+    const businessId = target.businessId;
 
-    // Find or create client (using compound unique for multi-business).
-    // A previously soft-deleted client with the same phone is revived instead of
-    // colliding with the unique(businessId, phone) index.
-    let client: { id: string; name: string; phone: string } | null = clientId
-      ? await prisma.client.findUnique({ where: { id: clientId } })
-      : await findOrReviveClient(businessId, clientPhone, clientName);
-
-    if (!client) {
-      client = await prisma.client.create({
-        data: { businessId, phone: clientPhone, name: clientName, tier: "NORMAL" },
+    /* A NAMED CLIENT MUST BELONG TO THAT COMPANY — checked before anything is
+       created or updated, so a foreign id cannot attach a project across
+       companies (or rename that client on the way in). */
+    if (clientId) {
+      const owner = await prisma.client.findUnique({
+        where: { id: clientId },
+        select: { id: true, businessId: true },
       });
-    } else if (client.name !== clientName) {
-      client = await prisma.client.update({
-        where: { id: client.id },
-        data: { name: clientName },
-      });
+      if (!owner) return NextResponse.json({ error: "Client not found" }, { status: 404 });
+      if (owner.businessId !== businessId) {
+        return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      }
     }
 
     const total = parseFloat(String(totalPrice));
     const dep = parseFloat(String(deposit || 0));
     const remaining = total - dep;
 
-    const project = await prisma.projectRecord.create({
-      data: {
-        businessId,
-        clientId: client.id,
-        projectName,
-        date: new Date(date),
-        customServiceText: customServiceText || null,
-        totalPrice: total,
-        deposit: dep,
-        remaining,
-        workStatus: workStatus || "WAITING",
-        paymentStatus: dep >= total ? "FULL" : dep > 0 ? "PARTIAL" : "UNPAID",
-        designerId: designerId || null,
-        designerName: designerName || null,
-        notes: notes || null,
-        services: serviceIds?.length ? { connect: serviceIds.map((id: string) => ({ id })) } : undefined,
-      },
-      include: {
-        client: { select: { id: true, name: true, phone: true, tier: true } },
-        designer: { select: { id: true, name: true } },
-        services: { select: { id: true, name: true } },
-      },
-    });
+    /* ONE TRANSACTION: the client (create/revive/rename), its project, the
+       deposit movement and the recomputed tier either all land or none do. */
+    const project = await prisma.$transaction(async (tx) => {
+      // Find or create client (using compound unique for multi-business).
+      // A previously soft-deleted client with the same phone is revived instead of
+      // colliding with the unique(businessId, phone) index.
+      let client = clientId
+        ? await tx.client.findUnique({ where: { id: clientId } })
+        : await findOrReviveClient(
+            businessId,
+            clientPhone,
+            clientName,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            tx.client as any,
+          );
 
-    // AUTO: Create IN transaction when deposit > 0
-    if (dep > 0) {
-      await prisma.poolTransaction.create({
+      if (!client) {
+        client = await tx.client.create({
+          data: { businessId, phone: clientPhone, name: clientName, tier: "NORMAL" },
+        });
+      } else if (client.name !== clientName) {
+        client = await tx.client.update({
+          where: { id: client.id },
+          data: { name: clientName },
+        });
+      }
+
+      const created = await tx.projectRecord.create({
         data: {
           businessId,
-          projectRecordId: project.id,
-          amountSAR: dep,
-          type: "IN",
+          clientId: client.id,
+          projectName,
           date: new Date(date),
-          note: `Deposit — ${clientName} — ${projectName}`,
+          customServiceText: customServiceText || null,
+          totalPrice: total,
+          deposit: dep,
+          remaining,
+          workStatus: workStatus || "WAITING",
+          paymentStatus: dep >= total ? "FULL" : dep > 0 ? "PARTIAL" : "UNPAID",
+          designerId: designerId || null,
+          designerName: designerName || null,
+          notes: notes || null,
+          services: serviceIds?.length ? { connect: serviceIds.map((id: string) => ({ id })) } : undefined,
+        },
+        include: {
+          client: { select: { id: true, name: true, phone: true, tier: true } },
+          designer: { select: { id: true, name: true } },
+          services: { select: { id: true, name: true } },
         },
       });
-    }
+
+      // AUTO: Create IN transaction when deposit > 0
+      if (dep > 0) {
+        await tx.poolTransaction.create({
+          data: {
+            businessId,
+            projectRecordId: created.id,
+            amountSAR: dep,
+            type: "IN",
+            date: new Date(date),
+            note: `Deposit — ${clientName} — ${projectName}`,
+          },
+        });
+      }
+
+      // AUTO: Update client tier
+      const projectCount = await tx.projectRecord.count({ where: { clientId: client.id } });
+      const totalPaid = await tx.projectRecord.aggregate({
+        where: { clientId: client.id, paymentStatus: "FULL" },
+        _sum: { totalPrice: true },
+      });
+      const totalRevenue = Number(totalPaid._sum.totalPrice ?? 0);
+
+      let tier: "VIP" | "LOYAL" | "NORMAL" | "DELINQUENT" = "NORMAL";
+      if (totalRevenue > 1000 || projectCount >= 3) tier = "VIP";
+      else if (totalRevenue > 500 || projectCount >= 2) tier = "LOYAL";
+
+      await tx.client.update({ where: { id: client.id }, data: { tier } });
+
+      return created;
+    });
 
     // Log activity
     await prisma.activityLog.create({
@@ -195,20 +242,6 @@ export async function POST(request: NextRequest) {
         entityId: project.id,
       },
     });
-
-    // AUTO: Update client tier
-    const projectCount = await prisma.projectRecord.count({ where: { clientId: client.id } });
-    const totalPaid = await prisma.projectRecord.aggregate({
-      where: { clientId: client.id, paymentStatus: "FULL" },
-      _sum: { totalPrice: true },
-    });
-    const totalRevenue = Number(totalPaid._sum.totalPrice ?? 0);
-
-    let tier: "VIP" | "LOYAL" | "NORMAL" | "DELINQUENT" = "NORMAL";
-    if (totalRevenue > 1000 || projectCount >= 3) tier = "VIP";
-    else if (totalRevenue > 500 || projectCount >= 2) tier = "LOYAL";
-
-    await prisma.client.update({ where: { id: client.id }, data: { tier } });
 
     return NextResponse.json(project, { status: 201 });
   } catch (error) {

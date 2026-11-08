@@ -92,3 +92,45 @@ export function resolveWriteScope(
   }
   return { ok: true, businessId: session.businessId, explicit: false };
 }
+
+function hasFlag(session: ScopedSession, slug: string): boolean {
+  switch (slug) {
+    case "nexup": return session.canAccessNexup;
+    case "rebound": return session.canAccessRebound;
+    case "abomazen": return session.canAccessAbomazen;
+    default: return false;
+  }
+}
+
+/**
+ * MAY THIS SESSION USE THE CLIENTS/PROJECTS WORKSPACE AT ALL?
+ * ──────────────────────────────────────────────────────────
+ * A FEATURE permission, deliberately separate from WHICH companies it touches.
+ * Any company allowance opens the workspace, and every row it returns is still
+ * scoped by `readScopeSlugs`; a session with no company has no workspace. This is
+ * the question the old middleware gate on `/api/projects` was really answering
+ * (it happened to spell it "nexup"), so it is the gate restored here — as a
+ * capability, not as a company.
+ */
+export function canUseDirectoryFeature(session: ScopedSession): boolean {
+  if (session.role === "SUPER_ADMIN") return true;
+  return session.canAccessNexup || session.canAccessRebound || session.canAccessAbomazen;
+}
+
+/**
+ * MAY THIS SESSION WRITE TO THIS COMPANY?
+ * ───────────────────────────────────────
+ * Role, then the target, then the company's own access FLAG. A matching
+ * `businessId` grants nothing on its own: a session can carry a company it has no
+ * flag for, and it may neither read that company nor write to it.
+ */
+export function companyWriteDenial(
+  session: ScopedSession,
+  company: { id: string; slug: string },
+): { status: 403; error: string } | null {
+  if (session.role === "EMPLOYEE") return { status: 403, error: "Access denied" };
+  if (session.role === "SUPER_ADMIN") return null;
+  if (session.businessId !== company.id) return { status: 403, error: "Access denied" };
+  if (!hasFlag(session, company.slug)) return { status: 403, error: "Access denied" };
+  return null;
+}

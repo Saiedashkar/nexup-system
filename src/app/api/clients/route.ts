@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentSession, isAdmin } from "@/lib/auth";
 import { softDeleteMany, softDeleteRecord } from "@/lib/soft-delete";
-import { resolveWriteScope } from "@/lib/read-scope";
-import { businessExists, resolveReadScope } from "@/lib/read-scope-db";
+import { resolveReadScope, resolveWriteTarget } from "@/lib/read-scope-db";
 
 export const runtime = "nodejs";
 
@@ -65,12 +64,9 @@ export async function DELETE(request: Request) {
     /* A READ scope does not authorise a cleanup. The target company is named
        explicitly — a scoped admin may only clean its own, a super admin has to
        say which company it means — and it has to be a real company. */
-    const scope = resolveWriteScope(session, new URL(request.url).searchParams.get("businessId"));
+    const scope = await resolveWriteTarget(session, new URL(request.url).searchParams.get("businessId"));
     if (!scope.ok) {
       return NextResponse.json({ error: scope.error }, { status: scope.status });
-    }
-    if (!(await businessExists(scope.businessId))) {
-      return NextResponse.json({ error: "Unknown company" }, { status: 404 });
     }
     const scopedIds = [scope.businessId];
 

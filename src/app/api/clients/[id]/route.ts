@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentSession, isSuperAdmin } from "@/lib/auth";
+import { getCurrentSession, isAdmin } from "@/lib/auth";
+import { companyWriteDenial } from "@/lib/read-scope";
 import { softDeleteMany, softDeleteRecord } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
@@ -13,22 +14,31 @@ export async function DELETE(
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    /* DELETING A CLIENT IS AN ADMIN OPERATION. It used to have no role check at
+       all, so every employee of the company could remove a client and all of its
+       projects, payments and subscriptions with one request. Refused before the
+       row is even read. */
+    if (!isAdmin(session)) return NextResponse.json({ error: "Access denied" }, { status: 403 });
+
     const { id } = await params;
 
     // Find the client and verify access
     const client = await prisma.client.findUnique({
       where: { id },
-      include: { projectRecords: { select: { id: true } } },
+      include: { projectRecords: { select: { id: true } }, business: { select: { slug: true } } },
     });
 
     if (!client) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
-    // Only super admin or matching business admin can delete
-    if (!isSuperAdmin(session) && session.businessId !== client.businessId) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
+    /* Role, then the client's company, then that company's access FLAG: carrying
+       a `businessId` is not permission to delete inside it. */
+    const denial = companyWriteDenial(session, {
+      id: client.businessId,
+      slug: client.business.slug,
+    });
+    if (denial) return NextResponse.json({ error: denial.error }, { status: denial.status });
 
     // Soft-delete in order: ClientPayments → PoolTransactions → ProjectRecords → Subscriptions → Client.
     // Nothing is really removed — everything is restorable from the recycle bin.

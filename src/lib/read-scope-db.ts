@@ -7,7 +7,13 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { readScopeSlugs, type ReadScopeMode, type ScopedSession } from "./read-scope";
+import {
+  companyWriteDenial,
+  readScopeSlugs,
+  resolveWriteScope,
+  type ReadScopeMode,
+  type ScopedSession,
+} from "./read-scope";
 
 export type BusinessRef = { id: string; name: string; slug: string };
 
@@ -31,11 +37,47 @@ export async function resolveReadScope(session: ScopedSession): Promise<ReadScop
   return { mode, businesses, businessIds: businesses.map((business) => business.id) };
 }
 
-/** True when the id names a real company; a write may not invent one. */
-export async function businessExists(businessId: string): Promise<boolean> {
-  const business = await prisma.business.findUnique({
-    where: { id: businessId },
-    select: { id: true },
+/**
+ * WHO A WRITE TARGETS, AND MAY IT — the whole answer, in one call.
+ *
+ * Order matters: role and target selection first (`resolveWriteScope`), then the
+ * company row, then that company's access FLAG (`companyWriteDenial`). A foreign
+ * or invented id therefore cannot be written to, and a `businessId` the session
+ * merely carries is not a permission of its own.
+ */
+export type WriteTarget =
+  | {
+      ok: true;
+      businessId: string;
+      slug: string;
+      explicit: boolean;
+      status?: undefined;
+      error?: undefined;
+    }
+  | {
+      ok: false;
+      status: 400 | 403 | 404;
+      error: string;
+      businessId?: undefined;
+      slug?: undefined;
+      explicit?: undefined;
+    };
+
+export async function resolveWriteTarget(
+  session: ScopedSession,
+  explicitBusinessId?: string | null,
+): Promise<WriteTarget> {
+  const scope = resolveWriteScope(session, explicitBusinessId);
+  if (!scope.ok) return { ok: false, status: scope.status, error: scope.error };
+
+  const company = await prisma.business.findUnique({
+    where: { id: scope.businessId },
+    select: { id: true, slug: true },
   });
-  return Boolean(business);
+  if (!company) return { ok: false, status: 404, error: "Unknown company" };
+
+  const denial = companyWriteDenial(session, company);
+  if (denial) return { ok: false, status: denial.status, error: denial.error };
+
+  return { ok: true, businessId: company.id, slug: company.slug, explicit: scope.explicit };
 }

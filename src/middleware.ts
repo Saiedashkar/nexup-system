@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { SESSION_COOKIE, verifySessionToken, type Session } from "@/lib/auth";
+import { canUseDirectoryFeature } from "@/lib/read-scope";
 
 const publicPaths = new Set(["/login", "/api/auth/login", "/api/auth/logout"]);
 
@@ -13,21 +14,20 @@ const publicPaths = new Set(["/login", "/api/auth/login", "/api/auth/logout"]);
 // `/api/exec/turn/<anything>`, keeps the blanket guard below.
 const routeManagedAuthPaths = new Set(["/api/exec/turn"]);
 
-// Business-specific route prefixes.
-//
-// `/api/projects` and `/api/clients` are deliberately NOT here. They are the two
-// SHARED reads: each resolves the session's companies itself, with the same rule
-// (`lib/read-scope.ts`), so the gate in front of them could only answer a
-// different question than the route did — that is how one session ended up able
-// to read a company's clients and not its projects. Every company keeps its own
-// typed routes (`/api/nexup`, `/api/rebound`, `/api/abomazen`), which remain
-// gated below, and the project rows these two return were already readable
-// through `/api/clients` for exactly the same companies.
+// Business-specific route prefixes: "may this session enter THIS COMPANY" — a
+// company question, answered per prefix.
 const businessRoutes: Record<string, string[]> = {
   nexup: ["/office/nexup", "/api/nexup", "/api/pool", "/api/withdrawals", "/api/expenses", "/api/services", "/api/client-payments"],
   rebound: ["/office/rebound", "/api/rebound", "/api/expenses"],
   abomazen: ["/office/abomazen", "/api/abomazen"],
 };
+
+// Feature gates: "may this session use this capability at all", independent of
+// which companies it may see. Each entry is answered by the same pure rule the
+// route uses (`lib/read-scope.ts`), so the gate and the handler cannot disagree.
+const featureRoutes: { prefixes: string[]; allows: (session: Session) => boolean }[] = [
+  { prefixes: ["/api/projects", "/command/clients", "/command/projects"], allows: canUseDirectoryFeature },
+];
 
 // Office finance routes (require canAccessOfficeFinanceFull or SUPER_ADMIN)
 const officeFinanceRoutes = [
@@ -92,6 +92,24 @@ export default async function middleware(request: NextRequest) {
         (slug === "abomazen" && session.canAccessAbomazen);
 
       if (!hasAccess) {
+        if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Access denied" }, { status: 403 });
+        return NextResponse.redirect(new URL("/office", request.url));
+      }
+    }
+  }
+
+  // ─── Check FEATURE access ───
+  //
+  // A capability, not a company: any company allowance opens the clients/projects
+  // workspace, and every row it returns is still scoped by the flags below.
+  // `/api/projects` used to sit in `businessRoutes.nexup`, which made "the nexup
+  // flag" the price of the whole workspace and told an abomazen admin it could
+  // not open the page for its own projects; the capability rule restores that gate
+  // without re-coupling it to one company. The route re-checks it too, so calling
+  // the handler directly is refused just the same.
+  for (const feature of featureRoutes) {
+    if (feature.prefixes.some(p => pathname === p || pathname.startsWith(p + "/"))) {
+      if (!feature.allows(session)) {
         if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Access denied" }, { status: 403 });
         return NextResponse.redirect(new URL("/office", request.url));
       }

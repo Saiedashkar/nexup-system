@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentSession, isSuperAdmin } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/auth";
+import { canUseDirectoryFeature, companyWriteDenial } from "@/lib/read-scope";
 import { softDeleteMany, softDeleteRecord } from "@/lib/soft-delete";
 
 export const runtime = "nodejs";
@@ -13,138 +14,133 @@ export async function PATCH(
   try {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (session.role === "EMPLOYEE") return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    if (!canUseDirectoryFeature(session)) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
 
     const { id } = await params;
     const body = await request.json();
 
     const existing = await prisma.projectRecord.findUnique({
       where: { id },
-      include: { client: true },
+      include: { client: true, business: { select: { slug: true } } },
     });
     if (!existing) {
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
 
-    /* ISOLATION: the project must belong to the caller's company. Without this
-       a scoped admin could patch another business's record by id. */
-    if (!isSuperAdmin(session) && session.businessId !== existing.businessId) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
+    /* ISOLATION + PERMISSION: the project's company has to be one this session
+       may write to — its own, with that company's flag on (or any company for a
+       super admin). A matching id alone would not be enough. */
+    const denial = companyWriteDenial(session, {
+      id: existing.businessId,
+      slug: existing.business.slug,
+    });
+    if (denial) return NextResponse.json({ error: denial.error }, { status: denial.status });
 
-    const updateData: Record<string, unknown> = {};
+    /* ONE TRANSACTION: the money movements, the project row and the client's tier
+       either all land or none do — a refused or failing patch leaves no payment
+       behind. Nothing below writes before the checks above have passed. */
+    const updated = await prisma.$transaction(async (tx) => {
+      const updateData: Record<string, unknown> = {};
 
-    if (body.workStatus !== undefined) updateData.workStatus = body.workStatus;
-    if (body.projectName !== undefined) updateData.projectName = body.projectName;
-    if (body.notes !== undefined) updateData.notes = body.notes;
+      if (body.workStatus !== undefined) updateData.workStatus = body.workStatus;
+      if (body.projectName !== undefined) updateData.projectName = body.projectName;
+      if (body.notes !== undefined) updateData.notes = body.notes;
 
-    // Handle designer — support both designerId (from dropdown) and designerName (free text)
-    if (body.designerId !== undefined) {
-      updateData.designerId = body.designerId || null;
-    }
-    if (body.designerName !== undefined) {
-      updateData.designerName = body.designerName || null;
-    }
+      // Handle designer — support both designerId (from dropdown) and designerName (free text)
+      if (body.designerId !== undefined) {
+        updateData.designerId = body.designerId || null;
+      }
+      if (body.designerName !== undefined) {
+        updateData.designerName = body.designerName || null;
+      }
 
-    // Handle payment updates — supports both full and partial payments
-    if (body.deposit !== undefined) {
-      const newDeposit = parseFloat(String(body.deposit));
-      const oldDeposit = parseFloat(String(existing.deposit));
-      const newRemaining = parseFloat(String(existing.totalPrice)) - newDeposit;
-      updateData.deposit = newDeposit;
-      updateData.remaining = Math.max(0, newRemaining);
-      updateData.paymentStatus = newDeposit >= parseFloat(String(existing.totalPrice))
-        ? "FULL"
-        : newDeposit > 0
-        ? "PARTIAL"
-        : "UNPAID";
+      const movements: { amount: number; note: string }[] = [];
 
-      // Create IN pool transaction for the payment difference
-      const depositDiff = newDeposit - oldDeposit;
-      if (depositDiff > 0) {
-        await prisma.poolTransaction.create({
+      // Handle payment updates — supports both full and partial payments
+      if (body.deposit !== undefined) {
+        const newDeposit = parseFloat(String(body.deposit));
+        const oldDeposit = parseFloat(String(existing.deposit));
+        const newRemaining = parseFloat(String(existing.totalPrice)) - newDeposit;
+        updateData.deposit = newDeposit;
+        updateData.remaining = Math.max(0, newRemaining);
+        updateData.paymentStatus = newDeposit >= parseFloat(String(existing.totalPrice))
+          ? "FULL"
+          : newDeposit > 0
+          ? "PARTIAL"
+          : "UNPAID";
+
+        const depositDiff = newDeposit - oldDeposit;
+        if (depositDiff > 0) movements.push({ amount: depositDiff, note: `Payment — ${existing.client.name} — ${existing.projectName}` });
+      }
+
+      // Quick pay remaining — sets deposit to full totalPrice
+      if (body.payRemaining) {
+        const remaining = parseFloat(String(existing.remaining));
+        if (remaining > 0) {
+          const newDeposit = parseFloat(String(existing.totalPrice));
+          updateData.deposit = newDeposit;
+          updateData.remaining = 0;
+          updateData.paymentStatus = "FULL";
+          movements.push({ amount: remaining, note: `Full payment — ${existing.client.name} — ${existing.projectName}` });
+        }
+      }
+
+      for (const movement of movements) {
+        await tx.poolTransaction.create({
           data: {
             businessId: existing.businessId,
             projectRecordId: id,
-            amountSAR: depositDiff,
+            amountSAR: movement.amount,
             type: "IN",
             date: new Date(),
-            note: `Payment — ${existing.client.name} — ${existing.projectName}`,
+            note: movement.note,
           },
         });
         // Mirror the difference as a ClientPayment row so a transfer receipt
         // can be attached to it (receipts attach to ClientPayment records).
-        await prisma.clientPayment.create({
+        await tx.clientPayment.create({
           data: {
             projectRecordId: id,
-            amount: depositDiff,
+            amount: movement.amount,
             date: new Date(),
             note: "دفعة",
             createdByUserId: session.userId,
           },
         });
       }
-    }
 
-    // Quick pay remaining — sets deposit to full totalPrice
-    if (body.payRemaining) {
-      const remaining = parseFloat(String(existing.remaining));
-      if (remaining > 0) {
-        const newDeposit = parseFloat(String(existing.totalPrice));
-        updateData.deposit = newDeposit;
-        updateData.remaining = 0;
-        updateData.paymentStatus = "FULL";
+      const row = await tx.projectRecord.update({
+        where: { id },
+        data: updateData,
+        include: {
+          client: { select: { id: true, name: true, phone: true, tier: true } },
+          designer: { select: { id: true, name: true } },
+          services: { select: { id: true, name: true } },
+        },
+      });
 
-        await prisma.poolTransaction.create({
-          data: {
-            businessId: existing.businessId,
-            projectRecordId: id,
-            amountSAR: remaining,
-            type: "IN",
-            date: new Date(),
-            note: `Full payment — ${existing.client.name} — ${existing.projectName}`,
-          },
-        });
-        // Mirror as a ClientPayment row so a transfer receipt can be attached.
-        await prisma.clientPayment.create({
-          data: {
-            projectRecordId: id,
-            amount: remaining,
-            date: new Date(),
-            note: "تحصيل كامل المتبقي",
-            createdByUserId: session.userId,
-          },
-        });
-      }
-    }
+      // Recalculate client tier
+      const projectCount = await tx.projectRecord.count({
+        where: { clientId: existing.clientId },
+      });
+      const totalPaid = await tx.projectRecord.aggregate({
+        where: { clientId: existing.clientId, paymentStatus: "FULL" },
+        _sum: { totalPrice: true },
+      });
+      const totalRevenue = Number(totalPaid._sum.totalPrice ?? 0);
 
-    const updated = await prisma.projectRecord.update({
-      where: { id },
-      data: updateData,
-      include: {
-        client: { select: { id: true, name: true, phone: true, tier: true } },
-        designer: { select: { id: true, name: true } },
-        services: { select: { id: true, name: true } },
-      },
-    });
+      let tier: "VIP" | "LOYAL" | "NORMAL" | "DELINQUENT" = "NORMAL";
+      if (totalRevenue > 1000 || projectCount >= 3) tier = "VIP";
+      else if (totalRevenue > 500 || projectCount >= 2) tier = "LOYAL";
 
-    // Recalculate client tier
-    const projectCount = await prisma.projectRecord.count({
-      where: { clientId: existing.clientId },
-    });
-    const totalPaid = await prisma.projectRecord.aggregate({
-      where: { clientId: existing.clientId, paymentStatus: "FULL" },
-      _sum: { totalPrice: true },
-    });
-    const totalRevenue = Number(totalPaid._sum.totalPrice ?? 0);
+      await tx.client.update({
+        where: { id: existing.clientId },
+        data: { tier },
+      });
 
-    let tier: "VIP" | "LOYAL" | "NORMAL" | "DELINQUENT" = "NORMAL";
-    if (totalRevenue > 1000 || projectCount >= 3) tier = "VIP";
-    else if (totalRevenue > 500 || projectCount >= 2) tier = "LOYAL";
-
-    await prisma.client.update({
-      where: { id: existing.clientId },
-      data: { tier },
+      return row;
     });
 
     await prisma.activityLog.create({
@@ -171,23 +167,27 @@ export async function DELETE(
   try {
     const session = await getCurrentSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (session.role === "EMPLOYEE") return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    if (!canUseDirectoryFeature(session)) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
 
     const { id } = await params;
 
     const existing = await prisma.projectRecord.findUnique({
       where: { id },
-      include: { poolTransactions: true },
+      include: { poolTransactions: true, business: { select: { slug: true } } },
     });
     if (!existing) {
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
 
-    /* ISOLATION: same rule on the delete path — a scoped admin deletes only
-       inside the company the session carries. */
-    if (!isSuperAdmin(session) && session.businessId !== existing.businessId) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
+    /* ISOLATION + PERMISSION: same rule on the delete path — role, then the
+       project's company, then that company's access flag. */
+    const denial = companyWriteDenial(session, {
+      id: existing.businessId,
+      slug: existing.business.slug,
+    });
+    if (denial) return NextResponse.json({ error: denial.error }, { status: denial.status });
 
     // Soft-delete related rows first (recoverable — nothing is destroyed)
     await softDeleteMany("ClientPayment", { projectRecordId: id }, session.userId);

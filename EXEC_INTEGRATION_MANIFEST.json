@@ -13,7 +13,7 @@
     "execLayer": 32,
     "authored": 11,
     "overlapBetweenLayers": 0,
-    "totalPathsWritten": 234,
+    "totalPathsWritten": 235,
     "productLayer": 85,
     "productTrackedModified": 39,
     "productUntracked": 46,
@@ -26,8 +26,8 @@
     "missionsGlassLayer": 1,
     "marketingLayer": 10,
     "marketingNote": "Marketing room layer: the delivered tree copied verbatim from nexup-command-product per docs/COMMAND_MARKETING_ROOM.md (route + stylesheet + six modules + its test + that doc). No shared file was edited for it; enabling its door is a sales-layer row. campaign-notice.ts (the outcome-to-notice mapping extracted out of marketing-room.tsx so the Arabic refusal can be tested without React) was added on 2026-11-07 and is recorded here; the room's copy, model, panel and test rows were re-hashed the same day after the approval-line, request-guard, breadcrumb and notice repairs.",
-    "directoryLayer": 12,
-    "directoryNote": "Binding layer: the read session/api/mapping/reducer/store modules, the pure scope rule and its DB resolution, the shared chrome, the two tests and the two documents of this round. Additive: every row here is a new path, none of them was in another layer."
+    "directoryLayer": 13,
+    "directoryNote": "Binding + authorization layer: the read session/api/mapping/reducer/store modules, the scope rule, its DB resolution and write target, the shared chrome, the three tests and the two documents. Additive: every row here is a new path, none of them was in another layer."
   },
   "digests": {
     "core73_excludingReport": {
@@ -48,7 +48,7 @@
     },
     "authored11": {
       "count": 11,
-      "value": "b545e47e7aa593f537c0bba5a812c719bc4f50713857b7cd2f0b4d5ee232b291"
+      "value": "22fe092e4695898588d410c6bba0ff73653ad204bf58688c1eb1a5280d500006"
     },
     "product85": {
       "count": 85,
@@ -76,8 +76,8 @@
       "value": "2bb0b6e53149c9ff3910cf2bdee191c898895f1d7a4d950160f81ffa0d9f23bb"
     },
     "directoryLayer": {
-      "count": 12,
-      "value": "51af7daf359a79439e2fb78af90a72931355fc4447efdd921985b36ab95f8091"
+      "count": 13,
+      "value": "4a89d53907bd8970ab15937d94f8878b2f3b4a708eddfb4037dafe7e402f3139"
     },
     "directoryNote": "The first real data binding: read layer (api/mapping/reducer/store) + shared chrome + test. The product rows for /command/clients, /command/projects, i18n/messages.ts and lab/kit.tsx were re-hashed on 2026-11-08 because those four files are now bound to the routes."
   },
@@ -827,7 +827,7 @@
       },
       {
         "path": "src/middleware.ts",
-        "sha256": "9cd30c7af1dfdea51c02676698f68e3848a3b362940c50a7b334ac5e6b71e2e5",
+        "sha256": "f00e6f4792f60ac1df2a2e082107be3ca513f268acd3a73644154f265c47adb9",
         "layer": "authored"
       },
       {
@@ -1500,7 +1500,7 @@
     "directory": [
       {
         "path": "docs/COMMAND_DIRECTORY_BINDING.md",
-        "sha256": "cbfa57014e5caed83fb0964fa9d6dafd83d1f0d4f3aa9a5e7313f38af7f63566"
+        "sha256": "b1ce55fb9dc012cbcc2980680000184a501da58e29d31473f99689d48512731f"
       },
       {
         "path": "docs/DEAL_HANDOFF_SPEC.md",
@@ -1532,11 +1532,11 @@
       },
       {
         "path": "src/lib/read-scope-db.ts",
-        "sha256": "1256d99f1e859827ddd70c88a8ee8b0b83c132c53d0549287b535a62b8bd71ba"
+        "sha256": "7a9d547ade134c5ccc72daeca1d55de778f0fcf3bea7c1d31fa14cefc99b2740"
       },
       {
         "path": "src/lib/read-scope.ts",
-        "sha256": "7348e6f8ddaada73e0467d552abe018b3f172f4b94e6e4284be9a5cb1fbeee3c"
+        "sha256": "d1dcacc5877b2b2f7e525b0bbdfcbc46f797b5d46f503498f0ce2bf55e1389e2"
       },
       {
         "path": "tests/command-directory-binding.test.ts",
@@ -1544,7 +1544,11 @@
       },
       {
         "path": "tests/directory-read-scope.test.ts",
-        "sha256": "4e1dcab413fbdaa87b177a2716ca573e408d0a93276024ededc0d40a40c9168e"
+        "sha256": "42d6174e3f8bf9f6ea76456b91d5c55c91a0f488b92190c85c173f42bad831ca"
+      },
+      {
+        "path": "tests/directory-write-authorization.test.ts",
+        "sha256": "870fe413266f5ab416e268aea000a444a0cbaf6ee9a99be0f76ba356f16f3625"
       }
     ]
   },

@@ -19,8 +19,8 @@
 
 | البند | القيمة |
 |---|---|
-| الالتزام | `cc59c42` (يحتوي حزمة `6f1196e` كاملة). **تكافؤ بايتي مُتحقَّق** بين `6a3be76` وHEAD في `src/`, `prisma/`, `scripts/`, `tests/`, `deploy/Dockerfile`, `deploy/compose.yml`, `deploy/traefik/` (`git diff --quiet` ⇒ `rc=0`). ما أُضيف بعد `6a3be76` هو وثائق هذا المجلد وفحص `verify-compose.py` فقط — لا شيء منه يُدخل في الصورة |
-| الأرشيف | `nexup-trial-afdca18.tar.gz` — 26M، 955 مدخلًا، `--prefix=nexup-trial/` |
+| الالتزام | الأرشيف مقطوع عند `afdca18` (يحتوي حزمة `6f1196e` كاملة). **تكافؤ بايتي مُتحقَّق** بين `6a3be76` وHEAD في `src/`, `prisma/`, `scripts/`, `tests/`, `deploy/Dockerfile`, `deploy/compose.yml`, `deploy/traefik/`, `deploy/.env.example` (`git diff --quiet` ⇒ `rc=0`). ما بعد `afdca18` وثائق فقط، ولا شيء منه يُدخل في الصورة |
+| الأرشيف | `nexup-trial-afdca18.tar.gz` — 25.7 MiB، 955 مدخلًا، `--prefix=nexup-trial/` |
 | البصمة | `sha256=7f8fea7d0eeb4c592bef71c2848ac26b7f827f29d09429fa7c419044dd5842db` |
 
 الأرشيف يحتوي الشجرة كلها كما في ذلك الالتزام، ومنها مجلد `bridge/` غير المتعلّق بهذا النشر: **الجذر

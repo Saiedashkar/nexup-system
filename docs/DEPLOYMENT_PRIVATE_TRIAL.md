@@ -452,7 +452,7 @@ docker logs --tail 50 nexup-command-app
 بـ`--slug nexup`، Traefik بشهادة self-signed بلا DNS عام، `smoke.mjs`، إثبات العزل من حاوية على شبكة
 الوكيل وحدها)، وقائمة الأدلة المطلوبة، وما لا يغطيه الاختبار.
 
-أرشيف الحزمة: `nexup-trial-cc59c42.tar.gz` (26M، 955 مدخلًا) ببصمة
+أرشيف الحزمة: `nexup-trial-afdca18.tar.gz` (25.7 MiB، 955 مدخلًا) ببصمة
 `sha256=7f8fea7d0eeb4c592bef71c2848ac26b7f827f29d09429fa7c419044dd5842db`، وتكافؤ مصادر التشغيل مع
 `6a3be76` مُتحقَّق بـ`git diff --quiet` (`rc=0`) على المسارات القابلة للتنفيذ.
 

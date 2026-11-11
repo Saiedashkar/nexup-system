@@ -114,3 +114,9 @@ docker run --rm --network <EDGE_NETWORK> busybox sh -c \
   'nc -zv nexup-command-db-1 5432'              # must FAIL: no such host / refused
 docker exec nexup-command-app-1 node -e "fetch('http://db:5432').catch(e=>console.log('reachable from app:', e.code))"
 ```
+
+## تسليم البيئة ذات Docker
+
+`HANDOVER_DOCKER_HOST.md` هو الشقّ الآخر عندما لا توجد بيئة Docker: متطلبات المضيف، أوامر حرفية
+للبناء بالقفل و`db push` وأول مستخدم (بـ`--slug nexup`) وTraefik/HTTPS و`smoke.mjs` وإثبات العزل،
+وقائمة الأدلة التي يجب أن تعود، وما لا يغطيه الاختبار.

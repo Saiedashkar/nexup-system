@@ -45,8 +45,8 @@
 
 ```bash
 # 1) التحقق من الأرشيف قبل فكّه
-sha256sum nexup-trial-6a3be76.tar.gz     # يجب أن يطابق 64d8b9ad…b53bf
-tar xzf nexup-trial-6a3be76.tar.gz && cd nexup-trial
+sha256sum nexup-trial-afdca18.tar.gz     # يجب أن يطابق 7f8fea7d0eeb4c59…5842db
+tar xzf nexup-trial-afdca18.tar.gz && cd nexup-trial
 
 # 2) الأسرار: الأسماء نفسها الموجودة في deploy/.env.example، والقيم تُولَّد هنا وحدها
 sudo install -d -m 700 /etc/nexup-command

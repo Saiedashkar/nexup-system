@@ -87,3 +87,30 @@ install -m 0644 deploy/traefik/command.yml /etc/traefik/dynamic/command.yml
 
 كذلك: نطاق القراءة في الكود مثبَّت على `nexup`/`rebound`/`abomazen`، فشركة بـslug آخر
 تُقرأ كصفر صفوف رغم وجودها. لهذا يُنشأ مستخدم التجربة على شركة `nexup`.
+
+## Static verification (`verify-compose.py`)
+
+Proving that the database is unreachable from the proxy network needs an engine and a second container
+on `edge`. Where no engine exists, this script proves everything the files themselves decide, and prints
+what it could not prove:
+
+```bash
+python deploy/scripts/verify-compose.py   # needs PyYAML; exit 1 on any broken invariant
+```
+
+It parses the real YAML (not the comments) and asserts: no service publishes a port, `internal` is
+`internal: true`, `edge` is `external: true`, **`db` is on `internal` only and on nothing else**, **`app`
+is the only member of `edge`**, the app waits for a healthy db, runs read-only, drops `ALL` caps, keeps
+`no-new-privileges`, defaults `TRIAL_READ_ONLY=1`, and the image is a pinned reference — plus that the
+Dockerfile takes `TRIAL_READ_ONLY` as a build `ARG` and its runtime stage is not root.
+
+On a host with Docker, the runtime proof replaces this one:
+
+```bash
+docker build -f deploy/Dockerfile --build-arg TRIAL_READ_ONLY=1 -t nexup-command:trial .
+docker compose -f deploy/compose.yml up -d
+docker compose -f deploy/compose.yml ps          # both healthy
+docker run --rm --network <EDGE_NETWORK> busybox sh -c \
+  'nc -zv nexup-command-db-1 5432'              # must FAIL: no such host / refused
+docker exec nexup-command-app-1 node -e "fetch('http://db:5432').catch(e=>console.log('reachable from app:', e.code))"
+```

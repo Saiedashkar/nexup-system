@@ -414,3 +414,33 @@ docker logs --tail 50 nexup-command-app
 
 **الحالة النهائية لهذا التسليم:** حزمة نشر جاهزة وقياساتها مسجّلة، و**لم يُغيَّر شيء على أي خادم
 ولم يُنشر شيء**. "يعمل" تقال فقط لما في §13.3–13.4 (والربط في §13.6)؛ "غير مُختبر" لما في §13.5.
+
+### 13.7 ما أُثبت بلا مُحرّك Docker، وما بقي غير مُختبر
+
+طلبُ تشغيل الحزمة على جهاز فيه Docker لا يمكن تنفيذه على جهاز التجهيز، والسبب مُقاس لا مُفترض:
+
+| الفحص | النتيجة |
+|---|---|
+| `docker --version` / `docker compose version` | `command not found` — لا CLI على PATH |
+| مسار تثبيت Docker Desktop (`C:\Program Files\Docker\Docker`) | **غير موجود** (سجل تثبيت 4.67.0 من 2026-04-02 يقول "Existing installation found" ثم أُزيل) |
+| `com.docker.service` | موجود لكنه **Stopped**؛ لا `dockerDesktopLinuxEngine` pipe |
+| WSL | `Ubuntu` موجودة وتعمل، لكن بلا `docker`/`dockerd`/`podman`/`nerdctl` |
+| مساحة القرص الحرة على C: | **0.8 GB** — لا تكفي `node:22-bookworm-slim` + `npm ci` + `.next` (عدة GB) |
+
+لذلك **لم يُبنَ أي image ولم تُشغَّل أي حاوية**، ولم أحاول تثبيت Docker Desktop: تثبيت على مستوى النظام
+بحجم عدة GB على قرص شبه ممتلئ يحتاج تصعيدًا إداريًا وتنزيلًا لا يمكن أن ينجح في هذه المساحة.
+
+بدلًا من ادّعاء غير مُختبَر، أُضيف فحص ثابت يستخرج ما تحسمه الملفات نفسها:
+`python deploy/scripts/verify-compose.py` (PyYAML، بلا أي اعتمادية جديدة في المشروع) — ينجح على
+**16/16** ثابتًا، أهمها:
+
+- **`db` على شبكة `internal` وحدها وليس على `edge` إطلاقًا**؛
+- **`app` هو العضو الوحيد على شبكة `edge`**؛
+- لا خدمة تنشر `ports:`/`expose:` (لا شيء يُرى من المضيف)؛
+- `internal: true` و`edge: external: true`؛
+- `read_only: true`, `cap_drop: [ALL]`, `no-new-privileges`, `depends_on: service_healthy`؛
+- `TRIAL_READ_ONLY` افتراضيًا `1`، والصورة مرجع مثبَّت لا `latest`؛
+- Dockerfile: `ARG TRIAL_READ_ONLY` موصول بالـ`ENV`، و`USER nextjs` (غير جذر)، و`HEALTHCHECK` موجود.
+
+هذا **إثبات ثابت حول الملفات، لا إثبات حول التشغيل**: أن الحاوية على `edge` لا تصِل فعلًا إلى Postgres
+يبقى غير مُختبر حتى يُشغَّل الأمران في §13.5/`deploy/README.md` على مضيف فيه محرّك.

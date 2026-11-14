@@ -65,10 +65,15 @@ RUN apt-get update \
 # The full node_modules is intentional (see deps): `next start` needs the runtime
 # packages and the migrate one-off needs the CLI. Nothing in it is world-writable.
 COPY --from=deps  --chown=nextjs:nextjs /app/node_modules ./node_modules
+# `prisma generate` runs in the build stage, after `deps` is snapshotted. Copy
+# its generated client explicitly or the runner keeps @prisma/client without
+# node_modules/.prisma and every database-backed route fails at runtime.
+COPY --from=build --chown=nextjs:nextjs /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build --chown=nextjs:nextjs /app/.next        ./.next
 COPY --from=build --chown=nextjs:nextjs /app/public       ./public
 COPY --from=build --chown=nextjs:nextjs /app/prisma       ./prisma
 COPY --from=build --chown=nextjs:nextjs /app/package.json ./package.json
+COPY --from=build --chown=nextjs:nextjs /app/prisma.config.ts ./prisma.config.ts
 COPY --from=build --chown=nextjs:nextjs /app/next.config.ts ./next.config.ts
 
 # `next start` writes image-optimizer output under .next/cache. The container runs

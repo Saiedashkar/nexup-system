@@ -30,7 +30,10 @@ services:
     env_file:
       - /etc/nexup-command/db.env
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # postgres:18 stores major-version data below /var/lib/postgresql.
+      # Mounting the legacy /var/lib/postgresql/data path makes the official
+      # image refuse to start before initdb.
+      - pgdata:/var/lib/postgresql
     networks:
       - internal
     healthcheck:

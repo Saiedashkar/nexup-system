@@ -158,6 +158,12 @@ check(
     any("pgdata:" in str(v) for v in db_volumes),
     f"volumes = {db_volumes}",
 )
+check(
+    "Postgres 18 volume uses the supported parent directory",
+    any(str(v).endswith(":/var/lib/postgresql") for v in db_volumes)
+    and not any(str(v).endswith(":/var/lib/postgresql/data") for v in db_volumes),
+    f"volumes = {db_volumes}",
+)
 
 # ── the image: the trial lock is a build input, and it is not root ──────────
 check(
@@ -174,6 +180,17 @@ check(
     f"USER {user_line or '(absent)'}",
 )
 check("image has a HEALTHCHECK", re.search(r"^HEALTHCHECK\s", dockerfile, re.M) is not None, "HEALTHCHECK present")
+check(
+    "runner carries the generated Prisma client",
+    "COPY --from=build" in dockerfile
+    and "/app/node_modules/.prisma ./node_modules/.prisma" in dockerfile,
+    "build-stage node_modules/.prisma copy",
+)
+check(
+    "runner carries Prisma 7 configuration",
+    "COPY --from=build" in dockerfile and "/app/prisma.config.ts ./prisma.config.ts" in dockerfile,
+    "build-stage prisma.config.ts copy",
+)
 
 # ── report ─────────────────────────────────────────────────────────────────
 failed = [r for r in results if not r[1]]

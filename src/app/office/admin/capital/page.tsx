@@ -299,6 +299,9 @@ export default function CapitalPage() {
   const [showSpendForm, setShowSpendForm] = useState(false);
   const [convertTarget, setConvertTarget] = useState<LedgerEntry | null>(null);
   const [filter, setFilter] = useState<"ALL" | "CAPITAL_IN" | "CAPITAL_SPEND">("ALL");
+  const [monthFilter, setMonthFilter] = useState("");
+  const [ledgerSearch, setLedgerSearch] = useState("");
+  const [movementFilter, setMovementFilter] = useState("ALL");
   const [error, setError] = useState<string | null>(null);
   const [inForm, setInForm] = useState({
     partnerId: "", amount: "", type: "CASH", fundFlow: "SPENT_ALREADY",
@@ -344,10 +347,18 @@ export default function CapitalPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const visible = useMemo(
-    () => entries.filter(e => filter === "ALL" || e.type === filter),
-    [entries, filter],
-  );
+  const months = useMemo(() => [...new Set(entries.map(e => e.date.slice(0, 7)))].sort().reverse(), [entries]);
+  const visible = useMemo(() => {
+    const q = ledgerSearch.trim().toLowerCase();
+    return entries.filter(e =>
+      (filter === "ALL" || e.type === filter) &&
+      (!monthFilter || e.date.slice(0, 7) === monthFilter) &&
+      (movementFilter === "ALL" || (e.type === "CAPITAL_SPEND" && (e.spendType || "EXPENSE") === movementFilter)) &&
+      (!q || [e.description, e.category, e.funder, e.recipientName, e.reference, e.notes, String(e.amount)].some(v => v?.toLowerCase().includes(q)))
+    );
+  }, [entries, filter, monthFilter, ledgerSearch, movementFilter]);
+  const visibleFunding = visible.filter(e => e.type === "CAPITAL_IN" && e.contributionType !== "ASSET").reduce((sum, e) => sum + e.amount, 0);
+  const visibleSpending = visible.filter(e => e.type === "CAPITAL_SPEND").reduce((sum, e) => sum + e.amount, 0);
 
   /* ما سيحدث للمؤشرات عند الحفظ — يُعرض للمستخدم قبل الضغط على «حفظ» */
   const inFormImpact = useMemo(() => {
@@ -930,7 +941,7 @@ export default function CapitalPage() {
         <div className="cap-ledger__head">
           <div className="cap-filters">
             {([["ALL", "الكل"], ["CAPITAL_IN", "تمويل"], ["CAPITAL_SPEND", "صرف"]] as const).map(([k, label]) => (
-              <button key={k} className={`cap-filter${filter === k ? " cap-filter--on" : ""}`} onClick={() => setFilter(k)}>{label}</button>
+              <button key={k} className={`cap-filter${filter === k ? " cap-filter--on" : ""}`} onClick={() => { setFilter(k); setMovementFilter("ALL"); }}>{label}</button>
             ))}
           </div>
           <div className="cap-ledger__count">
@@ -938,6 +949,30 @@ export default function CapitalPage() {
           </div>
         </div>
 
+        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+            <label style={labelStyle}>الشهر
+              <select style={inputStyle} value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
+                <option value="">كل الشهور</option>
+                {months.map(m => <option key={m} value={m}>{new Intl.DateTimeFormat("ar-EG", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(m + "-01T00:00:00Z"))}</option>)}
+              </select>
+            </label>
+            <label style={labelStyle}>نوع الصرف
+              <select style={inputStyle} value={movementFilter} onChange={e => { setMovementFilter(e.target.value); setFilter("ALL"); }}>
+                <option value="ALL">كل الأنواع</option><option value="EXPENSE">مصروف</option><option value="PERSON_WITHDRAWAL">سحب شخصي</option><option value="CUSTODY">عهدة</option>
+              </select>
+            </label>
+            <label style={labelStyle}>بحث في السجل
+              <input style={inputStyle} value={ledgerSearch} onChange={e => setLedgerSearch(e.target.value)} placeholder="اسم، وصف، مبلغ..." />
+            </label>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 14, marginTop: 12, fontSize: 12 }}>
+            <b>إجمالي التمويل الظاهر: {fmt(visibleFunding)} ج.م</b>
+            <b>إجمالي الصرف الظاهر: {fmt(visibleSpending)} ج.م</b>
+            <button className="cap-btn cap-btn--ghost cap-btn--sm" onClick={() => { setMonthFilter(""); setLedgerSearch(""); setMovementFilter("ALL"); setFilter("ALL"); }}>إلغاء الفلاتر</button>
+          </div>
+          <p style={{ color: "var(--muted)", fontSize: 11, marginBottom: 0 }}>الرصيد بجانب كل حركة هو الرصيد التراكمي التاريخي؛ إجماليات الفلتر تخص الحركات الظاهرة فقط.</p>
+        </div>
         <div className="cap-table">
           <div className="cap-table__head">
             <div>التاريخ</div><div>النوع</div><div>البيان / المصدر</div>
@@ -949,7 +984,7 @@ export default function CapitalPage() {
           {loading ? (
             <div className="cap-empty">جارٍ التحميل...</div>
           ) : visible.length === 0 ? (
-            <div className="cap-empty">لا توجد حركات بعد — ابدأ بتسجيل تمويل.</div>
+            <div className="cap-empty">لا توجد حركات مطابقة للفلاتر الحالية.</div>
           ) : visible.map(e => {
             const badge = spendBadge(e.spendType);
             // An in-kind contribution belongs in the ledger but moves no cash:

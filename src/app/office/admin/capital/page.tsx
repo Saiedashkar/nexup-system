@@ -1071,7 +1071,7 @@ export default function CapitalPage() {
               </div>
               </div>
             );
-          })
+          })}
         </div>
       </section>
     </div>

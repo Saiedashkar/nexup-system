@@ -131,6 +131,24 @@ describe("capital metrics — pure allocation rules", () => {
     expect(m.reconciliationWarnings).toHaveLength(2);
   });
 
+  it("reserves later explicitly linked direct funding before earlier unlinked spending", () => {
+    const m = computeCapitalMetrics({
+      contributions: [cash("direct", 85460, "SPENT_ALREADY"), cash("cash", 36500, "STILL_IN_TREASURY")],
+      spends: [
+        spend("opening", 78010, null, "2026-09-01"),
+        spend("direct-spend", 10700, "direct", "2026-11-05"),
+        spend("cash-spend", 33250, "cash", "2026-11-05"),
+      ],
+    });
+    expect(m.cashFundingReceived).toBe(121960);
+    expect(m.totalSpent).toBe(121960);
+    expect(m.availableFund).toBe(0);
+    expect(m.availableCashInTreasury).toBe(0);
+    expect(m.alreadySpentMirrorSpend).toBe(85460);
+    expect(m.treasuryDrawSpend).toBe(36500);
+    expect(m.reconciliationWarnings).toHaveLength(0);
+  });
+
   it("6. an over-draw is reported, never silently forced to zero", () => {
     const m = computeCapitalMetrics({
       contributions: [cash("c1", 1000, "STILL_IN_TREASURY")],

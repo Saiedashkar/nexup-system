@@ -151,17 +151,19 @@ export function computeCapitalMetrics(input: {
   );
   let absorbedByAlreadyP = 0;
   let treasuryDrawP = 0;
+  // Reserve explicit funding links BEFORE allocating unlinked expenses.
+  // Otherwise an early unlinked settlement can consume the same direct
+  // funding that a later explicitly linked expense consumes again.
+  const unlinked: CapitalSpendInput[] = [];
   for (const spend of ordered) {
     const amtP = toP(spend.amount);
     const linked = spend.contributionId ? byId.get(spend.contributionId) : undefined;
-    if (linked) {
-      // Explicit funding source: only real treasury cash is drawn from it.
-      if (linked.type === "CASH" && linked.fundFlow === "STILL_IN_TREASURY") treasuryDrawP += amtP;
-      else absorbedByAlreadyP += amtP; // already-spent / in-kind → no cash movement
-      continue;
-    }
-    // Unlinked (e.g. an opening settlement): mirrored against already-spent
-    // funding first, and only the remainder draws on treasury cash.
+    if (!linked) { unlinked.push(spend); continue; }
+    if (linked.type === "CASH" && linked.fundFlow === "STILL_IN_TREASURY") treasuryDrawP += amtP;
+    else absorbedByAlreadyP += amtP;
+  }
+  for (const spend of unlinked) {
+    const amtP = toP(spend.amount);
     const room = Math.max(0, cashSpentAlreadyP - absorbedByAlreadyP);
     const absorbed = Math.min(amtP, room);
     absorbedByAlreadyP += absorbed;
